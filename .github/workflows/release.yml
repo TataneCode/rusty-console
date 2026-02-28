@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: rusty_console
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact_name: rusty_console
+            asset_name: rusty_console-linux-x86_64
+
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact_name: rusty_console
+            asset_name: rusty_console-linux-x86_64-musl
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact_name: rusty_console.exe
+            asset_name: rusty_console-windows-x86_64.exe
+
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact_name: rusty_console
+            asset_name: rusty_console-macos-x86_64
+
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact_name: rusty_console
+            asset_name: rusty_console-macos-aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl-tools (Linux musl)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            file=$(find "$dir" -type f | head -1)
+            if [ -n "$file" ]; then
+              cp "$file" "release/$name"
+              chmod +x "release/$name" 2>/dev/null || true
+            fi
+          done
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

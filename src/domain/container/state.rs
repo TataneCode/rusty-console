@@ -1,0 +1,101 @@
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContainerState {
+    Running,
+    Paused,
+    Stopped,
+    Exited,
+    Dead,
+    Created,
+    Removing,
+    Restarting,
+}
+
+impl ContainerState {
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "running" => ContainerState::Running,
+            "paused" => ContainerState::Paused,
+            "exited" => ContainerState::Exited,
+            "dead" => ContainerState::Dead,
+            "created" => ContainerState::Created,
+            "removing" => ContainerState::Removing,
+            "restarting" => ContainerState::Restarting,
+            _ => ContainerState::Stopped,
+        }
+    }
+
+    pub fn is_running(&self) -> bool {
+        matches!(self, ContainerState::Running)
+    }
+
+    pub fn is_active(&self) -> bool {
+        matches!(
+            self,
+            ContainerState::Running | ContainerState::Paused | ContainerState::Restarting
+        )
+    }
+
+    pub fn can_be_started(&self) -> bool {
+        matches!(
+            self,
+            ContainerState::Stopped | ContainerState::Exited | ContainerState::Created
+        )
+    }
+
+    pub fn can_be_stopped(&self) -> bool {
+        matches!(
+            self,
+            ContainerState::Running | ContainerState::Paused | ContainerState::Restarting
+        )
+    }
+
+    pub fn can_be_deleted(&self) -> bool {
+        !self.is_active()
+    }
+}
+
+impl fmt::Display for ContainerState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ContainerState::Running => write!(f, "Running"),
+            ContainerState::Paused => write!(f, "Paused"),
+            ContainerState::Stopped => write!(f, "Stopped"),
+            ContainerState::Exited => write!(f, "Exited"),
+            ContainerState::Dead => write!(f, "Dead"),
+            ContainerState::Created => write!(f, "Created"),
+            ContainerState::Removing => write!(f, "Removing"),
+            ContainerState::Restarting => write!(f, "Restarting"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_str() {
+        assert_eq!(ContainerState::from_str("running"), ContainerState::Running);
+        assert_eq!(ContainerState::from_str("RUNNING"), ContainerState::Running);
+        assert_eq!(ContainerState::from_str("exited"), ContainerState::Exited);
+        assert_eq!(ContainerState::from_str("unknown"), ContainerState::Stopped);
+    }
+
+    #[test]
+    fn test_can_be_started() {
+        assert!(ContainerState::Stopped.can_be_started());
+        assert!(ContainerState::Exited.can_be_started());
+        assert!(ContainerState::Created.can_be_started());
+        assert!(!ContainerState::Running.can_be_started());
+    }
+
+    #[test]
+    fn test_can_be_stopped() {
+        assert!(ContainerState::Running.can_be_stopped());
+        assert!(ContainerState::Paused.can_be_stopped());
+        assert!(!ContainerState::Stopped.can_be_stopped());
+        assert!(!ContainerState::Exited.can_be_stopped());
+    }
+}

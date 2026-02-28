@@ -1,0 +1,108 @@
+use crate::application::{AppError, ContainerRepository};
+use crate::domain::Container;
+use crate::infrastructure::container::mapper::ContainerInfraMapper;
+use crate::infrastructure::docker::DockerClient;
+use async_trait::async_trait;
+use bollard::container::{
+    ListContainersOptions, LogsOptions, RemoveContainerOptions, StartContainerOptions,
+    StopContainerOptions,
+};
+use futures_util::StreamExt;
+use std::collections::HashMap;
+
+pub struct ContainerAdapter {
+    docker: DockerClient,
+}
+
+impl ContainerAdapter {
+    pub fn new(docker: DockerClient) -> Self {
+        ContainerAdapter { docker }
+    }
+}
+
+#[async_trait]
+impl ContainerRepository for ContainerAdapter {
+    async fn get_all(&self) -> Result<Vec<Container>, AppError> {
+        let mut filters = HashMap::new();
+        filters.insert("status", vec!["created", "restarting", "running", "removing", "paused", "exited", "dead"]);
+
+        let options = ListContainersOptions {
+            all: true,
+            filters,
+            ..Default::default()
+        };
+
+        let containers = self
+            .docker
+            .inner()
+            .list_containers(Some(options))
+            .await
+            .map_err(|e| AppError::repository(e.to_string()))?;
+
+        Ok(containers
+            .iter()
+            .filter_map(ContainerInfraMapper::from_docker)
+            .collect())
+    }
+
+    async fn get_by_id(&self, id: &str) -> Result<Option<Container>, AppError> {
+        let containers = self.get_all().await?;
+        Ok(containers.into_iter().find(|c| c.id().as_str() == id))
+    }
+
+    async fn get_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {
+        let options = LogsOptions::<String> {
+            stdout: true,
+            stderr: true,
+            tail: tail.map(|t| t.to_string()).unwrap_or_else(|| "100".to_string()),
+            ..Default::default()
+        };
+
+        let mut stream = self.docker.inner().logs(id, Some(options));
+        let mut logs = String::new();
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(output) => {
+                    logs.push_str(&output.to_string());
+                }
+                Err(e) => {
+                    return Err(AppError::repository(format!("Failed to get logs: {}", e)));
+                }
+            }
+        }
+
+        Ok(logs)
+    }
+
+    async fn start(&self, id: &str) -> Result<(), AppError> {
+        self.docker
+            .inner()
+            .start_container(id, None::<StartContainerOptions<String>>)
+            .await
+            .map_err(|e| AppError::operation_failed(format!("Failed to start container: {}", e)))
+    }
+
+    async fn stop(&self, id: &str) -> Result<(), AppError> {
+        let options = StopContainerOptions { t: 10 };
+
+        self.docker
+            .inner()
+            .stop_container(id, Some(options))
+            .await
+            .map_err(|e| AppError::operation_failed(format!("Failed to stop container: {}", e)))
+    }
+
+    async fn delete(&self, id: &str, force: bool) -> Result<(), AppError> {
+        let options = RemoveContainerOptions {
+            force,
+            ..Default::default()
+        };
+
+        self.docker
+            .inner()
+            .remove_container(id, Some(options))
+            .await
+            .map_err(|e| AppError::operation_failed(format!("Failed to delete container: {}", e)))
+    }
+}

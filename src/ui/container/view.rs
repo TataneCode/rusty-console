@@ -3,7 +3,7 @@ use crate::domain::ContainerState;
 use crate::ui::common::{render_help, render_table, Theme};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Wrap, TableState},
+    widgets::{Block, Borders, Cell, Paragraph, Row, TableState, Wrap},
     Frame,
 };
 
@@ -90,11 +90,7 @@ pub fn render_container_logs(
 
     frame.render_widget(log_content, chunks[0]);
 
-    render_help(
-        frame,
-        chunks[1],
-        " Esc/q: Back | Ctrl+u/d: Scroll ",
-    );
+    render_help(frame, chunks[1], " Esc/q: Back | Ctrl+u/d: Scroll ");
 }
 
 pub fn render_container_details(frame: &mut Frame, area: Rect, container: &ContainerDto) {

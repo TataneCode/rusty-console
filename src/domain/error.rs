@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum DomainError {
     #[error("Invalid container ID: {0}")]

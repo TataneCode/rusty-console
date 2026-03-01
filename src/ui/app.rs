@@ -32,6 +32,7 @@ pub enum Screen {
     ImageDetails,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
     DeleteContainer(bool),
@@ -131,12 +132,7 @@ impl App {
             }
             Screen::ContainerLogs => {
                 if let Some(logs) = &self.container_presenter.logs {
-                    render_container_logs(
-                        frame,
-                        area,
-                        logs,
-                        self.container_presenter.logs_scroll,
-                    );
+                    render_container_logs(frame, area, logs, self.container_presenter.logs_scroll);
                 }
             }
             Screen::ContainerDetails => {
@@ -254,7 +250,7 @@ impl App {
                 }
                 AppAction::Select => {
                     if *selected_yes {
-                        let confirm_action = confirm_action.clone();
+                        let confirm_action = *confirm_action;
                         self.confirm_dialog = None;
                         self.execute_confirm_action(confirm_action).await;
                     } else {
@@ -369,19 +365,17 @@ impl App {
 
     fn handle_details_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit | AppAction::Back => {
-                match &self.screen {
-                    Screen::ContainerDetails => {
-                        self.container_presenter.clear_details();
-                        self.screen = Screen::ContainerList;
-                    }
-                    Screen::ImageDetails => {
-                        self.image_presenter.clear_details();
-                        self.screen = Screen::ImageList;
-                    }
-                    _ => {}
+            AppAction::Quit | AppAction::Back => match &self.screen {
+                Screen::ContainerDetails => {
+                    self.container_presenter.clear_details();
+                    self.screen = Screen::ContainerList;
                 }
-            }
+                Screen::ImageDetails => {
+                    self.image_presenter.clear_details();
+                    self.screen = Screen::ImageList;
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -473,11 +467,7 @@ impl App {
     }
 
     async fn load_container_logs(&mut self, container: &ContainerDto) {
-        match self
-            .container_actions
-            .load_logs(container, Some(500))
-            .await
-        {
+        match self.container_actions.load_logs(container, Some(500)).await {
             Ok(logs) => self.container_presenter.set_logs(logs),
             Err(e) => self.error_message = Some(e.to_string()),
         }

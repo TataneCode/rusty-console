@@ -23,10 +23,7 @@ impl ImageAdapter {
         };
 
         match self.docker.inner().list_containers(Some(options)).await {
-            Ok(containers) => containers
-                .into_iter()
-                .filter_map(|c| c.image_id)
-                .collect(),
+            Ok(containers) => containers.into_iter().filter_map(|c| c.image_id).collect(),
             Err(_) => HashSet::new(),
         }
     }
@@ -57,7 +54,9 @@ impl ImageRepository for ImageAdapter {
 
     async fn get_by_id(&self, id: &str) -> Result<Option<Image>, AppError> {
         let images = self.get_all().await?;
-        Ok(images.into_iter().find(|i| i.id().as_str() == id || i.id().short() == id))
+        Ok(images
+            .into_iter()
+            .find(|i| i.id().as_str() == id || i.id().short() == id))
     }
 
     async fn delete(&self, id: &str, force: bool) -> Result<(), AppError> {

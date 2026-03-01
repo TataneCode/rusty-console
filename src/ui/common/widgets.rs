@@ -132,10 +132,7 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
         Theme::default_style()
     };
 
-    let text = format!(
-        "{}\n\n  [Yes]  [No]",
-        message
-    );
+    let text = format!("{}\n\n  [Yes]  [No]", message);
 
     let dialog = Paragraph::new(text)
         .block(

@@ -48,15 +48,7 @@ pub fn render_volume_list(
         Constraint::Percentage(25),
     ];
 
-    render_table(
-        frame,
-        chunks[0],
-        " Volumes ",
-        headers,
-        rows,
-        widths,
-        state,
-    );
+    render_table(frame, chunks[0], " Volumes ", headers, rows, widths, state);
 
     render_help(
         frame,

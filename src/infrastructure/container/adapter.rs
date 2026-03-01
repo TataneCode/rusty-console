@@ -24,7 +24,18 @@ impl ContainerAdapter {
 impl ContainerRepository for ContainerAdapter {
     async fn get_all(&self) -> Result<Vec<Container>, AppError> {
         let mut filters = HashMap::new();
-        filters.insert("status", vec!["created", "restarting", "running", "removing", "paused", "exited", "dead"]);
+        filters.insert(
+            "status",
+            vec![
+                "created",
+                "restarting",
+                "running",
+                "removing",
+                "paused",
+                "exited",
+                "dead",
+            ],
+        );
 
         let options = ListContainersOptions {
             all: true,
@@ -54,7 +65,9 @@ impl ContainerRepository for ContainerAdapter {
         let options = LogsOptions::<String> {
             stdout: true,
             stderr: true,
-            tail: tail.map(|t| t.to_string()).unwrap_or_else(|| "100".to_string()),
+            tail: tail
+                .map(|t| t.to_string())
+                .unwrap_or_else(|| "100".to_string()),
             ..Default::default()
         };
 

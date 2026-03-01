@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod application;
 mod domain;
 mod infrastructure;
@@ -14,7 +16,8 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let docker = DockerClient::new().map_err(|e| anyhow::anyhow!("Failed to connect to Docker: {}", e))?;
+    let docker =
+        DockerClient::new().map_err(|e| anyhow::anyhow!("Failed to connect to Docker: {}", e))?;
 
     let container_adapter = Arc::new(ContainerAdapter::new(docker.clone()));
     let volume_adapter = Arc::new(VolumeAdapter::new(docker.clone()));

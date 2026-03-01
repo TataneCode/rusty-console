@@ -1,5 +1,5 @@
-use bollard::Docker;
 use crate::infrastructure::error::InfraError;
+use bollard::Docker;
 
 pub fn create_docker_client() -> Result<Docker, InfraError> {
     Docker::connect_with_socket_defaults()

@@ -6,7 +6,10 @@ use std::collections::HashSet;
 pub struct ImageInfraMapper;
 
 impl ImageInfraMapper {
-    pub fn from_docker(summary: &ImageSummary, in_use_image_ids: &HashSet<String>) -> Option<Image> {
+    pub fn from_docker(
+        summary: &ImageSummary,
+        in_use_image_ids: &HashSet<String>,
+    ) -> Option<Image> {
         let id = ImageId::new(&summary.id).ok()?;
 
         let (repository, tag) = summary
@@ -24,7 +27,10 @@ impl ImageInfraMapper {
 
         let size = ImageSize::new(summary.size);
 
-        let created = Utc.timestamp_opt(summary.created, 0).single().unwrap_or_else(Utc::now);
+        let created = Utc
+            .timestamp_opt(summary.created, 0)
+            .single()
+            .unwrap_or_else(Utc::now);
 
         let in_use = in_use_image_ids.contains(&summary.id);
 

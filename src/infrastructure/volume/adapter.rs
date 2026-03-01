@@ -22,10 +22,10 @@ impl VolumeAdapter {
                 .volumes
                 .unwrap_or_default()
                 .into_iter()
-                .filter_map(|v| {
+                .map(|v| {
                     let name = v.name;
                     let size = v.usage_data.as_ref().map(|u| u.size).unwrap_or(-1);
-                    Some((name, size))
+                    (name, size)
                 })
                 .collect(),
             Err(_) => HashMap::new(),

@@ -164,9 +164,8 @@ mod tests {
 
     #[test]
     fn test_uses_volume() {
-        let container = create_test_container(ContainerState::Running).with_mounts(vec![
-            MountInfo::new("my-volume", "/data", "rw"),
-        ]);
+        let container = create_test_container(ContainerState::Running)
+            .with_mounts(vec![MountInfo::new("my-volume", "/data", "rw")]);
         assert!(container.uses_volume("my-volume"));
         assert!(!container.uses_volume("other-volume"));
     }

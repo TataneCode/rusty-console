@@ -56,15 +56,7 @@ pub fn render_image_list(
         Constraint::Percentage(25),
     ];
 
-    render_table(
-        frame,
-        chunks[0],
-        " Images ",
-        headers,
-        rows,
-        widths,
-        state,
-    );
+    render_table(frame, chunks[0], " Images ", headers, rows, widths, state);
 
     render_help(
         frame,

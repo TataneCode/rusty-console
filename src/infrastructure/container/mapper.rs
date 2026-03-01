@@ -24,15 +24,14 @@ impl ContainerInfraMapper {
         let state = summary
             .state
             .as_ref()
-            .map(|s| ContainerState::from_str(s))
+            .and_then(|s| s.parse().ok())
             .unwrap_or(ContainerState::Stopped);
 
         let status = summary.status.clone().unwrap_or_default();
 
         let created = summary
             .created
-            .map(|ts| Utc.timestamp_opt(ts, 0).single())
-            .flatten()
+            .and_then(|ts| Utc.timestamp_opt(ts, 0).single())
             .unwrap_or_else(Utc::now);
 
         let ports = Self::map_ports(summary.ports.as_ref());
@@ -53,14 +52,12 @@ impl ContainerInfraMapper {
                 ports
                     .iter()
                     .map(|p| {
-                        let protocol = p.typ.as_ref()
+                        let protocol = p
+                            .typ
+                            .as_ref()
                             .map(|t| format!("{:?}", t).to_lowercase())
                             .unwrap_or_else(|| "tcp".to_string());
-                        PortMapping::new(
-                            p.private_port as u16,
-                            p.public_port.map(|pp| pp as u16),
-                            protocol,
-                        )
+                        PortMapping::new(p.private_port, p.public_port, protocol)
                     })
                     .collect()
             })
@@ -78,10 +75,7 @@ impl ContainerInfraMapper {
                     .map(|(name, endpoint)| {
                         NetworkInfo::new(
                             name.clone(),
-                            endpoint
-                                .ip_address
-                                .clone()
-                                .unwrap_or_default(),
+                            endpoint.ip_address.clone().unwrap_or_default(),
                         )
                     })
                     .collect()

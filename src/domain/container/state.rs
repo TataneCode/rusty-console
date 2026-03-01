@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContainerState {
@@ -12,9 +13,11 @@ pub enum ContainerState {
     Restarting,
 }
 
-impl ContainerState {
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+impl FromStr for ContainerState {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
             "running" => ContainerState::Running,
             "paused" => ContainerState::Paused,
             "exited" => ContainerState::Exited,
@@ -23,9 +26,11 @@ impl ContainerState {
             "removing" => ContainerState::Removing,
             "restarting" => ContainerState::Restarting,
             _ => ContainerState::Stopped,
-        }
+        })
     }
+}
 
+impl ContainerState {
     pub fn is_running(&self) -> bool {
         matches!(self, ContainerState::Running)
     }
@@ -77,10 +82,22 @@ mod tests {
 
     #[test]
     fn test_from_str() {
-        assert_eq!(ContainerState::from_str("running"), ContainerState::Running);
-        assert_eq!(ContainerState::from_str("RUNNING"), ContainerState::Running);
-        assert_eq!(ContainerState::from_str("exited"), ContainerState::Exited);
-        assert_eq!(ContainerState::from_str("unknown"), ContainerState::Stopped);
+        assert_eq!(
+            "running".parse::<ContainerState>().unwrap(),
+            ContainerState::Running
+        );
+        assert_eq!(
+            "RUNNING".parse::<ContainerState>().unwrap(),
+            ContainerState::Running
+        );
+        assert_eq!(
+            "exited".parse::<ContainerState>().unwrap(),
+            ContainerState::Exited
+        );
+        assert_eq!(
+            "unknown".parse::<ContainerState>().unwrap(),
+            ContainerState::Stopped
+        );
     }
 
     #[test]

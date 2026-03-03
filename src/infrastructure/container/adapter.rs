@@ -118,4 +118,20 @@ impl ContainerRepository for ContainerAdapter {
             .await
             .map_err(|e| AppError::operation_failed(format!("Failed to delete container: {}", e)))
     }
+
+    async fn pause(&self, id: &str) -> Result<(), AppError> {
+        self.docker
+            .inner()
+            .pause_container(id)
+            .await
+            .map_err(|e| AppError::operation_failed(format!("Failed to pause container: {}", e)))
+    }
+
+    async fn unpause(&self, id: &str) -> Result<(), AppError> {
+        self.docker
+            .inner()
+            .unpause_container(id)
+            .await
+            .map_err(|e| AppError::operation_failed(format!("Failed to unpause container: {}", e)))
+    }
 }

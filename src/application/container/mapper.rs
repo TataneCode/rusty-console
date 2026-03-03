@@ -22,6 +22,8 @@ impl ContainerMapper {
             can_start: container.can_be_started(),
             can_stop: container.can_be_stopped(),
             can_delete: container.can_be_deleted(),
+            can_pause: container.can_be_paused(),
+            can_unpause: container.can_be_unpaused(),
         }
     }
 

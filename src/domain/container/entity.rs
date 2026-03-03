@@ -106,6 +106,14 @@ impl Container {
         self.state.can_be_deleted()
     }
 
+    pub fn can_be_paused(&self) -> bool {
+        self.state.can_be_paused()
+    }
+
+    pub fn can_be_unpaused(&self) -> bool {
+        self.state.can_be_unpaused()
+    }
+
     pub fn display_name(&self) -> &str {
         self.name.trim_start_matches('/')
     }

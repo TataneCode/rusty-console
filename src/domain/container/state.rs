@@ -56,6 +56,20 @@ impl ContainerState {
         )
     }
 
+    pub fn can_be_paused(&self) -> bool {
+        matches!(
+            self,
+            ContainerState::Running
+        )
+    }
+
+    pub fn can_be_unpaused(&self) -> bool {
+        matches!(
+            self,
+            ContainerState::Paused
+        )
+    }
+
     pub fn can_be_deleted(&self) -> bool {
         !self.is_active()
     }

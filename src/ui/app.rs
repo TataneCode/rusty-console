@@ -346,6 +346,11 @@ impl App {
                     self.confirm_dialog = Some((ConfirmAction::DeleteContainer(force), true));
                 }
             }
+            AppAction::PauseUnpause => {
+                if let Some(container) = self.container_presenter.selected_container().cloned() {
+                    self.pause_unpause_container(&container).await;
+                }
+            }
             AppAction::Refresh => self.load_containers().await,
             _ => {}
         }
@@ -478,6 +483,21 @@ impl App {
             self.container_actions.stop_container(&container.id).await
         } else if container.can_start {
             self.container_actions.start_container(&container.id).await
+        } else {
+            return;
+        };
+
+        match result {
+            Ok(_) => self.load_containers().await,
+            Err(e) => self.error_message = Some(e.to_string()),
+        }
+    }
+
+    async fn pause_unpause_container(&mut self, container: &ContainerDto) {
+        let result = if container.can_pause {
+            self.container_actions.pause_container(&container.id).await
+        } else if container.can_unpause {
+            self.container_actions.unpause_container(&container.id).await
         } else {
             return;
         };

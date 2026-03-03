@@ -16,6 +16,7 @@ pub enum AppAction {
     Refresh,
     ScrollUp,
     ScrollDown,
+    PauseUnpause,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -38,6 +39,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(AppAction::ScrollUp)
         }
+        KeyCode::Char('p') => Some(AppAction::PauseUnpause),
         _ => None,
     }
 }

@@ -43,5 +43,4 @@ impl ContainerActions {
     pub async fn unpause_container(&self, id: &str) -> Result<(), AppError> {
         self.service.unpause_container(id).await
     }
-    
 }

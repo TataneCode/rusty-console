@@ -497,7 +497,9 @@ impl App {
         let result = if container.can_pause {
             self.container_actions.pause_container(&container.id).await
         } else if container.can_unpause {
-            self.container_actions.unpause_container(&container.id).await
+            self.container_actions
+                .unpause_container(&container.id)
+                .await
         } else {
             return;
         };

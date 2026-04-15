@@ -114,7 +114,10 @@ mod tests {
         let service = ContainerService::new(Arc::new(mock));
         let result = service.get_all_containers().await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("connection failed"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("connection failed"));
     }
 
     #[tokio::test]
@@ -122,7 +125,13 @@ mod tests {
         let mut mock = MockContainerRepository::new();
         mock.expect_get_by_id()
             .withf(|id| id == "abc123")
-            .returning(|_| Ok(Some(make_container("abc123", "/web", ContainerState::Running))));
+            .returning(|_| {
+                Ok(Some(make_container(
+                    "abc123",
+                    "/web",
+                    ContainerState::Running,
+                )))
+            });
 
         let service = ContainerService::new(Arc::new(mock));
         let result = service.get_container_by_id("abc123").await.unwrap();

@@ -53,15 +53,7 @@ pub fn render_container_list(
         None => " Containers ".to_string(),
     };
 
-    render_table(
-        frame,
-        chunks[0],
-        &title,
-        headers,
-        rows,
-        widths,
-        state,
-    );
+    render_table(frame, chunks[0], &title, headers, rows, widths, state);
 
     render_help(
         frame,

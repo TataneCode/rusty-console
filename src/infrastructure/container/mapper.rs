@@ -166,7 +166,10 @@ impl ContainerInfraMapper {
                     .iter()
                     .flat_map(|(port_key, bindings)| {
                         let parts: Vec<&str> = port_key.split('/').collect();
-                        let private_port = parts.first().and_then(|p| p.parse::<u16>().ok()).unwrap_or(0);
+                        let private_port = parts
+                            .first()
+                            .and_then(|p| p.parse::<u16>().ok())
+                            .unwrap_or(0);
                         let protocol = parts.get(1).unwrap_or(&"tcp").to_string();
 
                         bindings
@@ -178,11 +181,17 @@ impl ContainerInfraMapper {
                                             .host_port
                                             .as_ref()
                                             .and_then(|p| p.parse::<u16>().ok());
-                                        PortMapping::new(private_port, public_port, protocol.clone())
+                                        PortMapping::new(
+                                            private_port,
+                                            public_port,
+                                            protocol.clone(),
+                                        )
                                     })
                                     .collect::<Vec<_>>()
                             })
-                            .unwrap_or_else(|| vec![PortMapping::new(private_port, None, protocol.clone())])
+                            .unwrap_or_else(|| {
+                                vec![PortMapping::new(private_port, None, protocol.clone())]
+                            })
                     })
                     .collect()
             })
@@ -372,7 +381,11 @@ mod tests {
 
         let container = ContainerInfraMapper::from_docker(&summary).unwrap();
         assert_eq!(container.networks().len(), 2);
-        let net_names: Vec<&str> = container.networks().iter().map(|n| n.name.as_str()).collect();
+        let net_names: Vec<&str> = container
+            .networks()
+            .iter()
+            .map(|n| n.name.as_str())
+            .collect();
         assert!(net_names.contains(&"bridge"));
         assert!(net_names.contains(&"custom_net"));
     }
@@ -399,7 +412,10 @@ mod tests {
         let container = ContainerInfraMapper::from_docker(&summary).unwrap();
         assert_eq!(container.mounts().len(), 2);
         assert_eq!(container.mounts()[0].source, "pgdata");
-        assert_eq!(container.mounts()[0].destination, "/var/lib/postgresql/data");
+        assert_eq!(
+            container.mounts()[0].destination,
+            "/var/lib/postgresql/data"
+        );
         assert_eq!(container.mounts()[1].source, "/host/config");
         assert_eq!(container.mounts()[1].mode, "rw"); // default when None
     }
@@ -433,7 +449,10 @@ mod tests {
         assert_eq!(container.image(), "myapp:v2");
         assert_eq!(container.state(), ContainerState::Running);
         assert_eq!(container.env_vars().len(), 2);
-        assert_eq!(container.env_vars()[0], "DATABASE_URL=postgres://localhost/db");
+        assert_eq!(
+            container.env_vars()[0],
+            "DATABASE_URL=postgres://localhost/db"
+        );
         assert_eq!(container.env_vars()[1], "RUST_LOG=info");
     }
 

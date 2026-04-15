@@ -1,5 +1,5 @@
-use crate::application::{AppError, ImageRepository};
 use crate::application::PruneResultDto;
+use crate::application::{AppError, ImageRepository};
 use crate::domain::Image;
 use crate::infrastructure::docker::DockerClient;
 use crate::infrastructure::image::mapper::ImageInfraMapper;
@@ -85,15 +85,10 @@ impl ImageRepository for ImageAdapter {
             .inner()
             .prune_images(Some(options))
             .await
-            .map_err(|e| {
-                AppError::operation_failed(format!("Failed to prune images: {}", e))
-            })?;
+            .map_err(|e| AppError::operation_failed(format!("Failed to prune images: {}", e)))?;
 
         Ok(PruneResultDto {
-            deleted_count: result
-                .images_deleted
-                .map(|i| i.len() as u32)
-                .unwrap_or(0),
+            deleted_count: result.images_deleted.map(|i| i.len() as u32).unwrap_or(0),
             space_freed: result.space_reclaimed.unwrap_or(0) as u64,
         })
     }

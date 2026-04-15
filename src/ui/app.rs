@@ -543,32 +543,28 @@ impl App {
                     Err(e) => self.error_message = Some(e.to_string()),
                 }
             }
-            ConfirmAction::PruneVolumes => {
-                match self.volume_actions.prune_volumes().await {
-                    Ok(result) => {
-                        self.error_message = Some(format!(
-                            "Pruned {} volume(s), freed {}",
-                            result.deleted_count,
-                            format_bytes(result.space_freed)
-                        ));
-                        self.load_volumes().await;
-                    }
-                    Err(e) => self.error_message = Some(e.to_string()),
+            ConfirmAction::PruneVolumes => match self.volume_actions.prune_volumes().await {
+                Ok(result) => {
+                    self.error_message = Some(format!(
+                        "Pruned {} volume(s), freed {}",
+                        result.deleted_count,
+                        format_bytes(result.space_freed)
+                    ));
+                    self.load_volumes().await;
                 }
-            }
-            ConfirmAction::PruneImages => {
-                match self.image_actions.prune_images().await {
-                    Ok(result) => {
-                        self.error_message = Some(format!(
-                            "Pruned {} image(s), freed {}",
-                            result.deleted_count,
-                            format_bytes(result.space_freed)
-                        ));
-                        self.load_images().await;
-                    }
-                    Err(e) => self.error_message = Some(e.to_string()),
+                Err(e) => self.error_message = Some(e.to_string()),
+            },
+            ConfirmAction::PruneImages => match self.image_actions.prune_images().await {
+                Ok(result) => {
+                    self.error_message = Some(format!(
+                        "Pruned {} image(s), freed {}",
+                        result.deleted_count,
+                        format_bytes(result.space_freed)
+                    ));
+                    self.load_images().await;
                 }
-            }
+                Err(e) => self.error_message = Some(e.to_string()),
+            },
         }
     }
 
@@ -674,7 +670,11 @@ impl App {
             return;
         }
 
-        match self.container_actions.restart_container(&container.id).await {
+        match self
+            .container_actions
+            .restart_container(&container.id)
+            .await
+        {
             Ok(_) => self.load_containers().await,
             Err(e) => self.error_message = Some(e.to_string()),
         }

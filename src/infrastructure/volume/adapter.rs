@@ -1,5 +1,5 @@
-use crate::application::{AppError, VolumeRepository};
 use crate::application::PruneResultDto;
+use crate::application::{AppError, VolumeRepository};
 use crate::domain::Volume;
 use crate::infrastructure::docker::DockerClient;
 use crate::infrastructure::volume::mapper::VolumeInfraMapper;
@@ -98,15 +98,10 @@ impl VolumeRepository for VolumeAdapter {
             .inner()
             .prune_volumes(None::<bollard::volume::PruneVolumesOptions<String>>)
             .await
-            .map_err(|e| {
-                AppError::operation_failed(format!("Failed to prune volumes: {}", e))
-            })?;
+            .map_err(|e| AppError::operation_failed(format!("Failed to prune volumes: {}", e)))?;
 
         Ok(PruneResultDto {
-            deleted_count: result
-                .volumes_deleted
-                .map(|v| v.len() as u32)
-                .unwrap_or(0),
+            deleted_count: result.volumes_deleted.map(|v| v.len() as u32).unwrap_or(0),
             space_freed: result.space_reclaimed.unwrap_or(0) as u64,
         })
     }

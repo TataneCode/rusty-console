@@ -351,6 +351,11 @@ impl App {
                     self.pause_unpause_container(&container).await;
                 }
             }
+            AppAction::Restart => {
+                if let Some(container) = self.container_presenter.selected_container().cloned() {
+                    self.restart_container(&container).await;
+                }
+            }
             AppAction::Refresh => self.load_containers().await,
             _ => {}
         }
@@ -505,6 +510,17 @@ impl App {
         };
 
         match result {
+            Ok(_) => self.load_containers().await,
+            Err(e) => self.error_message = Some(e.to_string()),
+        }
+    }
+
+    async fn restart_container(&mut self, container: &ContainerDto) {
+        if !container.can_restart {
+            return;
+        }
+
+        match self.container_actions.restart_container(&container.id).await {
             Ok(_) => self.load_containers().await,
             Err(e) => self.error_message = Some(e.to_string()),
         }

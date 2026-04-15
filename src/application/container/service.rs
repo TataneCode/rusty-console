@@ -49,6 +49,10 @@ impl ContainerService {
         self.repository.delete(id, force).await
     }
 
+    pub async fn restart_container(&self, id: &str) -> Result<(), AppError> {
+        self.repository.restart(id).await
+    }
+
     pub async fn pause_container(&self, id: &str) -> Result<(), AppError> {
         self.repository.pause(id).await
     }

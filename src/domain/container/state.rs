@@ -64,6 +64,13 @@ impl ContainerState {
         matches!(self, ContainerState::Paused)
     }
 
+    pub fn can_be_restarted(&self) -> bool {
+        matches!(
+            self,
+            ContainerState::Running | ContainerState::Paused | ContainerState::Restarting
+        )
+    }
+
     pub fn can_be_deleted(&self) -> bool {
         !self.is_active()
     }

@@ -10,6 +10,7 @@ pub trait ContainerRepository: Send + Sync {
     async fn start(&self, id: &str) -> Result<(), AppError>;
     async fn stop(&self, id: &str) -> Result<(), AppError>;
     async fn delete(&self, id: &str, force: bool) -> Result<(), AppError>;
+    async fn restart(&self, id: &str) -> Result<(), AppError>;
     async fn pause(&self, id: &str) -> Result<(), AppError>;
     async fn unpause(&self, id: &str) -> Result<(), AppError>;
 }

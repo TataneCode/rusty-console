@@ -60,7 +60,7 @@ pub fn render_container_list(
     render_help(
         frame,
         chunks[1],
-        " q: Quit | j/k: Navigate | l: Logs | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause/Unpause",
+        " q: Quit | j/k: Navigate | l: Logs | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart",
     );
 }
 

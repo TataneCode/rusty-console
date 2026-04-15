@@ -106,6 +106,10 @@ impl Container {
         self.state.can_be_deleted()
     }
 
+    pub fn can_be_restarted(&self) -> bool {
+        self.state.can_be_restarted()
+    }
+
     pub fn can_be_paused(&self) -> bool {
         self.state.can_be_paused()
     }

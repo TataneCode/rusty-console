@@ -36,6 +36,10 @@ impl ContainerActions {
         self.service.delete_container(id, force).await
     }
 
+    pub async fn restart_container(&self, id: &str) -> Result<(), AppError> {
+        self.service.restart_container(id).await
+    }
+
     pub async fn pause_container(&self, id: &str) -> Result<(), AppError> {
         self.service.pause_container(id).await
     }

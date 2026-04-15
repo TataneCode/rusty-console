@@ -13,6 +13,7 @@ pub struct ContainerDto {
     pub can_start: bool,
     pub can_stop: bool,
     pub can_delete: bool,
+    pub can_restart: bool,
     pub can_pause: bool,
     pub can_unpause: bool,
 }

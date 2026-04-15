@@ -4,8 +4,8 @@ use crate::infrastructure::container::mapper::ContainerInfraMapper;
 use crate::infrastructure::docker::DockerClient;
 use async_trait::async_trait;
 use bollard::container::{
-    ListContainersOptions, LogsOptions, RemoveContainerOptions, StartContainerOptions,
-    StopContainerOptions,
+    ListContainersOptions, LogsOptions, RemoveContainerOptions, RestartContainerOptions,
+    StartContainerOptions, StopContainerOptions,
 };
 use futures_util::StreamExt;
 use std::collections::HashMap;
@@ -117,6 +117,16 @@ impl ContainerRepository for ContainerAdapter {
             .remove_container(id, Some(options))
             .await
             .map_err(|e| AppError::operation_failed(format!("Failed to delete container: {}", e)))
+    }
+
+    async fn restart(&self, id: &str) -> Result<(), AppError> {
+        let options = RestartContainerOptions { t: 10 };
+
+        self.docker
+            .inner()
+            .restart_container(id, Some(options))
+            .await
+            .map_err(|e| AppError::operation_failed(format!("Failed to restart container: {}", e)))
     }
 
     async fn pause(&self, id: &str) -> Result<(), AppError> {

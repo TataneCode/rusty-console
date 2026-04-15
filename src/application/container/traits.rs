@@ -1,4 +1,5 @@
 use crate::application::error::AppError;
+use crate::application::PruneResultDto;
 use crate::domain::Container;
 use async_trait::async_trait;
 
@@ -13,4 +14,5 @@ pub trait ContainerRepository: Send + Sync {
     async fn restart(&self, id: &str) -> Result<(), AppError>;
     async fn pause(&self, id: &str) -> Result<(), AppError>;
     async fn unpause(&self, id: &str) -> Result<(), AppError>;
+    async fn prune(&self) -> Result<PruneResultDto, AppError>;
 }

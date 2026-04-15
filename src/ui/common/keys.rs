@@ -18,6 +18,7 @@ pub enum AppAction {
     ScrollDown,
     PauseUnpause,
     Restart,
+    Prune,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -42,6 +43,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         }
         KeyCode::Char('p') => Some(AppAction::PauseUnpause),
         KeyCode::Char('R') => Some(AppAction::Restart),
+        KeyCode::Char('X') => Some(AppAction::Prune),
         _ => None,
     }
 }

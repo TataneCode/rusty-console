@@ -38,6 +38,9 @@ pub enum ConfirmAction {
     DeleteContainer(bool),
     DeleteVolume,
     DeleteImage(bool),
+    PruneContainers,
+    PruneVolumes,
+    PruneImages,
 }
 
 pub struct App {
@@ -180,6 +183,9 @@ impl App {
                         "Delete this image?"
                     }
                 }
+                ConfirmAction::PruneContainers => "Prune all stopped containers?",
+                ConfirmAction::PruneVolumes => "Prune all unused volumes?",
+                ConfirmAction::PruneImages => "Prune all dangling images?",
             };
             render_confirm_dialog(frame, message, *selected_yes);
         }
@@ -359,6 +365,9 @@ impl App {
                 }
             }
             AppAction::Refresh => self.load_containers().await,
+            AppAction::Prune => {
+                self.confirm_dialog = Some((ConfirmAction::PruneContainers, true));
+            }
             _ => {}
         }
     }
@@ -408,6 +417,9 @@ impl App {
                 }
             }
             AppAction::Refresh => self.load_volumes().await,
+            AppAction::Prune => {
+                self.confirm_dialog = Some((ConfirmAction::PruneVolumes, true));
+            }
             _ => {}
         }
     }
@@ -431,6 +443,9 @@ impl App {
                 }
             }
             AppAction::Refresh => self.load_images().await,
+            AppAction::Prune => {
+                self.confirm_dialog = Some((ConfirmAction::PruneImages, true));
+            }
             _ => {}
         }
     }
@@ -466,6 +481,45 @@ impl App {
                     } else {
                         self.load_images().await;
                     }
+                }
+            }
+            ConfirmAction::PruneContainers => {
+                match self.container_actions.prune_containers().await {
+                    Ok(result) => {
+                        self.error_message = Some(format!(
+                            "Pruned {} container(s), freed {}",
+                            result.deleted_count,
+                            format_bytes(result.space_freed)
+                        ));
+                        self.load_containers().await;
+                    }
+                    Err(e) => self.error_message = Some(e.to_string()),
+                }
+            }
+            ConfirmAction::PruneVolumes => {
+                match self.volume_actions.prune_volumes().await {
+                    Ok(result) => {
+                        self.error_message = Some(format!(
+                            "Pruned {} volume(s), freed {}",
+                            result.deleted_count,
+                            format_bytes(result.space_freed)
+                        ));
+                        self.load_volumes().await;
+                    }
+                    Err(e) => self.error_message = Some(e.to_string()),
+                }
+            }
+            ConfirmAction::PruneImages => {
+                match self.image_actions.prune_images().await {
+                    Ok(result) => {
+                        self.error_message = Some(format!(
+                            "Pruned {} image(s), freed {}",
+                            result.deleted_count,
+                            format_bytes(result.space_freed)
+                        ));
+                        self.load_images().await;
+                    }
+                    Err(e) => self.error_message = Some(e.to_string()),
                 }
             }
         }
@@ -548,5 +602,21 @@ impl App {
             Ok(images) => self.image_presenter.set_images(images),
             Err(e) => self.error_message = Some(e.to_string()),
         }
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
     }
 }

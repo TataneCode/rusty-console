@@ -2,6 +2,7 @@ use crate::application::error::AppError;
 use crate::application::volume::dto::VolumeDto;
 use crate::application::volume::mapper::VolumeMapper;
 use crate::application::volume::traits::VolumeRepository;
+use crate::application::PruneResultDto;
 use std::sync::Arc;
 
 pub struct VolumeService {
@@ -25,5 +26,9 @@ impl VolumeService {
 
     pub async fn delete_volume(&self, name: &str) -> Result<(), AppError> {
         self.repository.delete(name).await
+    }
+
+    pub async fn prune_volumes(&self) -> Result<PruneResultDto, AppError> {
+        self.repository.prune().await
     }
 }

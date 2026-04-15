@@ -1,10 +1,11 @@
 use crate::application::{AppError, ImageRepository};
+use crate::application::PruneResultDto;
 use crate::domain::Image;
 use crate::infrastructure::docker::DockerClient;
 use crate::infrastructure::image::mapper::ImageInfraMapper;
 use async_trait::async_trait;
 use bollard::container::ListContainersOptions;
-use bollard::image::{ListImagesOptions, RemoveImageOptions};
+use bollard::image::{ListImagesOptions, PruneImagesOptions, RemoveImageOptions};
 use std::collections::HashSet;
 
 pub struct ImageAdapter {
@@ -72,5 +73,28 @@ impl ImageRepository for ImageAdapter {
             .map_err(|e| AppError::operation_failed(format!("Failed to delete image: {}", e)))?;
 
         Ok(())
+    }
+
+    async fn prune(&self) -> Result<PruneResultDto, AppError> {
+        let mut filters = std::collections::HashMap::new();
+        filters.insert("dangling", vec!["true"]);
+        let options = PruneImagesOptions { filters };
+
+        let result = self
+            .docker
+            .inner()
+            .prune_images(Some(options))
+            .await
+            .map_err(|e| {
+                AppError::operation_failed(format!("Failed to prune images: {}", e))
+            })?;
+
+        Ok(PruneResultDto {
+            deleted_count: result
+                .images_deleted
+                .map(|i| i.len() as u32)
+                .unwrap_or(0),
+            space_freed: result.space_reclaimed.unwrap_or(0) as u64,
+        })
     }
 }

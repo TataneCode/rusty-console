@@ -1,4 +1,5 @@
 use crate::application::AppError;
+use crate::application::PruneResultDto;
 use crate::application::{ContainerDto, ContainerLogsDto, ContainerService};
 
 pub struct ContainerActions {
@@ -53,5 +54,9 @@ impl ContainerActions {
 
     pub async fn unpause_container(&self, id: &str) -> Result<(), AppError> {
         self.service.unpause_container(id).await
+    }
+
+    pub async fn prune_containers(&self) -> Result<PruneResultDto, AppError> {
+        self.service.prune_containers().await
     }
 }

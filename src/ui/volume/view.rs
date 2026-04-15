@@ -53,7 +53,7 @@ pub fn render_volume_list(
     render_help(
         frame,
         chunks[1],
-        " q: Quit | j/k: Navigate | d: Delete | r: Refresh | Esc: Back ",
+        " q: Quit | j/k: Navigate | d: Delete | r: Refresh | X: Prune | Esc: Back ",
     );
 }
 

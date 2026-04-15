@@ -1,11 +1,12 @@
 use crate::application::{AppError, ContainerRepository};
+use crate::application::PruneResultDto;
 use crate::domain::Container;
 use crate::infrastructure::container::mapper::ContainerInfraMapper;
 use crate::infrastructure::docker::DockerClient;
 use async_trait::async_trait;
 use bollard::container::{
-    ListContainersOptions, LogsOptions, RemoveContainerOptions, RestartContainerOptions,
-    StartContainerOptions, StopContainerOptions,
+    ListContainersOptions, LogsOptions, PruneContainersOptions, RemoveContainerOptions,
+    RestartContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use futures_util::StreamExt;
 use std::collections::HashMap;
@@ -149,5 +150,24 @@ impl ContainerRepository for ContainerAdapter {
             .unpause_container(id)
             .await
             .map_err(|e| AppError::operation_failed(format!("Failed to unpause container: {}", e)))
+    }
+
+    async fn prune(&self) -> Result<PruneResultDto, AppError> {
+        let result = self
+            .docker
+            .inner()
+            .prune_containers(None::<PruneContainersOptions<String>>)
+            .await
+            .map_err(|e| {
+                AppError::operation_failed(format!("Failed to prune containers: {}", e))
+            })?;
+
+        Ok(PruneResultDto {
+            deleted_count: result
+                .containers_deleted
+                .map(|c| c.len() as u32)
+                .unwrap_or(0),
+            space_freed: result.space_reclaimed.unwrap_or(0) as u64,
+        })
     }
 }

@@ -2,6 +2,7 @@ use crate::application::container::dto::{ContainerDto, ContainerLogsDto};
 use crate::application::container::mapper::ContainerMapper;
 use crate::application::container::traits::ContainerRepository;
 use crate::application::error::AppError;
+use crate::application::PruneResultDto;
 use std::sync::Arc;
 
 pub struct ContainerService {
@@ -59,5 +60,9 @@ impl ContainerService {
 
     pub async fn unpause_container(&self, id: &str) -> Result<(), AppError> {
         self.repository.unpause(id).await
+    }
+
+    pub async fn prune_containers(&self) -> Result<PruneResultDto, AppError> {
+        self.repository.prune().await
     }
 }

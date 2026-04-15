@@ -1,4 +1,4 @@
-use crate::application::{AppError, VolumeDto, VolumeService};
+use crate::application::{AppError, PruneResultDto, VolumeDto, VolumeService};
 
 pub struct VolumeActions {
     service: VolumeService,
@@ -15,5 +15,9 @@ impl VolumeActions {
 
     pub async fn delete_volume(&self, name: &str) -> Result<(), AppError> {
         self.service.delete_volume(name).await
+    }
+
+    pub async fn prune_volumes(&self) -> Result<PruneResultDto, AppError> {
+        self.service.prune_volumes().await
     }
 }

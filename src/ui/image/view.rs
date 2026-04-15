@@ -61,7 +61,7 @@ pub fn render_image_list(
     render_help(
         frame,
         chunks[1],
-        " q: Quit | j/k: Navigate | d: Delete | c: Details | r: Refresh | Esc: Back ",
+        " q: Quit | j/k: Navigate | d: Delete | c: Details | r: Refresh | X: Prune | Esc: Back ",
     );
 }
 

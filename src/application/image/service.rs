@@ -2,6 +2,7 @@ use crate::application::error::AppError;
 use crate::application::image::dto::ImageDto;
 use crate::application::image::mapper::ImageMapper;
 use crate::application::image::traits::ImageRepository;
+use crate::application::PruneResultDto;
 use std::sync::Arc;
 
 pub struct ImageService {
@@ -25,5 +26,9 @@ impl ImageService {
 
     pub async fn delete_image(&self, id: &str, force: bool) -> Result<(), AppError> {
         self.repository.delete(id, force).await
+    }
+
+    pub async fn prune_images(&self) -> Result<PruneResultDto, AppError> {
+        self.repository.prune().await
     }
 }

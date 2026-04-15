@@ -113,4 +113,34 @@ mod tests {
 
         assert!(!volume.can_be_deleted());
     }
+
+    fn create_test_volume() -> Volume {
+        Volume::new(
+            VolumeId::new("vol1").unwrap(),
+            "my-volume",
+            "local",
+            "/var/lib/docker/volumes/my-volume/_data",
+        )
+    }
+
+    #[test]
+    fn test_name() {
+        let volume = create_test_volume();
+        assert_eq!(volume.name(), "my-volume");
+    }
+
+    #[test]
+    fn test_mountpoint() {
+        let volume = create_test_volume();
+        assert_eq!(
+            volume.mountpoint(),
+            "/var/lib/docker/volumes/my-volume/_data"
+        );
+    }
+
+    #[test]
+    fn test_driver() {
+        let volume = create_test_volume();
+        assert_eq!(volume.driver(), "local");
+    }
 }

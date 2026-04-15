@@ -127,4 +127,28 @@ mod tests {
         let in_use = create_test_image("nginx", "latest").with_in_use(true);
         assert!(!in_use.can_be_deleted());
     }
+
+    #[test]
+    fn test_can_be_deleted_explicitly_not_in_use() {
+        let image = create_test_image("nginx", "latest").with_in_use(false);
+        assert!(image.can_be_deleted());
+    }
+
+    #[test]
+    fn test_short_id() {
+        let image = create_test_image("nginx", "latest");
+        assert_eq!(image.id().short(), "test123");
+    }
+
+    #[test]
+    fn test_full_name_no_repo() {
+        let image = create_test_image("<none>", "latest");
+        assert_eq!(image.full_name(), "<none>:latest");
+    }
+
+    #[test]
+    fn test_is_dangling_empty_strings() {
+        let image = create_test_image("", "");
+        assert!(image.is_dangling());
+    }
 }

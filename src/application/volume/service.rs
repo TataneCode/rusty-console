@@ -32,3 +32,91 @@ impl VolumeService {
         self.repository.prune().await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::volume::traits::MockVolumeRepository;
+    use crate::domain::{Volume, VolumeId};
+    use std::sync::Arc;
+
+    fn make_volume(id: &str, name: &str) -> Volume {
+        Volume::new(
+            VolumeId::new(id).unwrap(),
+            name,
+            "local",
+            format!("/var/lib/docker/volumes/{}/_data", name),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_get_all_volumes_returns_dtos() {
+        let mut mock = MockVolumeRepository::new();
+        mock.expect_get_all().returning(|| {
+            Ok(vec![
+                make_volume("vol1", "my-data"),
+                make_volume("vol2", "pg-data"),
+            ])
+        });
+
+        let service = VolumeService::new(Arc::new(mock));
+        let result = service.get_all_volumes().await.unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name, "my-data");
+        assert_eq!(result[0].driver, "local");
+        assert_eq!(result[1].name, "pg-data");
+    }
+
+    #[tokio::test]
+    async fn test_get_volume_by_name_found() {
+        let mut mock = MockVolumeRepository::new();
+        mock.expect_get_by_name()
+            .withf(|name| name == "my-data")
+            .returning(|_| Ok(Some(make_volume("vol1", "my-data"))));
+
+        let service = VolumeService::new(Arc::new(mock));
+        let result = service.get_volume_by_name("my-data").await.unwrap();
+        assert!(result.is_some());
+        let dto = result.unwrap();
+        assert_eq!(dto.name, "my-data");
+        assert_eq!(dto.driver, "local");
+        assert!(dto.can_delete);
+    }
+
+    #[tokio::test]
+    async fn test_get_volume_by_name_not_found() {
+        let mut mock = MockVolumeRepository::new();
+        mock.expect_get_by_name().returning(|_| Ok(None));
+
+        let service = VolumeService::new(Arc::new(mock));
+        let result = service.get_volume_by_name("missing").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_volume_delegates() {
+        let mut mock = MockVolumeRepository::new();
+        mock.expect_delete()
+            .withf(|name| name == "my-data")
+            .returning(|_| Ok(()));
+
+        let service = VolumeService::new(Arc::new(mock));
+        assert!(service.delete_volume("my-data").await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_prune_volumes_returns_result() {
+        let mut mock = MockVolumeRepository::new();
+        mock.expect_prune().returning(|| {
+            Ok(PruneResultDto {
+                deleted_count: 2,
+                space_freed: 500_000,
+            })
+        });
+
+        let service = VolumeService::new(Arc::new(mock));
+        let result = service.prune_volumes().await.unwrap();
+        assert_eq!(result.deleted_count, 2);
+        assert_eq!(result.space_freed, 500_000);
+    }
+}

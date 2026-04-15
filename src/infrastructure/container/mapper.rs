@@ -227,3 +227,275 @@ impl ContainerInfraMapper {
             .unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bollard::models::{
+        ContainerConfig, ContainerInspectResponse, ContainerState as BollardContainerState,
+        ContainerStateStatusEnum, ContainerSummary, ContainerSummaryNetworkSettings,
+        EndpointSettings, MountPoint, NetworkSettings, Port, PortBinding, PortTypeEnum,
+    };
+    use std::collections::HashMap;
+
+    fn make_summary(id: &str, name: &str, image: &str, state: &str) -> ContainerSummary {
+        ContainerSummary {
+            id: Some(id.to_string()),
+            names: Some(vec![format!("/{name}")]),
+            image: Some(image.to_string()),
+            state: Some(state.to_string()),
+            status: Some("Up 5 minutes".to_string()),
+            created: Some(1_700_000_000),
+            ..Default::default()
+        }
+    }
+
+    // ── from_docker tests ──
+
+    #[test]
+    fn from_docker_happy_path() {
+        let summary = ContainerSummary {
+            id: Some("abc123def456".to_string()),
+            names: Some(vec!["/my-container".to_string()]),
+            image: Some("nginx:latest".to_string()),
+            state: Some("running".to_string()),
+            status: Some("Up 5 minutes".to_string()),
+            created: Some(1_700_000_000),
+            ports: Some(vec![Port {
+                private_port: 80,
+                public_port: Some(8080),
+                typ: Some(PortTypeEnum::TCP),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+
+        let container = ContainerInfraMapper::from_docker(&summary).unwrap();
+        assert_eq!(container.id().as_str(), "abc123def456");
+        assert_eq!(container.name(), "/my-container");
+        assert_eq!(container.image(), "nginx:latest");
+        assert_eq!(container.state(), ContainerState::Running);
+        assert_eq!(container.status(), "Up 5 minutes");
+        assert_eq!(container.ports().len(), 1);
+        assert_eq!(container.ports()[0].private_port, 80);
+        assert_eq!(container.ports()[0].public_port, Some(8080));
+    }
+
+    #[test]
+    fn from_docker_missing_id_returns_none() {
+        let summary = ContainerSummary {
+            id: None,
+            names: Some(vec!["/c".to_string()]),
+            ..Default::default()
+        };
+        assert!(ContainerInfraMapper::from_docker(&summary).is_none());
+    }
+
+    #[test]
+    fn from_docker_empty_id_returns_none() {
+        let summary = ContainerSummary {
+            id: Some(String::new()),
+            names: Some(vec!["/c".to_string()]),
+            ..Default::default()
+        };
+        assert!(ContainerInfraMapper::from_docker(&summary).is_none());
+    }
+
+    #[test]
+    fn from_docker_missing_names_defaults_to_unknown() {
+        let summary = ContainerSummary {
+            id: Some("abc123".to_string()),
+            names: None,
+            ..Default::default()
+        };
+        let container = ContainerInfraMapper::from_docker(&summary).unwrap();
+        assert_eq!(container.name(), "unknown");
+    }
+
+    #[test]
+    fn from_docker_port_mapping_with_multiple_ports() {
+        let summary = ContainerSummary {
+            id: Some("abc123".to_string()),
+            names: Some(vec!["/web".to_string()]),
+            ports: Some(vec![
+                Port {
+                    private_port: 80,
+                    public_port: Some(8080),
+                    typ: Some(PortTypeEnum::TCP),
+                    ..Default::default()
+                },
+                Port {
+                    private_port: 443,
+                    public_port: None,
+                    typ: Some(PortTypeEnum::TCP),
+                    ..Default::default()
+                },
+                Port {
+                    private_port: 53,
+                    public_port: Some(5353),
+                    typ: Some(PortTypeEnum::UDP),
+                    ..Default::default()
+                },
+            ]),
+            ..Default::default()
+        };
+
+        let container = ContainerInfraMapper::from_docker(&summary).unwrap();
+        assert_eq!(container.ports().len(), 3);
+        assert_eq!(container.ports()[0].public_port, Some(8080));
+        assert_eq!(container.ports()[1].public_port, None);
+        assert_eq!(container.ports()[2].protocol, "udp");
+    }
+
+    #[test]
+    fn from_docker_network_extraction() {
+        let mut networks = HashMap::new();
+        networks.insert(
+            "bridge".to_string(),
+            EndpointSettings {
+                ip_address: Some("172.17.0.2".to_string()),
+                ..Default::default()
+            },
+        );
+        networks.insert(
+            "custom_net".to_string(),
+            EndpointSettings {
+                ip_address: Some("10.0.0.5".to_string()),
+                ..Default::default()
+            },
+        );
+
+        let mut summary = make_summary("abc123", "web", "nginx", "running");
+        summary.network_settings = Some(ContainerSummaryNetworkSettings {
+            networks: Some(networks),
+        });
+
+        let container = ContainerInfraMapper::from_docker(&summary).unwrap();
+        assert_eq!(container.networks().len(), 2);
+        let net_names: Vec<&str> = container.networks().iter().map(|n| n.name.as_str()).collect();
+        assert!(net_names.contains(&"bridge"));
+        assert!(net_names.contains(&"custom_net"));
+    }
+
+    #[test]
+    fn from_docker_mount_extraction() {
+        let mut summary = make_summary("abc123", "db", "postgres", "running");
+        summary.mounts = Some(vec![
+            MountPoint {
+                name: Some("pgdata".to_string()),
+                destination: Some("/var/lib/postgresql/data".to_string()),
+                mode: Some("rw".to_string()),
+                ..Default::default()
+            },
+            MountPoint {
+                name: None,
+                source: Some("/host/config".to_string()),
+                destination: Some("/etc/app".to_string()),
+                mode: None,
+                ..Default::default()
+            },
+        ]);
+
+        let container = ContainerInfraMapper::from_docker(&summary).unwrap();
+        assert_eq!(container.mounts().len(), 2);
+        assert_eq!(container.mounts()[0].source, "pgdata");
+        assert_eq!(container.mounts()[0].destination, "/var/lib/postgresql/data");
+        assert_eq!(container.mounts()[1].source, "/host/config");
+        assert_eq!(container.mounts()[1].mode, "rw"); // default when None
+    }
+
+    // ── from_inspect tests ──
+
+    #[test]
+    fn from_inspect_happy_path_with_env_vars() {
+        let response = ContainerInspectResponse {
+            id: Some("abc123def456".to_string()),
+            name: Some("/my-app".to_string()),
+            created: Some("2024-01-15T10:30:00Z".to_string()),
+            state: Some(BollardContainerState {
+                status: Some(ContainerStateStatusEnum::RUNNING),
+                ..Default::default()
+            }),
+            config: Some(ContainerConfig {
+                image: Some("myapp:v2".to_string()),
+                env: Some(vec![
+                    "DATABASE_URL=postgres://localhost/db".to_string(),
+                    "RUST_LOG=info".to_string(),
+                ]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let container = ContainerInfraMapper::from_inspect(&response).unwrap();
+        assert_eq!(container.id().as_str(), "abc123def456");
+        assert_eq!(container.name(), "/my-app");
+        assert_eq!(container.image(), "myapp:v2");
+        assert_eq!(container.state(), ContainerState::Running);
+        assert_eq!(container.env_vars().len(), 2);
+        assert_eq!(container.env_vars()[0], "DATABASE_URL=postgres://localhost/db");
+        assert_eq!(container.env_vars()[1], "RUST_LOG=info");
+    }
+
+    #[test]
+    fn from_inspect_missing_optional_fields() {
+        let response = ContainerInspectResponse {
+            id: Some("def456".to_string()),
+            name: None,
+            created: None,
+            state: None,
+            config: None,
+            ..Default::default()
+        };
+
+        let container = ContainerInfraMapper::from_inspect(&response).unwrap();
+        assert_eq!(container.name(), "unknown");
+        assert_eq!(container.image(), "unknown");
+        assert_eq!(container.state(), ContainerState::Stopped);
+        assert!(container.env_vars().is_empty());
+    }
+
+    #[test]
+    fn from_inspect_missing_id_returns_none() {
+        let response = ContainerInspectResponse {
+            id: None,
+            ..Default::default()
+        };
+        assert!(ContainerInfraMapper::from_inspect(&response).is_none());
+    }
+
+    #[test]
+    fn from_inspect_ports_from_network_settings() {
+        let mut ports = HashMap::new();
+        ports.insert(
+            "80/tcp".to_string(),
+            Some(vec![PortBinding {
+                host_ip: Some("0.0.0.0".to_string()),
+                host_port: Some("8080".to_string()),
+            }]),
+        );
+        ports.insert("443/tcp".to_string(), None);
+
+        let response = ContainerInspectResponse {
+            id: Some("abc123".to_string()),
+            network_settings: Some(NetworkSettings {
+                ports: Some(ports),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let container = ContainerInfraMapper::from_inspect(&response).unwrap();
+        assert_eq!(container.ports().len(), 2);
+        let has_public_80 = container
+            .ports()
+            .iter()
+            .any(|p| p.private_port == 80 && p.public_port == Some(8080));
+        let has_no_public_443 = container
+            .ports()
+            .iter()
+            .any(|p| p.private_port == 443 && p.public_port.is_none());
+        assert!(has_public_80);
+        assert!(has_no_public_443);
+    }
+}

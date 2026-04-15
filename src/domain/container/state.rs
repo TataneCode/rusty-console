@@ -130,4 +130,40 @@ mod tests {
         assert!(!ContainerState::Stopped.can_be_stopped());
         assert!(!ContainerState::Exited.can_be_stopped());
     }
+
+    #[test]
+    fn test_can_be_restarted() {
+        assert!(ContainerState::Running.can_be_restarted());
+        assert!(ContainerState::Paused.can_be_restarted());
+        assert!(ContainerState::Restarting.can_be_restarted());
+        assert!(!ContainerState::Stopped.can_be_restarted());
+        assert!(!ContainerState::Exited.can_be_restarted());
+        assert!(!ContainerState::Created.can_be_restarted());
+        assert!(!ContainerState::Dead.can_be_restarted());
+        assert!(!ContainerState::Removing.can_be_restarted());
+    }
+
+    #[test]
+    fn test_can_be_paused() {
+        assert!(ContainerState::Running.can_be_paused());
+        assert!(!ContainerState::Paused.can_be_paused());
+        assert!(!ContainerState::Stopped.can_be_paused());
+        assert!(!ContainerState::Exited.can_be_paused());
+        assert!(!ContainerState::Dead.can_be_paused());
+        assert!(!ContainerState::Created.can_be_paused());
+        assert!(!ContainerState::Removing.can_be_paused());
+        assert!(!ContainerState::Restarting.can_be_paused());
+    }
+
+    #[test]
+    fn test_can_be_unpaused() {
+        assert!(ContainerState::Paused.can_be_unpaused());
+        assert!(!ContainerState::Running.can_be_unpaused());
+        assert!(!ContainerState::Stopped.can_be_unpaused());
+        assert!(!ContainerState::Exited.can_be_unpaused());
+        assert!(!ContainerState::Dead.can_be_unpaused());
+        assert!(!ContainerState::Created.can_be_unpaused());
+        assert!(!ContainerState::Removing.can_be_unpaused());
+        assert!(!ContainerState::Restarting.can_be_unpaused());
+    }
 }

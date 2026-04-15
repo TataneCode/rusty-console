@@ -3,6 +3,7 @@ use crate::application::PruneResultDto;
 use crate::domain::Image;
 use async_trait::async_trait;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait ImageRepository: Send + Sync {
     async fn get_all(&self) -> Result<Vec<Image>, AppError>;

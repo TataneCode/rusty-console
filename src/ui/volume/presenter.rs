@@ -94,3 +94,105 @@ impl Default for VolumePresenter {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_volume(name: &str) -> VolumeDto {
+        VolumeDto {
+            id: format!("id_{name}"),
+            name: name.to_string(),
+            driver: "local".to_string(),
+            mountpoint: format!("/var/lib/docker/volumes/{name}/_data"),
+            size: "10 MB".to_string(),
+            created: "2024-01-01".to_string(),
+            in_use: false,
+            can_delete: true,
+        }
+    }
+
+    fn three_volumes() -> Vec<VolumeDto> {
+        vec![
+            make_volume("pgdata"),
+            make_volume("redis-cache"),
+            make_volume("app-logs"),
+        ]
+    }
+
+    #[test]
+    fn test_set_volumes_updates_list() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        assert_eq!(p.volumes.len(), 3);
+        assert_eq!(p.selection.selected(), Some(0));
+        assert!(p.error.is_none());
+    }
+
+    #[test]
+    fn test_filtered_volumes_by_name() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        // Case-insensitive: "REDIS" should match "redis-cache"
+        for c in "REDIS".chars() {
+            p.push_filter_char(c);
+        }
+        let filtered = p.filtered_volumes();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "redis-cache");
+    }
+
+    #[test]
+    fn test_selected_volume_from_filtered_list() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        for c in "app".chars() {
+            p.push_filter_char(c);
+        }
+        let selected = p.selected_volume();
+        assert!(selected.is_some());
+        assert_eq!(selected.unwrap().name, "app-logs");
+    }
+
+    #[test]
+    fn test_activate_deactivate_filter() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        p.activate_filter();
+        assert!(p.filter_active);
+        p.push_filter_char('x');
+        p.deactivate_filter();
+        assert!(!p.filter_active);
+        assert!(p.filter.is_empty());
+        // All items visible again
+        assert_eq!(p.filtered_volumes().len(), 3);
+    }
+
+    #[test]
+    fn test_filter_narrows_selection() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        p.navigate_down();
+        p.navigate_down();
+        assert_eq!(p.selection.selected(), Some(2));
+        // Filter to 1 item
+        for c in "pgdata".chars() {
+            p.push_filter_char(c);
+        }
+        assert_eq!(p.filtered_volumes().len(), 1);
+        assert_eq!(p.selection.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_navigate_wraps() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        assert_eq!(p.selection.selected(), Some(0));
+        // Wrap backwards from 0
+        p.navigate_up();
+        assert_eq!(p.selection.selected(), Some(2));
+        // Wrap forwards from last
+        p.navigate_down();
+        assert_eq!(p.selection.selected(), Some(0));
+    }
+}

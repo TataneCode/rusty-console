@@ -192,4 +192,47 @@ mod tests {
         assert!(container.uses_volume("my-volume"));
         assert!(!container.uses_volume("other-volume"));
     }
+
+    #[test]
+    fn test_can_be_restarted_when_running() {
+        let container = create_test_container(ContainerState::Running);
+        assert!(container.can_be_restarted());
+    }
+
+    #[test]
+    fn test_can_be_restarted_when_stopped() {
+        let container = create_test_container(ContainerState::Stopped);
+        assert!(!container.can_be_restarted());
+    }
+
+    #[test]
+    fn test_env_vars_empty_by_default() {
+        let container = create_test_container(ContainerState::Running);
+        assert!(container.env_vars().is_empty());
+    }
+
+    #[test]
+    fn test_with_env_vars() {
+        let container = create_test_container(ContainerState::Running)
+            .with_env_vars(vec!["FOO=bar".to_string(), "BAZ=qux".to_string()]);
+        assert_eq!(container.env_vars().len(), 2);
+        assert_eq!(container.env_vars()[0], "FOO=bar");
+        assert_eq!(container.env_vars()[1], "BAZ=qux");
+    }
+
+    #[test]
+    fn test_uses_volume_no_mounts() {
+        let container = create_test_container(ContainerState::Running);
+        assert!(!container.uses_volume("any-volume"));
+    }
+
+    #[test]
+    fn test_uses_volume_multiple_mounts() {
+        let container = create_test_container(ContainerState::Running).with_mounts(vec![
+            MountInfo::new("volume-a", "/data-a", "rw"),
+            MountInfo::new("volume-b", "/data-b", "ro"),
+        ]);
+        assert!(container.uses_volume("volume-b"));
+        assert!(!container.uses_volume("volume-c"));
+    }
 }

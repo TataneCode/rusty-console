@@ -3,6 +3,7 @@ use crate::application::PruneResultDto;
 use crate::domain::Container;
 use async_trait::async_trait;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait ContainerRepository: Send + Sync {
     async fn get_all(&self) -> Result<Vec<Container>, AppError>;

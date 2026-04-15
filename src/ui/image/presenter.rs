@@ -107,3 +107,112 @@ impl Default for ImagePresenter {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_image(repository: &str, tag: &str) -> ImageDto {
+        ImageDto {
+            id: format!("sha256:{repository}_{tag}"),
+            short_id: "abc123".to_string(),
+            repository: repository.to_string(),
+            tag: tag.to_string(),
+            full_name: format!("{repository}:{tag}"),
+            size: "50 MB".to_string(),
+            created: "2024-01-01".to_string(),
+            in_use: false,
+            is_dangling: false,
+            can_delete: true,
+        }
+    }
+
+    fn three_images() -> Vec<ImageDto> {
+        vec![
+            make_image("nginx", "latest"),
+            make_image("redis", "7-alpine"),
+            make_image("postgres", "16"),
+        ]
+    }
+
+    #[test]
+    fn test_set_images_updates_list() {
+        let mut p = ImagePresenter::new();
+        p.set_images(three_images());
+        assert_eq!(p.images.len(), 3);
+        assert_eq!(p.selection.selected(), Some(0));
+        assert!(p.error.is_none());
+    }
+
+    #[test]
+    fn test_filtered_images_by_repository() {
+        let mut p = ImagePresenter::new();
+        p.set_images(three_images());
+        // Case-insensitive: "NGINX" matches "nginx"
+        for c in "NGINX".chars() {
+            p.push_filter_char(c);
+        }
+        let filtered = p.filtered_images();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].repository, "nginx");
+    }
+
+    #[test]
+    fn test_filtered_images_by_tag() {
+        let mut p = ImagePresenter::new();
+        p.set_images(three_images());
+        for c in "alpine".chars() {
+            p.push_filter_char(c);
+        }
+        let filtered = p.filtered_images();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].repository, "redis");
+    }
+
+    #[test]
+    fn test_selected_image_from_filtered_list() {
+        let mut p = ImagePresenter::new();
+        p.set_images(three_images());
+        for c in "postgres".chars() {
+            p.push_filter_char(c);
+        }
+        let selected = p.selected_image();
+        assert!(selected.is_some());
+        assert_eq!(selected.unwrap().repository, "postgres");
+    }
+
+    #[test]
+    fn test_activate_deactivate_filter() {
+        let mut p = ImagePresenter::new();
+        p.set_images(three_images());
+        p.activate_filter();
+        assert!(p.filter_active);
+        p.push_filter_char('z');
+        p.deactivate_filter();
+        assert!(!p.filter_active);
+        assert!(p.filter.is_empty());
+        assert_eq!(p.filtered_images().len(), 3);
+    }
+
+    #[test]
+    fn test_set_details_and_clear() {
+        let mut p = ImagePresenter::new();
+        assert!(p.selected_image.is_none());
+        p.set_details(make_image("nginx", "latest"));
+        assert!(p.selected_image.is_some());
+        assert_eq!(p.selected_image.as_ref().unwrap().repository, "nginx");
+        p.clear_details();
+        assert!(p.selected_image.is_none());
+    }
+
+    #[test]
+    fn test_navigate_wraps() {
+        let mut p = ImagePresenter::new();
+        p.set_images(three_images());
+        assert_eq!(p.selection.selected(), Some(0));
+        p.navigate_up();
+        assert_eq!(p.selection.selected(), Some(2));
+        p.navigate_down();
+        assert_eq!(p.selection.selected(), Some(0));
+    }
+}

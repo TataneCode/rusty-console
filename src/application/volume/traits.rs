@@ -3,6 +3,7 @@ use crate::application::PruneResultDto;
 use crate::domain::Volume;
 use async_trait::async_trait;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait VolumeRepository: Send + Sync {
     async fn get_all(&self) -> Result<Vec<Volume>, AppError>;

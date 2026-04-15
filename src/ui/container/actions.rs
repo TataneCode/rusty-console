@@ -24,6 +24,13 @@ impl ContainerActions {
             .await
     }
 
+    pub async fn load_container_details(
+        &self,
+        id: &str,
+    ) -> Result<Option<ContainerDto>, AppError> {
+        self.service.get_container_by_id(id).await
+    }
+
     pub async fn start_container(&self, id: &str) -> Result<(), AppError> {
         self.service.start_container(id).await
     }

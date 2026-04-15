@@ -331,8 +331,10 @@ impl App {
             }
             AppAction::ViewDetails => {
                 if let Some(container) = self.container_presenter.selected_container().cloned() {
-                    self.container_presenter.set_details(container);
-                    self.screen = Screen::ContainerDetails;
+                    self.load_container_details(&container.id).await;
+                    if self.container_presenter.selected_container.is_some() {
+                        self.screen = Screen::ContainerDetails;
+                    }
                 }
             }
             AppAction::StartStop => {
@@ -472,6 +474,14 @@ impl App {
     async fn load_containers(&mut self) {
         match self.container_actions.load_containers().await {
             Ok(containers) => self.container_presenter.set_containers(containers),
+            Err(e) => self.error_message = Some(e.to_string()),
+        }
+    }
+
+    async fn load_container_details(&mut self, id: &str) {
+        match self.container_actions.load_container_details(id).await {
+            Ok(Some(container)) => self.container_presenter.set_details(container),
+            Ok(None) => self.error_message = Some("Container not found".to_string()),
             Err(e) => self.error_message = Some(e.to_string()),
         }
     }

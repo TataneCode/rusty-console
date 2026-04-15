@@ -57,8 +57,14 @@ impl ContainerRepository for ContainerAdapter {
     }
 
     async fn get_by_id(&self, id: &str) -> Result<Option<Container>, AppError> {
-        let containers = self.get_all().await?;
-        Ok(containers.into_iter().find(|c| c.id().as_str() == id))
+        let response = self
+            .docker
+            .inner()
+            .inspect_container(id, None)
+            .await
+            .map_err(|e| AppError::repository(e.to_string()))?;
+
+        Ok(ContainerInfraMapper::from_inspect(&response))
     }
 
     async fn get_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {

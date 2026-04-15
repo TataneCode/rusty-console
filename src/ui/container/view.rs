@@ -105,6 +105,20 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
         _ => Theme::stopped_style(),
     };
 
+    let env_section = if container.env_vars.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\nEnvironment Variables:\n{}",
+            container
+                .env_vars
+                .iter()
+                .map(|v| format!("  {}", v))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    };
+
     let details = format!(
         "ID:       {}\n\
          Name:     {}\n\
@@ -113,7 +127,7 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
          Status:   {}\n\
          Created:  {}\n\
          Ports:    {}\n\
-         Networks: {}",
+         Networks: {}{}",
         container.id,
         container.name,
         container.image,
@@ -122,6 +136,7 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
         container.created,
         container.ports,
         container.networks,
+        env_section,
     );
 
     let details_widget = Paragraph::new(details)

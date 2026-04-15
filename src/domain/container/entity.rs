@@ -13,6 +13,7 @@ pub struct Container {
     ports: Vec<PortMapping>,
     networks: Vec<NetworkInfo>,
     mounts: Vec<MountInfo>,
+    env_vars: Vec<String>,
 }
 
 impl Container {
@@ -34,6 +35,7 @@ impl Container {
             ports: Vec::new(),
             networks: Vec::new(),
             mounts: Vec::new(),
+            env_vars: Vec::new(),
         }
     }
 
@@ -49,6 +51,11 @@ impl Container {
 
     pub fn with_mounts(mut self, mounts: Vec<MountInfo>) -> Self {
         self.mounts = mounts;
+        self
+    }
+
+    pub fn with_env_vars(mut self, env_vars: Vec<String>) -> Self {
+        self.env_vars = env_vars;
         self
     }
 
@@ -87,6 +94,10 @@ impl Container {
 
     pub fn mounts(&self) -> &[MountInfo] {
         &self.mounts
+    }
+
+    pub fn env_vars(&self) -> &[String] {
+        &self.env_vars
     }
 
     // Business logic

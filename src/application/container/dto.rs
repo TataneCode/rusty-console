@@ -16,6 +16,7 @@ pub struct ContainerDto {
     pub can_restart: bool,
     pub can_pause: bool,
     pub can_unpause: bool,
+    pub env_vars: Vec<String>,
 }
 
 impl ContainerDto {

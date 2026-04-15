@@ -7,6 +7,8 @@ pub struct ImagePresenter {
     pub selected_image: Option<ImageDto>,
     pub loading: bool,
     pub error: Option<String>,
+    pub filter: String,
+    pub filter_active: bool,
 }
 
 impl ImagePresenter {
@@ -17,12 +19,14 @@ impl ImagePresenter {
             selected_image: None,
             loading: false,
             error: None,
+            filter: String::new(),
+            filter_active: false,
         }
     }
 
     pub fn set_images(&mut self, images: Vec<ImageDto>) {
         self.images = images;
-        self.selection.set_items(self.images.len());
+        self.update_filtered_selection();
         self.error = None;
     }
 
@@ -34,8 +38,26 @@ impl ImagePresenter {
         self.error = None;
     }
 
+    pub fn filtered_images(&self) -> Vec<&ImageDto> {
+        if self.filter.is_empty() {
+            self.images.iter().collect()
+        } else {
+            let filter_lower = self.filter.to_lowercase();
+            self.images
+                .iter()
+                .filter(|i| {
+                    i.repository.to_lowercase().contains(&filter_lower)
+                        || i.tag.to_lowercase().contains(&filter_lower)
+                })
+                .collect()
+        }
+    }
+
     pub fn selected_image(&self) -> Option<&ImageDto> {
-        self.selection.selected().and_then(|i| self.images.get(i))
+        let filtered = self.filtered_images();
+        self.selection
+            .selected()
+            .and_then(|i| filtered.get(i).copied())
     }
 
     pub fn set_details(&mut self, image: ImageDto) {
@@ -52,6 +74,31 @@ impl ImagePresenter {
 
     pub fn navigate_down(&mut self) {
         self.selection.next();
+    }
+
+    pub fn activate_filter(&mut self) {
+        self.filter_active = true;
+    }
+
+    pub fn deactivate_filter(&mut self) {
+        self.filter_active = false;
+        self.filter.clear();
+        self.update_filtered_selection();
+    }
+
+    pub fn push_filter_char(&mut self, c: char) {
+        self.filter.push(c);
+        self.update_filtered_selection();
+    }
+
+    pub fn pop_filter_char(&mut self) {
+        self.filter.pop();
+        self.update_filtered_selection();
+    }
+
+    fn update_filtered_selection(&mut self) {
+        let count = self.filtered_images().len();
+        self.selection.set_items(count);
     }
 }
 

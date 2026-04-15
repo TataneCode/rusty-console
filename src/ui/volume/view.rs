@@ -11,6 +11,7 @@ pub fn render_volume_list(
     area: Rect,
     volumes: &[VolumeDto],
     state: &mut TableState,
+    active_filter: Option<&str>,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -48,12 +49,17 @@ pub fn render_volume_list(
         Constraint::Percentage(25),
     ];
 
-    render_table(frame, chunks[0], " Volumes ", headers, rows, widths, state);
+    let title = match active_filter {
+        Some(f) => format!(" Volumes [/: {}▏] ", f),
+        None => " Volumes ".to_string(),
+    };
+
+    render_table(frame, chunks[0], &title, headers, rows, widths, state);
 
     render_help(
         frame,
         chunks[1],
-        " q: Quit | j/k: Navigate | d: Delete | r: Refresh | X: Prune | Esc: Back ",
+        " q: Quit | /: Filter | j/k: Navigate | d: Delete | r: Refresh | X: Prune | Esc: Back ",
     );
 }
 

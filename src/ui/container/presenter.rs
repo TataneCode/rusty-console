@@ -9,6 +9,8 @@ pub struct ContainerPresenter {
     pub selected_container: Option<ContainerDto>,
     pub loading: bool,
     pub error: Option<String>,
+    pub filter: String,
+    pub filter_active: bool,
 }
 
 impl ContainerPresenter {
@@ -21,12 +23,14 @@ impl ContainerPresenter {
             selected_container: None,
             loading: false,
             error: None,
+            filter: String::new(),
+            filter_active: false,
         }
     }
 
     pub fn set_containers(&mut self, containers: Vec<ContainerDto>) {
         self.containers = containers;
-        self.selection.set_items(self.containers.len());
+        self.update_filtered_selection();
         self.error = None;
     }
 
@@ -38,10 +42,26 @@ impl ContainerPresenter {
         self.error = None;
     }
 
+    pub fn filtered_containers(&self) -> Vec<&ContainerDto> {
+        if self.filter.is_empty() {
+            self.containers.iter().collect()
+        } else {
+            let filter_lower = self.filter.to_lowercase();
+            self.containers
+                .iter()
+                .filter(|c| {
+                    c.name.to_lowercase().contains(&filter_lower)
+                        || c.image.to_lowercase().contains(&filter_lower)
+                })
+                .collect()
+        }
+    }
+
     pub fn selected_container(&self) -> Option<&ContainerDto> {
+        let filtered = self.filtered_containers();
         self.selection
             .selected()
-            .and_then(|i| self.containers.get(i))
+            .and_then(|i| filtered.get(i).copied())
     }
 
     pub fn set_logs(&mut self, logs: ContainerLogsDto) {
@@ -76,6 +96,31 @@ impl ContainerPresenter {
 
     pub fn navigate_down(&mut self) {
         self.selection.next();
+    }
+
+    pub fn activate_filter(&mut self) {
+        self.filter_active = true;
+    }
+
+    pub fn deactivate_filter(&mut self) {
+        self.filter_active = false;
+        self.filter.clear();
+        self.update_filtered_selection();
+    }
+
+    pub fn push_filter_char(&mut self, c: char) {
+        self.filter.push(c);
+        self.update_filtered_selection();
+    }
+
+    pub fn pop_filter_char(&mut self) {
+        self.filter.pop();
+        self.update_filtered_selection();
+    }
+
+    fn update_filtered_selection(&mut self) {
+        let count = self.filtered_containers().len();
+        self.selection.set_items(count);
     }
 }
 

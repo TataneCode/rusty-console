@@ -19,6 +19,7 @@ pub enum AppAction {
     PauseUnpause,
     Restart,
     Prune,
+    ActivateFilter,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -44,6 +45,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('p') => Some(AppAction::PauseUnpause),
         KeyCode::Char('R') => Some(AppAction::Restart),
         KeyCode::Char('X') => Some(AppAction::Prune),
+        KeyCode::Char('/') => Some(AppAction::ActivateFilter),
         _ => None,
     }
 }

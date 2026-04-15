@@ -1,4 +1,4 @@
-use crate::application::ContainerDto;
+use crate::application::{ContainerDto, ImageDto, VolumeDto};
 use crate::ui::common::{map_key_to_action, render_confirm_dialog, render_error_popup, AppAction};
 use crate::ui::container::{
     render_container_details, render_container_list, render_container_logs, ContainerActions,
@@ -8,7 +8,7 @@ use crate::ui::event::{AppEvent, EventHandler};
 use crate::ui::image::{render_image_details, render_image_list, ImageActions, ImagePresenter};
 use crate::ui::volume::{render_volume_list, VolumeActions, VolumePresenter};
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
+    event::{DisableMouseCapture, EnableMouseCapture, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -97,7 +97,9 @@ impl App {
 
             match event_handler.next()? {
                 AppEvent::Key(key) => {
-                    if let Some(action) = map_key_to_action(key) {
+                    if self.is_filter_active() && self.handle_filter_key(key.code) {
+                        // Key consumed by filter input
+                    } else if let Some(action) = map_key_to_action(key) {
                         self.handle_action(action).await;
                     }
                 }
@@ -126,11 +128,23 @@ impl App {
         match &self.screen {
             Screen::MainMenu => self.render_main_menu(frame, area),
             Screen::ContainerList => {
+                let filtered: Vec<ContainerDto> = self
+                    .container_presenter
+                    .filtered_containers()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let active_filter = if self.container_presenter.filter_active {
+                    Some(self.container_presenter.filter.as_str())
+                } else {
+                    None
+                };
                 render_container_list(
                     frame,
                     area,
-                    &self.container_presenter.containers,
+                    &filtered,
                     &mut self.container_presenter.selection.state,
+                    active_filter,
                 );
             }
             Screen::ContainerLogs => {
@@ -144,19 +158,43 @@ impl App {
                 }
             }
             Screen::VolumeList => {
+                let filtered: Vec<VolumeDto> = self
+                    .volume_presenter
+                    .filtered_volumes()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let active_filter = if self.volume_presenter.filter_active {
+                    Some(self.volume_presenter.filter.as_str())
+                } else {
+                    None
+                };
                 render_volume_list(
                     frame,
                     area,
-                    &self.volume_presenter.volumes,
+                    &filtered,
                     &mut self.volume_presenter.selection.state,
+                    active_filter,
                 );
             }
             Screen::ImageList => {
+                let filtered: Vec<ImageDto> = self
+                    .image_presenter
+                    .filtered_images()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let active_filter = if self.image_presenter.filter_active {
+                    Some(self.image_presenter.filter.as_str())
+                } else {
+                    None
+                };
                 render_image_list(
                     frame,
                     area,
-                    &self.image_presenter.images,
+                    &filtered,
                     &mut self.image_presenter.selection.state,
+                    active_filter,
                 );
             }
             Screen::ImageDetails => {
@@ -368,6 +406,9 @@ impl App {
             AppAction::Prune => {
                 self.confirm_dialog = Some((ConfirmAction::PruneContainers, true));
             }
+            AppAction::ActivateFilter => {
+                self.container_presenter.activate_filter();
+            }
             _ => {}
         }
     }
@@ -420,6 +461,9 @@ impl App {
             AppAction::Prune => {
                 self.confirm_dialog = Some((ConfirmAction::PruneVolumes, true));
             }
+            AppAction::ActivateFilter => {
+                self.volume_presenter.activate_filter();
+            }
             _ => {}
         }
     }
@@ -445,6 +489,9 @@ impl App {
             AppAction::Refresh => self.load_images().await,
             AppAction::Prune => {
                 self.confirm_dialog = Some((ConfirmAction::PruneImages, true));
+            }
+            AppAction::ActivateFilter => {
+                self.image_presenter.activate_filter();
             }
             _ => {}
         }
@@ -522,6 +569,49 @@ impl App {
                     Err(e) => self.error_message = Some(e.to_string()),
                 }
             }
+        }
+    }
+
+    fn is_filter_active(&self) -> bool {
+        match self.screen {
+            Screen::ContainerList => self.container_presenter.filter_active,
+            Screen::VolumeList => self.volume_presenter.filter_active,
+            Screen::ImageList => self.image_presenter.filter_active,
+            _ => false,
+        }
+    }
+
+    /// Returns true if the key was consumed by the filter input.
+    fn handle_filter_key(&mut self, code: KeyCode) -> bool {
+        match code {
+            KeyCode::Esc => {
+                match self.screen {
+                    Screen::ContainerList => self.container_presenter.deactivate_filter(),
+                    Screen::VolumeList => self.volume_presenter.deactivate_filter(),
+                    Screen::ImageList => self.image_presenter.deactivate_filter(),
+                    _ => {}
+                }
+                true
+            }
+            KeyCode::Backspace => {
+                match self.screen {
+                    Screen::ContainerList => self.container_presenter.pop_filter_char(),
+                    Screen::VolumeList => self.volume_presenter.pop_filter_char(),
+                    Screen::ImageList => self.image_presenter.pop_filter_char(),
+                    _ => {}
+                }
+                true
+            }
+            KeyCode::Char(c) => {
+                match self.screen {
+                    Screen::ContainerList => self.container_presenter.push_filter_char(c),
+                    Screen::VolumeList => self.volume_presenter.push_filter_char(c),
+                    Screen::ImageList => self.image_presenter.push_filter_char(c),
+                    _ => {}
+                }
+                true
+            }
+            _ => false,
         }
     }
 

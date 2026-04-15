@@ -12,6 +12,7 @@ pub fn render_container_list(
     area: Rect,
     containers: &[ContainerDto],
     state: &mut TableState,
+    active_filter: Option<&str>,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -47,10 +48,15 @@ pub fn render_container_list(
         Constraint::Percentage(20),
     ];
 
+    let title = match active_filter {
+        Some(f) => format!(" Containers [/: {}▏] ", f),
+        None => " Containers ".to_string(),
+    };
+
     render_table(
         frame,
         chunks[0],
-        " Containers ",
+        &title,
         headers,
         rows,
         widths,
@@ -60,7 +66,7 @@ pub fn render_container_list(
     render_help(
         frame,
         chunks[1],
-        " q: Quit | j/k: Navigate | l: Logs | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart | X: Prune",
+        " q: Quit | /: Filter | j/k: Navigate | l: Logs | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart | X: Prune",
     );
 }
 

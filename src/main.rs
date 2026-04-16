@@ -1,16 +1,24 @@
 #![allow(dead_code)]
 
-mod application;
-mod domain;
-mod infrastructure;
+mod container;
+mod docker;
+mod errors;
+mod image;
+mod shared;
 mod ui;
+mod volume;
 
-use application::{ContainerService, ImageService, VolumeService};
-use infrastructure::{ContainerAdapter, DockerClient, ImageAdapter, VolumeAdapter};
+use container::application::ContainerService;
+use container::infrastructure::adapter::ContainerAdapter;
+use container::ui::ContainerActions;
+use docker::DockerClient;
+use image::application::ImageService;
+use image::infrastructure::adapter::ImageAdapter;
+use image::ui::ImageActions;
 use ui::app::App;
-use ui::container::ContainerActions;
-use ui::image::ImageActions;
-use ui::volume::VolumeActions;
+use volume::application::VolumeService;
+use volume::infrastructure::adapter::VolumeAdapter;
+use volume::ui::VolumeActions;
 
 use std::sync::Arc;
 

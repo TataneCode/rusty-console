@@ -54,41 +54,63 @@ ui  →  application  →  domain  ←  infrastructure
 
 No outer layer may be imported by an inner one. The `domain` layer has zero third-party dependencies.
 
+### Folder layout
+
+Source code is organized **feature-first**: each domain concept gets its own top-level folder containing all its layers as sub-folders.
+
+```
+src/
+  container/
+    domain/          Entity, ContainerState, value objects
+    application/     DTO, mapper, service, repository trait
+    infrastructure/  Bollard adapter and infra mapper
+    ui/              Actions, presenter, view
+  image/             (same structure)
+  volume/            (same structure)
+  errors/            DomainError, AppError, InfraError
+  docker/            DockerClient (shared Bollard wrapper)
+  shared.rs          PruneResultDto
+  ui/
+    app.rs           Screen state-machine and event loop
+    event.rs         Terminal event handler
+    common/          Shared widgets, colour theme, key bindings
+```
+
 ### Layers
 
-#### `domain/`
+#### `*/domain/`
 The core of the application. Contains pure Rust business logic with no external crates.
 
 - **Entities** — `Container`, `Volume`, `Image`. Each entity encapsulates its own business rules (e.g. `Container::can_be_started()`, `Container::uses_volume()`).
 - **Value Objects** — `ContainerId`, `PortMapping`, `NetworkInfo`, `MountInfo`, `VolumeId`, `ImageId`. Immutable, identity-free wrappers.
 - **Domain state** — `ContainerState` enum (`Running`, `Paused`, `Exited`, `Dead`, …) with derived predicates used to drive UI affordances.
-- **Errors** — `domain/error.rs`, re-wrapped at each outer layer.
+- **Errors** — `errors/domain.rs`, re-wrapped at each outer layer.
 
-#### `application/`
+#### `*/application/`
 Orchestration layer. Defines the contracts the rest of the system depends on and provides use-case implementations.
 
-- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository` (in `traits.rs` of each sub-module). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
+- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository` (in `traits.rs` of each feature). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
 - **Services** — `ContainerService`, `VolumeService`, `ImageService`. Thin use-case coordinators that call a repository and return DTOs.
 - **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`. Plain data structs crossing the application→UI boundary.
 - **Mappers** — `ContainerMapper`, etc. Convert domain entities into DTOs.
 
-#### `infrastructure/`
+#### `*/infrastructure/`
 Adapts the Docker daemon API to the application's repository traits using [bollard](https://crates.io/crates/bollard).
 
 - **Adapters** — `ContainerAdapter`, `VolumeAdapter`, `ImageAdapter`. Each implements the corresponding repository trait. Log streaming uses `futures_util::StreamExt` to consume bollard's async stream.
 - **Mappers** — `ContainerInfraMapper`, etc. Convert raw bollard API types into domain entities.
-- **`DockerClient`** — a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
+- **`docker/`** — `DockerClient`, a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
 
-#### `ui/`
+#### `*/ui/`
 Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
 
-- **`app.rs`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
+- **`ui/app.rs`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
 - **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`.
-- **Per-domain triad** (e.g. `ui/container/`):
+- **Per-feature triad** (e.g. `container/ui/`):
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
   - `view.rs` — pure ratatui widget composition functions
   - `actions.rs` — async wrappers around application services; called from `app.rs` event handlers
-- **`common/`** — shared widgets, colour theme, and `keys.rs` which maps raw `KeyEvent`s to `AppAction` variants.
+- **`ui/common/`** — shared widgets, colour theme, and `keys.rs` which maps raw `KeyEvent`s to `AppAction` variants.
 
 ### Data Flow
 

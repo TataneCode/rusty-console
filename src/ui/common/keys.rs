@@ -20,6 +20,7 @@ pub enum AppAction {
     Restart,
     Prune,
     ActivateFilter,
+    StopAll,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -46,6 +47,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('R') => Some(AppAction::Restart),
         KeyCode::Char('X') => Some(AppAction::Prune),
         KeyCode::Char('/') => Some(AppAction::ActivateFilter),
+        KeyCode::Char('S') => Some(AppAction::StopAll),
         _ => None,
     }
 }
@@ -226,6 +228,14 @@ mod tests {
         assert_eq!(
             map_key_to_action(key_event(KeyCode::Char('/'))),
             Some(AppAction::ActivateFilter)
+        );
+    }
+
+    #[test]
+    fn test_stop_all() {
+        assert_eq!(
+            map_key_to_action(key_event(KeyCode::Char('S'))),
+            Some(AppAction::StopAll)
         );
     }
 

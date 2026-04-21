@@ -5,6 +5,7 @@ mod docker;
 mod errors;
 mod image;
 mod shared;
+mod stack;
 mod ui;
 mod volume;
 
@@ -15,6 +16,9 @@ use docker::DockerClient;
 use image::application::ImageService;
 use image::infrastructure::adapter::ImageAdapter;
 use image::ui::ImageActions;
+use stack::application::StackService;
+use stack::infrastructure::adapter::StackAdapter;
+use stack::ui::StackActions;
 use ui::app::App;
 use volume::application::VolumeService;
 use volume::infrastructure::adapter::VolumeAdapter;
@@ -30,16 +34,24 @@ async fn main() -> anyhow::Result<()> {
     let container_adapter = Arc::new(ContainerAdapter::new(docker.clone()));
     let volume_adapter = Arc::new(VolumeAdapter::new(docker.clone()));
     let image_adapter = Arc::new(ImageAdapter::new(docker.clone()));
+    let stack_adapter = Arc::new(StackAdapter::new(docker.clone()));
 
     let container_service = ContainerService::new(container_adapter);
     let volume_service = VolumeService::new(volume_adapter);
     let image_service = ImageService::new(image_adapter);
+    let stack_service = StackService::new(stack_adapter);
 
     let container_actions = ContainerActions::new(container_service);
     let volume_actions = VolumeActions::new(volume_service);
     let image_actions = ImageActions::new(image_service);
+    let stack_actions = StackActions::new(stack_service);
 
-    let mut app = App::new(container_actions, volume_actions, image_actions);
+    let mut app = App::new(
+        container_actions,
+        volume_actions,
+        image_actions,
+        stack_actions,
+    );
     app.run().await?;
 
     Ok(())

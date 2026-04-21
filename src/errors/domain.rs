@@ -12,6 +12,9 @@ pub enum DomainError {
     #[error("Invalid image ID: {0}")]
     InvalidImageId(String),
 
+    #[error("Invalid stack name: {0}")]
+    InvalidStackName(String),
+
     #[error("Invalid state transition: cannot {action} container in {current_state} state")]
     InvalidStateTransition {
         action: String,

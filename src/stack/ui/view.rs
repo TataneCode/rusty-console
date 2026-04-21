@@ -1,0 +1,53 @@
+use crate::stack::application::StackDto;
+use crate::ui::common::{render_help, render_table, Theme};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    widgets::{Cell, Row, TableState},
+    Frame,
+};
+
+pub fn render_stack_list(
+    frame: &mut Frame,
+    area: Rect,
+    stacks: &[StackDto],
+    state: &mut TableState,
+) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(2)])
+        .split(area);
+
+    let headers = vec!["Stack", "Containers", "Running"];
+
+    let rows: Vec<Row> = stacks
+        .iter()
+        .map(|s| {
+            let running_style = if s.running_count > 0 && s.running_count == s.container_count {
+                Theme::in_use_style()
+            } else {
+                Theme::default_style()
+            };
+
+            Row::new(vec![
+                Cell::from(s.name.clone()),
+                Cell::from(s.container_count.to_string()),
+                Cell::from(format!("{}/{}", s.running_count, s.container_count))
+                    .style(running_style),
+            ])
+        })
+        .collect();
+
+    let widths = vec![
+        Constraint::Percentage(60),
+        Constraint::Percentage(20),
+        Constraint::Percentage(20),
+    ];
+
+    render_table(frame, chunks[0], " Stacks ", headers, rows, widths, state);
+
+    render_help(
+        frame,
+        chunks[1],
+        " q: Quit | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | r: Refresh | Esc: Back ",
+    );
+}

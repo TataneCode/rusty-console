@@ -232,7 +232,7 @@ Le drill-down charge directement les containers de la stack sélectionnée :
 ```rust
 // dans handle_stack_list_action — AppAction::Select
 if let Some(stack) = self.stack_presenter.selected_stack() {
-    self.container_presenter.load(stack.containers.clone());
+    self.container_presenter.set_containers(stack.containers.clone());
     self.screen = Screen::StackContainers;
 }
 ```

@@ -808,11 +808,18 @@ impl App {
                 }
             }
             AppAction::Refresh => {
+                let selected_stack_name = self
+                    .stack_presenter
+                    .selected_stack()
+                    .map(|stack| stack.name.clone());
+
                 self.load_stacks().await;
+
                 let containers = self
                     .stack_presenter
                     .selected_stack()
-                    .map(|s| s.containers.clone())
+                    .filter(|stack| Some(&stack.name) == selected_stack_name.as_ref())
+                    .map(|stack| stack.containers.clone())
                     .unwrap_or_default();
                 self.container_presenter.set_containers(containers);
             }

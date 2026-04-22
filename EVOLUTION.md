@@ -254,7 +254,8 @@ src/ui/app.rs           -> ajouter Screen::StackList et Screen::StackContainers
                            ajouter stack_presenter: StackPresenter, stack_actions: StackActions
                            render_stack_list(), handle_stack_list_action()
                            menu : ajouter "  Stacks" comme 4e option
-src/ui/common/keys.rs   -> nouveaux variants AppAction::StartAll, StopAll, ActivateStackDrillDown
+src/ui/common/keys.rs   -> ajouter AppAction::StopAll ; réutiliser StartStop pour "Start All"
+                           et documenter le drill-down via l'action/navigation existante
 ```
 
 ---

@@ -5,6 +5,7 @@ use crate::container::ui::{
 };
 use crate::image::application::ImageDto;
 use crate::image::ui::{render_image_details, render_image_list, ImageActions, ImagePresenter};
+use crate::stack::ui::{render_stack_list, StackActions, StackPresenter};
 use crate::ui::common::{map_key_to_action, render_confirm_dialog, render_error_popup, AppAction};
 use crate::ui::event::{AppEvent, EventHandler};
 use crate::volume::application::VolumeDto;
@@ -32,6 +33,8 @@ pub enum Screen {
     VolumeList,
     ImageList,
     ImageDetails,
+    StackList,
+    StackContainers,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -53,9 +56,11 @@ pub struct App {
     pub container_presenter: ContainerPresenter,
     pub volume_presenter: VolumePresenter,
     pub image_presenter: ImagePresenter,
+    pub stack_presenter: StackPresenter,
     pub container_actions: ContainerActions,
     pub volume_actions: VolumeActions,
     pub image_actions: ImageActions,
+    pub stack_actions: StackActions,
     pub confirm_dialog: Option<(ConfirmAction, bool)>,
     pub error_message: Option<String>,
 }
@@ -65,6 +70,7 @@ impl App {
         container_actions: ContainerActions,
         volume_actions: VolumeActions,
         image_actions: ImageActions,
+        stack_actions: StackActions,
     ) -> Self {
         let mut menu_state = ListState::default();
         menu_state.select(Some(0));
@@ -77,9 +83,11 @@ impl App {
             container_presenter: ContainerPresenter::new(),
             volume_presenter: VolumePresenter::new(),
             image_presenter: ImagePresenter::new(),
+            stack_presenter: StackPresenter::new(),
             container_actions,
             volume_actions,
             image_actions,
+            stack_actions,
             confirm_dialog: None,
             error_message: None,
         }
@@ -204,6 +212,29 @@ impl App {
                     render_image_details(frame, area, image);
                 }
             }
+            Screen::StackList => {
+                render_stack_list(
+                    frame,
+                    area,
+                    &self.stack_presenter.stacks,
+                    &mut self.stack_presenter.selection.state,
+                );
+            }
+            Screen::StackContainers => {
+                let filtered: Vec<ContainerDto> = self
+                    .container_presenter
+                    .filtered_containers()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                render_container_list(
+                    frame,
+                    area,
+                    &filtered,
+                    &mut self.container_presenter.selection.state,
+                    None,
+                );
+            }
         }
 
         if let Some((action, selected_yes)) = &self.confirm_dialog {
@@ -258,6 +289,7 @@ impl App {
             ListItem::new("  Containers"),
             ListItem::new("  Volumes"),
             ListItem::new("  Images"),
+            ListItem::new("  Stacks"),
             ListItem::new("  Quit"),
         ];
 
@@ -319,6 +351,8 @@ impl App {
             Screen::VolumeList => self.handle_volume_list_action(action).await,
             Screen::ImageList => self.handle_image_list_action(action).await,
             Screen::ImageDetails => self.handle_details_action(action),
+            Screen::StackList => self.handle_stack_list_action(action).await,
+            Screen::StackContainers => self.handle_stack_containers_action(action).await,
         }
     }
 
@@ -327,13 +361,13 @@ impl App {
             AppAction::Quit => self.should_quit = true,
             AppAction::NavigateUp => {
                 if let Some(selected) = self.menu_state.selected() {
-                    let new_selected = if selected == 0 { 3 } else { selected - 1 };
+                    let new_selected = if selected == 0 { 4 } else { selected - 1 };
                     self.menu_state.select(Some(new_selected));
                 }
             }
             AppAction::NavigateDown => {
                 if let Some(selected) = self.menu_state.selected() {
-                    let new_selected = if selected >= 3 { 0 } else { selected + 1 };
+                    let new_selected = if selected >= 4 { 0 } else { selected + 1 };
                     self.menu_state.select(Some(new_selected));
                 }
             }
@@ -352,7 +386,11 @@ impl App {
                             self.screen = Screen::ImageList;
                             self.load_images().await;
                         }
-                        3 => self.should_quit = true,
+                        3 => {
+                            self.screen = Screen::StackList;
+                            self.load_stacks().await;
+                        }
+                        4 => self.should_quit = true,
                         _ => {}
                     }
                 }
@@ -693,6 +731,99 @@ impl App {
         match self.image_actions.load_images().await {
             Ok(images) => self.image_presenter.set_images(images),
             Err(e) => self.error_message = Some(e.to_string()),
+        }
+    }
+
+    async fn load_stacks(&mut self) {
+        match self.stack_actions.load_stacks().await {
+            Ok(stacks) => self.stack_presenter.load(stacks),
+            Err(e) => self.error_message = Some(e.to_string()),
+        }
+    }
+
+    async fn handle_stack_list_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::Quit => self.should_quit = true,
+            AppAction::Back => self.screen = Screen::MainMenu,
+            AppAction::NavigateUp => self.stack_presenter.navigate_up(),
+            AppAction::NavigateDown => self.stack_presenter.navigate_down(),
+            AppAction::Select => {
+                if let Some(stack) = self.stack_presenter.selected_stack() {
+                    let containers = stack.containers.clone();
+                    self.container_presenter.set_containers(containers);
+                    self.screen = Screen::StackContainers;
+                }
+            }
+            AppAction::StartStop => {
+                if let Some(stack) = self.stack_presenter.selected_stack() {
+                    let ids = stack
+                        .containers
+                        .iter()
+                        .filter(|c| c.can_start)
+                        .map(|c| c.id.clone())
+                        .collect::<Vec<_>>();
+                    if !ids.is_empty() {
+                        if let Err(e) = self.stack_actions.start_all(&ids).await {
+                            self.error_message = Some(e.to_string());
+                        } else {
+                            self.load_stacks().await;
+                        }
+                    }
+                }
+            }
+            AppAction::StopAll => {
+                if let Some(stack) = self.stack_presenter.selected_stack() {
+                    let ids = stack
+                        .containers
+                        .iter()
+                        .filter(|c| c.can_stop)
+                        .map(|c| c.id.clone())
+                        .collect::<Vec<_>>();
+                    if !ids.is_empty() {
+                        if let Err(e) = self.stack_actions.stop_all(&ids).await {
+                            self.error_message = Some(e.to_string());
+                        } else {
+                            self.load_stacks().await;
+                        }
+                    }
+                }
+            }
+            AppAction::Refresh => self.load_stacks().await,
+            _ => {}
+        }
+    }
+
+    async fn handle_stack_containers_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::Quit => self.should_quit = true,
+            AppAction::Back => {
+                self.screen = Screen::StackList;
+                self.load_stacks().await;
+            }
+            AppAction::NavigateUp => self.container_presenter.navigate_up(),
+            AppAction::NavigateDown => self.container_presenter.navigate_down(),
+            AppAction::StartStop => {
+                if let Some(container) = self.container_presenter.selected_container().cloned() {
+                    self.toggle_container(&container).await;
+                }
+            }
+            AppAction::Refresh => {
+                let selected_stack_name = self
+                    .stack_presenter
+                    .selected_stack()
+                    .map(|stack| stack.name.clone());
+
+                self.load_stacks().await;
+
+                let containers = self
+                    .stack_presenter
+                    .selected_stack()
+                    .filter(|stack| Some(&stack.name) == selected_stack_name.as_ref())
+                    .map(|stack| stack.containers.clone())
+                    .unwrap_or_default();
+                self.container_presenter.set_containers(containers);
+            }
+            _ => {}
         }
     }
 }

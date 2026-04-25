@@ -13,8 +13,8 @@ impl StackService {
         StackService { repository }
     }
 
-    pub async fn list_stacks(&self) -> Result<Vec<StackDto>, AppError> {
-        let stacks = self.repository.list_stacks().await?;
+    pub async fn get_all_stacks(&self) -> Result<Vec<StackDto>, AppError> {
+        let stacks = self.repository.get_all().await?;
         Ok(StackMapper::to_dto_list(&stacks))
     }
 
@@ -41,11 +41,11 @@ mod tests {
     #[tokio::test]
     async fn test_list_stacks_returns_dtos() {
         let mut mock = MockStackRepository::new();
-        mock.expect_list_stacks()
+        mock.expect_get_all()
             .returning(|| Ok(vec![make_stack("app-a"), make_stack("app-b")]));
 
         let service = StackService::new(Arc::new(mock));
-        let result = service.list_stacks().await.unwrap();
+        let result = service.get_all_stacks().await.unwrap();
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "app-a");
@@ -79,10 +79,10 @@ mod tests {
     #[tokio::test]
     async fn test_list_stacks_empty() {
         let mut mock = MockStackRepository::new();
-        mock.expect_list_stacks().returning(|| Ok(vec![]));
+        mock.expect_get_all().returning(|| Ok(vec![]));
 
         let service = StackService::new(Arc::new(mock));
-        let result = service.list_stacks().await.unwrap();
+        let result = service.get_all_stacks().await.unwrap();
         assert!(result.is_empty());
     }
 }

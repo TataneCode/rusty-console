@@ -138,6 +138,7 @@ mod tests {
     fn make_container(name: &str, image: &str) -> ContainerDto {
         ContainerDto {
             id: format!("id_{name}"),
+            short_id: format!("id_{name}"),
             name: name.to_string(),
             image: image.to_string(),
             state: ContainerState::Running,

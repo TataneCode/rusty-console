@@ -1,5 +1,7 @@
 use crate::errors::DomainError;
 
+pub type VolumeSize = crate::shared::ByteSize;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VolumeId(String);
 
@@ -25,45 +27,6 @@ impl std::fmt::Display for VolumeId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VolumeSize(i64);
-
-impl VolumeSize {
-    pub fn new(bytes: i64) -> Self {
-        VolumeSize(bytes)
-    }
-
-    pub fn bytes(&self) -> i64 {
-        self.0
-    }
-
-    pub fn human_readable(&self) -> String {
-        const KB: i64 = 1024;
-        const MB: i64 = KB * 1024;
-        const GB: i64 = MB * 1024;
-
-        if self.0 < 0 {
-            return "N/A".to_string();
-        }
-
-        if self.0 >= GB {
-            format!("{:.2} GB", self.0 as f64 / GB as f64)
-        } else if self.0 >= MB {
-            format!("{:.2} MB", self.0 as f64 / MB as f64)
-        } else if self.0 >= KB {
-            format!("{:.2} KB", self.0 as f64 / KB as f64)
-        } else {
-            format!("{} B", self.0)
-        }
-    }
-}
-
-impl Default for VolumeSize {
-    fn default() -> Self {
-        VolumeSize(-1)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,14 +41,5 @@ mod tests {
     fn test_volume_id_empty() {
         let result = VolumeId::new("");
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_volume_size_human_readable() {
-        assert_eq!(VolumeSize::new(500).human_readable(), "500 B");
-        assert_eq!(VolumeSize::new(1536).human_readable(), "1.50 KB");
-        assert_eq!(VolumeSize::new(1_572_864).human_readable(), "1.50 MB");
-        assert_eq!(VolumeSize::new(1_610_612_736).human_readable(), "1.50 GB");
-        assert_eq!(VolumeSize::new(-1).human_readable(), "N/A");
     }
 }

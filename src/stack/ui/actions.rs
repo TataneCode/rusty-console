@@ -11,7 +11,7 @@ impl StackActions {
     }
 
     pub async fn load_stacks(&self) -> Result<Vec<StackDto>, AppError> {
-        self.service.list_stacks().await
+        self.service.get_all_stacks().await
     }
 
     pub async fn start_all(&self, container_ids: &[String]) -> Result<(), AppError> {

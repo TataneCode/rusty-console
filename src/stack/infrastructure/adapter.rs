@@ -19,7 +19,7 @@ impl StackAdapter {
 
 #[async_trait]
 impl StackRepository for StackAdapter {
-    async fn list_stacks(&self) -> Result<Vec<Stack>, AppError> {
+    async fn get_all(&self) -> Result<Vec<Stack>, AppError> {
         let mut filters = HashMap::new();
         filters.insert(
             "status",

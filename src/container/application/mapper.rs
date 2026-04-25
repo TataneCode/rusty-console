@@ -7,6 +7,7 @@ impl ContainerMapper {
     pub fn to_dto(container: &Container) -> ContainerDto {
         ContainerDto {
             id: container.id().to_string(),
+            short_id: container.id().short().to_string(),
             name: container.display_name().to_string(),
             image: container.image().to_string(),
             state: container.state(),
@@ -68,6 +69,7 @@ mod tests {
         let dto = ContainerMapper::to_dto(&container);
 
         assert_eq!(dto.id, "abc123def456");
+        assert_eq!(dto.short_id, "abc123def456");
         assert_eq!(dto.name, "my-nginx");
         assert_eq!(dto.image, "nginx:latest");
         assert_eq!(dto.status, "Up 5 minutes");

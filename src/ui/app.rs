@@ -5,6 +5,7 @@ use crate::container::ui::{
 };
 use crate::image::application::ImageDto;
 use crate::image::ui::{render_image_details, render_image_list, ImageActions, ImagePresenter};
+use crate::stack::application::StackDto;
 use crate::stack::ui::{render_stack_list, StackActions, StackPresenter};
 use crate::ui::common::{map_key_to_action, render_confirm_dialog, render_error_popup, AppAction};
 use crate::ui::event::{AppEvent, EventHandler};
@@ -213,11 +214,23 @@ impl App {
                 }
             }
             Screen::StackList => {
+                let filtered: Vec<StackDto> = self
+                    .stack_presenter
+                    .filtered_stacks()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let active_filter = if self.stack_presenter.filter_active {
+                    Some(self.stack_presenter.filter.as_str())
+                } else {
+                    None
+                };
                 render_stack_list(
                     frame,
                     area,
-                    &self.stack_presenter.stacks,
+                    &filtered,
                     &mut self.stack_presenter.selection.state,
+                    active_filter,
                 );
             }
             Screen::StackContainers => {
@@ -613,6 +626,7 @@ impl App {
             Screen::ContainerList => self.container_presenter.filter_active,
             Screen::VolumeList => self.volume_presenter.filter_active,
             Screen::ImageList => self.image_presenter.filter_active,
+            Screen::StackList => self.stack_presenter.filter_active,
             _ => false,
         }
     }
@@ -625,6 +639,7 @@ impl App {
                     Screen::ContainerList => self.container_presenter.deactivate_filter(),
                     Screen::VolumeList => self.volume_presenter.deactivate_filter(),
                     Screen::ImageList => self.image_presenter.deactivate_filter(),
+                    Screen::StackList => self.stack_presenter.deactivate_filter(),
                     _ => {}
                 }
                 true
@@ -634,6 +649,7 @@ impl App {
                     Screen::ContainerList => self.container_presenter.pop_filter_char(),
                     Screen::VolumeList => self.volume_presenter.pop_filter_char(),
                     Screen::ImageList => self.image_presenter.pop_filter_char(),
+                    Screen::StackList => self.stack_presenter.pop_filter_char(),
                     _ => {}
                 }
                 true
@@ -643,6 +659,7 @@ impl App {
                     Screen::ContainerList => self.container_presenter.push_filter_char(c),
                     Screen::VolumeList => self.volume_presenter.push_filter_char(c),
                     Screen::ImageList => self.image_presenter.push_filter_char(c),
+                    Screen::StackList => self.stack_presenter.push_filter_char(c),
                     _ => {}
                 }
                 true
@@ -736,8 +753,8 @@ impl App {
 
     async fn load_stacks(&mut self) {
         match self.stack_actions.load_stacks().await {
-            Ok(stacks) => self.stack_presenter.load(stacks),
-            Err(e) => self.error_message = Some(e.to_string()),
+            Ok(stacks) => self.stack_presenter.set_stacks(stacks),
+            Err(e) => self.stack_presenter.set_error(e.to_string()),
         }
     }
 
@@ -789,6 +806,9 @@ impl App {
                 }
             }
             AppAction::Refresh => self.load_stacks().await,
+            AppAction::ActivateFilter => {
+                self.stack_presenter.activate_filter();
+            }
             _ => {}
         }
     }

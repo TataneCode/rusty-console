@@ -3,6 +3,7 @@ use crate::container::domain::ContainerState;
 #[derive(Debug, Clone)]
 pub struct ContainerDto {
     pub id: String,
+    pub short_id: String,
     pub name: String,
     pub image: String,
     pub state: ContainerState,

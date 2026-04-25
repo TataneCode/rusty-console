@@ -914,10 +914,8 @@ impl App {
                     }
                 }
             }
-            AppAction::RemoveAll => {
-                if !self.container_presenter.containers.is_empty() {
-                    self.confirm_dialog = Some((ConfirmAction::RemoveAllStackContainers, true));
-                }
+            AppAction::RemoveAll if !self.container_presenter.containers.is_empty() => {
+                self.confirm_dialog = Some((ConfirmAction::RemoveAllStackContainers, true));
             }
             AppAction::Refresh => self.refresh_stack_containers().await,
             _ => {}

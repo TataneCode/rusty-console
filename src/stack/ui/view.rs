@@ -83,13 +83,13 @@ pub fn render_stack_containers(
                 _ => Theme::stopped_style(),
             };
 
-            let image = if c.image.len() > 30 {
-                format!("{}…", &c.image[..29])
+            let image = if c.image.chars().count() > 30 {
+                format!("{}…", c.image.chars().take(29).collect::<String>())
             } else {
                 c.image.clone()
             };
-            let ports = if c.ports.len() > 25 {
-                format!("{}…", &c.ports[..24])
+            let ports = if c.ports.chars().count() > 25 {
+                format!("{}…", c.ports.chars().take(24).collect::<String>())
             } else {
                 c.ports.clone()
             };

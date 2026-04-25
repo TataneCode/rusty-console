@@ -21,4 +21,8 @@ impl StackActions {
     pub async fn stop_all(&self, container_ids: &[String]) -> Result<(), AppError> {
         self.service.stop_all(container_ids).await
     }
+
+    pub async fn remove_all(&self, container_ids: &[String]) -> Result<(), AppError> {
+        self.service.remove_all(container_ids).await
+    }
 }

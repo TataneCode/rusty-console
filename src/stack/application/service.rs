@@ -25,6 +25,9 @@ impl StackService {
     pub async fn stop_all(&self, container_ids: &[String]) -> Result<(), AppError> {
         self.repository.stop_all(container_ids).await
     }
+    pub async fn remove_all(&self, container_ids: &[String]) -> Result<(), AppError> {
+        self.repository.remove_all(container_ids).await
+    }
 }
 
 #[cfg(test)]
@@ -84,5 +87,17 @@ mod tests {
         let service = StackService::new(Arc::new(mock));
         let result = service.get_all_stacks().await.unwrap();
         assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_remove_all_delegates_to_repository() {
+        let ids = vec!["id1".to_string(), "id2".to_string()];
+        let mut mock = MockStackRepository::new();
+        mock.expect_remove_all()
+            .with(eq(ids.clone()))
+            .returning(|_| Ok(()));
+
+        let service = StackService::new(Arc::new(mock));
+        assert!(service.remove_all(&ids).await.is_ok());
     }
 }

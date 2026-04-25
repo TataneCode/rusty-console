@@ -4,7 +4,9 @@ use crate::stack::application::traits::StackRepository;
 use crate::stack::domain::Stack;
 use crate::stack::infrastructure::mapper::StackInfraMapper;
 use async_trait::async_trait;
-use bollard::container::{ListContainersOptions, StartContainerOptions, StopContainerOptions};
+use bollard::container::{
+    ListContainersOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions,
+};
 use std::collections::HashMap;
 
 pub struct StackAdapter {
@@ -71,6 +73,25 @@ impl StackRepository for StackAdapter {
                 .await
                 .map_err(|e| {
                     AppError::operation_failed(format!("Failed to stop container {}: {}", id, e))
+                })?;
+        }
+        Ok(())
+    }
+
+    async fn remove_all(&self, container_ids: &[String]) -> Result<(), AppError> {
+        for id in container_ids {
+            self.docker
+                .inner()
+                .remove_container(
+                    id,
+                    Some(RemoveContainerOptions {
+                        force: true,
+                        ..Default::default()
+                    }),
+                )
+                .await
+                .map_err(|e| {
+                    AppError::operation_failed(format!("Failed to remove container {}: {}", id, e))
                 })?;
         }
         Ok(())

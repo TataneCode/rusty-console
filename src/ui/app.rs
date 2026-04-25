@@ -6,7 +6,7 @@ use crate::container::ui::{
 use crate::image::application::ImageDto;
 use crate::image::ui::{render_image_details, render_image_list, ImageActions, ImagePresenter};
 use crate::stack::application::StackDto;
-use crate::stack::ui::{render_stack_list, StackActions, StackPresenter};
+use crate::stack::ui::{render_stack_containers, render_stack_list, StackActions, StackPresenter};
 use crate::ui::common::{map_key_to_action, render_confirm_dialog, render_error_popup, AppAction};
 use crate::ui::event::{AppEvent, EventHandler};
 use crate::volume::application::VolumeDto;
@@ -47,6 +47,7 @@ pub enum ConfirmAction {
     PruneContainers,
     PruneVolumes,
     PruneImages,
+    RemoveAllStackContainers,
 }
 
 pub struct App {
@@ -234,18 +235,23 @@ impl App {
                 );
             }
             Screen::StackContainers => {
-                let filtered: Vec<ContainerDto> = self
+                let containers: Vec<ContainerDto> = self
                     .container_presenter
                     .filtered_containers()
                     .into_iter()
                     .cloned()
                     .collect();
-                render_container_list(
+                let stack_name = self
+                    .stack_presenter
+                    .selected_stack()
+                    .map(|s| s.name.as_str())
+                    .unwrap_or("Stack");
+                render_stack_containers(
                     frame,
                     area,
-                    &filtered,
+                    stack_name,
+                    &containers,
                     &mut self.container_presenter.selection.state,
-                    None,
                 );
             }
         }
@@ -270,6 +276,9 @@ impl App {
                 ConfirmAction::PruneContainers => "Prune all stopped containers?",
                 ConfirmAction::PruneVolumes => "Prune all unused volumes?",
                 ConfirmAction::PruneImages => "Prune all dangling images?",
+                ConfirmAction::RemoveAllStackContainers => {
+                    "Remove ALL containers in this stack? (force)"
+                }
             };
             render_confirm_dialog(frame, message, *selected_yes);
         }
@@ -618,6 +627,21 @@ impl App {
                 }
                 Err(e) => self.error_message = Some(e.to_string()),
             },
+            ConfirmAction::RemoveAllStackContainers => {
+                let ids: Vec<String> = self
+                    .container_presenter
+                    .containers
+                    .iter()
+                    .map(|c| c.id.clone())
+                    .collect();
+                match self.stack_actions.remove_all(&ids).await {
+                    Ok(_) => {
+                        self.screen = Screen::StackList;
+                        self.load_stacks().await;
+                    }
+                    Err(e) => self.error_message = Some(e.to_string()),
+                }
+            }
         }
     }
 
@@ -758,6 +782,21 @@ impl App {
         }
     }
 
+    async fn refresh_stack_containers(&mut self) {
+        let selected_stack_name = self
+            .stack_presenter
+            .selected_stack()
+            .map(|stack| stack.name.clone());
+        self.load_stacks().await;
+        let containers = self
+            .stack_presenter
+            .selected_stack()
+            .filter(|stack| Some(&stack.name) == selected_stack_name.as_ref())
+            .map(|stack| stack.containers.clone())
+            .unwrap_or_default();
+        self.container_presenter.set_containers(containers);
+    }
+
     async fn handle_stack_list_action(&mut self, action: AppAction) {
         match action {
             AppAction::Quit => self.should_quit = true,
@@ -824,25 +863,63 @@ impl App {
             AppAction::NavigateDown => self.container_presenter.navigate_down(),
             AppAction::StartStop => {
                 if let Some(container) = self.container_presenter.selected_container().cloned() {
-                    self.toggle_container(&container).await;
+                    let result = if container.can_stop {
+                        self.container_actions.stop_container(&container.id).await
+                    } else if container.can_start {
+                        self.container_actions.start_container(&container.id).await
+                    } else {
+                        return;
+                    };
+                    match result {
+                        Ok(_) => self.refresh_stack_containers().await,
+                        Err(e) => self.error_message = Some(e.to_string()),
+                    }
                 }
             }
-            AppAction::Refresh => {
-                let selected_stack_name = self
-                    .stack_presenter
-                    .selected_stack()
-                    .map(|stack| stack.name.clone());
-
-                self.load_stacks().await;
-
-                let containers = self
-                    .stack_presenter
-                    .selected_stack()
-                    .filter(|stack| Some(&stack.name) == selected_stack_name.as_ref())
-                    .map(|stack| stack.containers.clone())
-                    .unwrap_or_default();
-                self.container_presenter.set_containers(containers);
+            AppAction::Delete => {
+                if let Some(container) = self.container_presenter.selected_container() {
+                    let force = container.can_stop;
+                    self.confirm_dialog = Some((ConfirmAction::DeleteContainer(force), true));
+                }
             }
+            AppAction::StopAll => {
+                if let Some(stack) = self.stack_presenter.selected_stack() {
+                    let ids: Vec<String> = stack
+                        .containers
+                        .iter()
+                        .filter(|c| c.can_stop)
+                        .map(|c| c.id.clone())
+                        .collect();
+                    if !ids.is_empty() {
+                        match self.stack_actions.stop_all(&ids).await {
+                            Ok(_) => self.refresh_stack_containers().await,
+                            Err(e) => self.error_message = Some(e.to_string()),
+                        }
+                    }
+                }
+            }
+            AppAction::StartAll => {
+                if let Some(stack) = self.stack_presenter.selected_stack() {
+                    let ids: Vec<String> = stack
+                        .containers
+                        .iter()
+                        .filter(|c| c.can_start)
+                        .map(|c| c.id.clone())
+                        .collect();
+                    if !ids.is_empty() {
+                        match self.stack_actions.start_all(&ids).await {
+                            Ok(_) => self.refresh_stack_containers().await,
+                            Err(e) => self.error_message = Some(e.to_string()),
+                        }
+                    }
+                }
+            }
+            AppAction::RemoveAll => {
+                if !self.container_presenter.containers.is_empty() {
+                    self.confirm_dialog = Some((ConfirmAction::RemoveAllStackContainers, true));
+                }
+            }
+            AppAction::Refresh => self.refresh_stack_containers().await,
             _ => {}
         }
     }

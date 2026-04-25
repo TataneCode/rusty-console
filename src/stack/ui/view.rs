@@ -1,3 +1,5 @@
+use crate::container::application::ContainerDto;
+use crate::container::domain::ContainerState;
 use crate::stack::application::StackDto;
 use crate::ui::common::{render_help, render_table, Theme};
 use ratatui::{
@@ -55,5 +57,67 @@ pub fn render_stack_list(
         frame,
         chunks[1],
         " q: Quit | /: Filter | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | r: Refresh | Esc: Back ",
+    );
+}
+
+pub fn render_stack_containers(
+    frame: &mut Frame,
+    area: Rect,
+    stack_name: &str,
+    containers: &[ContainerDto],
+    state: &mut TableState,
+) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(2)])
+        .split(area);
+
+    let headers = vec!["Name", "Image", "State", "Status", "Ports"];
+
+    let rows: Vec<Row> = containers
+        .iter()
+        .map(|c| {
+            let state_style = match c.state {
+                ContainerState::Running => Theme::running_style(),
+                ContainerState::Paused | ContainerState::Restarting => Theme::paused_style(),
+                _ => Theme::stopped_style(),
+            };
+
+            let image = if c.image.len() > 30 {
+                format!("{}…", &c.image[..29])
+            } else {
+                c.image.clone()
+            };
+            let ports = if c.ports.len() > 25 {
+                format!("{}…", &c.ports[..24])
+            } else {
+                c.ports.clone()
+            };
+
+            Row::new(vec![
+                Cell::from(c.name.clone()),
+                Cell::from(image),
+                Cell::from(c.state_display()).style(state_style),
+                Cell::from(c.status.clone()),
+                Cell::from(ports),
+            ])
+        })
+        .collect();
+
+    let widths = vec![
+        Constraint::Percentage(20),
+        Constraint::Percentage(25),
+        Constraint::Percentage(10),
+        Constraint::Percentage(25),
+        Constraint::Percentage(20),
+    ];
+
+    let title = format!(" Stack: {} ", stack_name);
+    render_table(frame, chunks[0], &title, headers, rows, widths, state);
+
+    render_help(
+        frame,
+        chunks[1],
+        " Esc/q: Back | j/k: Navigate | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | d: Delete | r: Refresh ",
     );
 }

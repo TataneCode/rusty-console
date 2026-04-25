@@ -4,9 +4,10 @@ A terminal user interface (TUI) for managing Docker containers, volumes, and ima
 
 ## Features
 
-- **Containers** — list all containers regardless of state, start/stop, view real-time logs, inspect details, delete (with force option for running containers)
-- **Volumes** — list all volumes, detect which ones are in use, delete unused volumes
-- **Images** — list all images with usage status, inspect details, delete (with force option for in-use images)
+- **Containers** — list all containers regardless of state, start/stop, pause/unpause, restart, view real-time logs, inspect details (incl. env vars), delete (with force option for running containers), prune stopped containers, filter by name
+- **Volumes** — list all volumes, detect which ones are in use, delete unused volumes, prune unused volumes, filter by name
+- **Images** — list all images with usage status, inspect details, delete (with force option for in-use images), prune dangling images, filter by name
+- **Stacks** — detect Docker Compose stacks from container labels, list stacks with running/total counts, drill down into a stack's containers, start/stop/remove all containers in a stack at once
 - Confirmation dialogs for all destructive actions
 - Error popups with dismiss-on-keypress behaviour
 
@@ -28,19 +29,56 @@ cargo build --release
 
 ## Key Bindings
 
+### Global
+
 | Key | Action |
 |-----|--------|
 | `j` / `↓` | Move selection down |
 | `k` / `↑` | Move selection up |
 | `Enter` | Select / confirm |
 | `Esc` / `q` | Go back / quit |
-| `l` | View container logs |
-| `s` | Start or stop a container |
-| `c` | View details |
-| `d` | Delete (opens confirmation dialog) |
 | `r` | Refresh list |
+| `/` | Activate filter (type to search, `Esc` to clear) |
+
+### Containers
+
+| Key | Action |
+|-----|--------|
+| `s` | Start or stop the selected container |
+| `p` | Pause or unpause the selected container |
+| `R` | Restart the selected container |
+| `l` | View container logs |
+| `c` | View container details |
+| `d` | Delete (opens confirmation dialog) |
+| `X` | Prune all stopped containers |
 | `Ctrl+U` | Scroll up (in log view) |
 | `Ctrl+D` | Scroll down (in log view) |
+
+### Stacks
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Drill down into stack's containers |
+| `s` | Start All containers in the selected stack |
+| `S` | Stop All containers in the selected stack |
+
+### Stack Containers (drill-down)
+
+| Key | Action |
+|-----|--------|
+| `s` | Start or stop the selected container |
+| `d` | Delete the selected container |
+| `Ctrl+S` | Start All containers in the stack |
+| `S` | Stop All containers in the stack |
+| `D` | Remove All containers in the stack (force, with confirmation) |
+
+### Volumes & Images
+
+| Key | Action |
+|-----|--------|
+| `d` | Delete (opens confirmation dialog) |
+| `c` | View image details |
+| `X` | Prune unused volumes / dangling images |
 
 ---
 
@@ -67,6 +105,7 @@ src/
     ui/              Actions, presenter, view
   image/             (same structure)
   volume/            (same structure)
+  stack/             (same structure — groups containers by compose label)
   errors/            DomainError, AppError, InfraError
   docker/            DockerClient (shared Bollard wrapper)
   shared.rs          PruneResultDto
@@ -105,7 +144,7 @@ Adapts the Docker daemon API to the application's repository traits using [bolla
 Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
 
 - **`ui/app.rs`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
-- **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`.
+- **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `StackList`, `StackContainers`.
 - **Per-feature triad** (e.g. `container/ui/`):
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
   - `view.rs` — pure ratatui widget composition functions
@@ -136,6 +175,7 @@ DockerClient
   └─► Arc<ContainerAdapter>  →  ContainerService  →  ContainerActions
   └─► Arc<VolumeAdapter>     →  VolumeService     →  VolumeActions
   └─► Arc<ImageAdapter>      →  ImageService      →  ImageActions
+  └─► Arc<StackAdapter>      →  StackService      →  StackActions
                                                          │
                                                          ▼
                                                        App::new(…)

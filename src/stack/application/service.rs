@@ -13,8 +13,8 @@ impl StackService {
         StackService { repository }
     }
 
-    pub async fn list_stacks(&self) -> Result<Vec<StackDto>, AppError> {
-        let stacks = self.repository.list_stacks().await?;
+    pub async fn get_all_stacks(&self) -> Result<Vec<StackDto>, AppError> {
+        let stacks = self.repository.get_all().await?;
         Ok(StackMapper::to_dto_list(&stacks))
     }
 
@@ -24,6 +24,9 @@ impl StackService {
 
     pub async fn stop_all(&self, container_ids: &[String]) -> Result<(), AppError> {
         self.repository.stop_all(container_ids).await
+    }
+    pub async fn remove_all(&self, container_ids: &[String]) -> Result<(), AppError> {
+        self.repository.remove_all(container_ids).await
     }
 }
 
@@ -41,11 +44,11 @@ mod tests {
     #[tokio::test]
     async fn test_list_stacks_returns_dtos() {
         let mut mock = MockStackRepository::new();
-        mock.expect_list_stacks()
+        mock.expect_get_all()
             .returning(|| Ok(vec![make_stack("app-a"), make_stack("app-b")]));
 
         let service = StackService::new(Arc::new(mock));
-        let result = service.list_stacks().await.unwrap();
+        let result = service.get_all_stacks().await.unwrap();
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "app-a");
@@ -79,10 +82,22 @@ mod tests {
     #[tokio::test]
     async fn test_list_stacks_empty() {
         let mut mock = MockStackRepository::new();
-        mock.expect_list_stacks().returning(|| Ok(vec![]));
+        mock.expect_get_all().returning(|| Ok(vec![]));
 
         let service = StackService::new(Arc::new(mock));
-        let result = service.list_stacks().await.unwrap();
+        let result = service.get_all_stacks().await.unwrap();
         assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_remove_all_delegates_to_repository() {
+        let ids = vec!["id1".to_string(), "id2".to_string()];
+        let mut mock = MockStackRepository::new();
+        mock.expect_remove_all()
+            .with(eq(ids.clone()))
+            .returning(|_| Ok(()));
+
+        let service = StackService::new(Arc::new(mock));
+        assert!(service.remove_all(&ids).await.is_ok());
     }
 }

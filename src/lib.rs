@@ -21,7 +21,7 @@ pub use image::application::{ImageDto, ImageRepository, ImageService};
 pub use image::domain::Image;
 pub use image::infrastructure::adapter::ImageAdapter;
 pub use image::ui::{ImageActions, ImagePresenter};
-pub use shared::PruneResultDto;
+pub use shared::{ByteSize, PruneResultDto};
 pub use stack::application::traits::StackRepository;
 pub use stack::application::{StackDto, StackService};
 pub use stack::domain::{Stack, StackName};

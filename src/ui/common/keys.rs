@@ -21,6 +21,8 @@ pub enum AppAction {
     Prune,
     ActivateFilter,
     StopAll,
+    StartAll,
+    RemoveAll,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -33,6 +35,9 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::PageDown => Some(AppAction::PageDown),
         KeyCode::Enter => Some(AppAction::Select),
         KeyCode::Char('l') => Some(AppAction::ViewLogs),
+        KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(AppAction::StartAll)
+        }
         KeyCode::Char('s') => Some(AppAction::StartStop),
         KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(AppAction::ScrollDown)
@@ -48,6 +53,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('X') => Some(AppAction::Prune),
         KeyCode::Char('/') => Some(AppAction::ActivateFilter),
         KeyCode::Char('S') => Some(AppAction::StopAll),
+        KeyCode::Char('D') => Some(AppAction::RemoveAll),
         _ => None,
     }
 }
@@ -236,6 +242,25 @@ mod tests {
         assert_eq!(
             map_key_to_action(key_event(KeyCode::Char('S'))),
             Some(AppAction::StopAll)
+        );
+    }
+
+    #[test]
+    fn test_start_all_ctrl_s() {
+        assert_eq!(
+            map_key_to_action(key_event_with_modifiers(
+                KeyCode::Char('s'),
+                KeyModifiers::CONTROL
+            )),
+            Some(AppAction::StartAll)
+        );
+    }
+
+    #[test]
+    fn test_remove_all() {
+        assert_eq!(
+            map_key_to_action(key_event(KeyCode::Char('D'))),
+            Some(AppAction::RemoveAll)
         );
     }
 

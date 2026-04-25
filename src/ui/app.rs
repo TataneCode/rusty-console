@@ -778,7 +778,7 @@ impl App {
     async fn load_stacks(&mut self) {
         match self.stack_actions.load_stacks().await {
             Ok(stacks) => self.stack_presenter.set_stacks(stacks),
-            Err(e) => self.stack_presenter.set_error(e.to_string()),
+            Err(e) => self.error_message = Some(e.to_string()),
         }
     }
 

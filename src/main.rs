@@ -19,19 +19,19 @@ mod ui;
 mod volume;
 
 use application::container::ContainerService;
-use image::application::ImageService;
-use image::infrastructure::adapter::ImageAdapter;
-use image::ui::ImageActions;
+use application::image::ImageService;
+use application::stack::StackService;
+use application::volume::VolumeService;
 use infrastructure::docker::client::DockerClient;
 use infrastructure::docker::container::ContainerAdapter;
+use infrastructure::docker::image::ImageAdapter;
+use infrastructure::docker::stack::StackAdapter;
+use infrastructure::docker::volume::VolumeAdapter;
+use presentation::tui::app::App;
 use presentation::tui::container::ContainerActions;
-use stack::application::StackService;
-use stack::infrastructure::adapter::StackAdapter;
-use stack::ui::StackActions;
-use ui::app::App;
-use volume::application::VolumeService;
-use volume::infrastructure::adapter::VolumeAdapter;
-use volume::ui::VolumeActions;
+use presentation::tui::image::ImageActions;
+use presentation::tui::stack::StackActions;
+use presentation::tui::volume::VolumeActions;
 
 use std::sync::Arc;
 

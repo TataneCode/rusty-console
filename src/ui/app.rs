@@ -1,16 +1,20 @@
 use crate::application::container::ContainerDto;
-use crate::image::application::ImageDto;
-use crate::image::ui::{render_image_details, render_image_list, ImageActions, ImagePresenter};
+use crate::application::image::ImageDto;
+use crate::application::stack::StackDto;
+use crate::application::volume::VolumeDto;
 use crate::presentation::tui::container::{
     render_container_details, render_container_list, render_container_logs, ContainerActions,
     ContainerPresenter,
 };
-use crate::stack::application::StackDto;
-use crate::stack::ui::{render_stack_containers, render_stack_list, StackActions, StackPresenter};
+use crate::presentation::tui::image::{
+    render_image_details, render_image_list, ImageActions, ImagePresenter,
+};
+use crate::presentation::tui::stack::{
+    render_stack_containers, render_stack_list, StackActions, StackPresenter,
+};
+use crate::presentation::tui::volume::{render_volume_list, VolumeActions, VolumePresenter};
 use crate::ui::common::{map_key_to_action, render_confirm_dialog, render_error_popup, AppAction};
 use crate::ui::event::{AppEvent, EventHandler};
-use crate::volume::application::VolumeDto;
-use crate::volume::ui::{render_volume_list, VolumeActions, VolumePresenter};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, KeyCode},
     execute,

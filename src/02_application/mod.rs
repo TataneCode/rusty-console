@@ -9,21 +9,13 @@
 //! - Do not depend on ratatui, crossterm, bollard, or other outer-framework
 //!   implementation details.
 
-pub mod container {
-    pub use crate::container::application::*;
-}
+pub mod container;
 
-pub mod image {
-    pub use crate::image::application::*;
-}
+pub mod image;
 
-pub mod volume {
-    pub use crate::volume::application::*;
-}
+pub mod volume;
 
-pub mod stack {
-    pub use crate::stack::application::*;
-}
+pub mod stack;
 
 pub mod error;
 

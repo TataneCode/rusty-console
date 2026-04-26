@@ -13,21 +13,13 @@
 //! - Shared pure business primitives belong here first unless they are clearly
 //!   application-only transport types.
 
-pub mod container {
-    pub use crate::container::domain::*;
-}
+pub mod container;
 
-pub mod image {
-    pub use crate::image::domain::*;
-}
+pub mod image;
 
-pub mod volume {
-    pub use crate::volume::domain::*;
-}
+pub mod volume;
 
-pub mod stack {
-    pub use crate::stack::domain::*;
-}
+pub mod stack;
 
 pub mod error;
 

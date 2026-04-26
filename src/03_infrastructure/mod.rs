@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 //! Transitional bridge for the target infrastructure layer.
 //!
 //! Boundary rules for this layer:
@@ -10,5 +8,3 @@
 
 pub mod docker;
 pub mod error;
-
-pub use error::InfraError;

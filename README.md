@@ -90,7 +90,7 @@ The project follows **Domain-Driven Design (DDD)** with a clean, strictly inward
 04_presentation  →  02_application  →  01_domain  ←  03_infrastructure
 ```
 
-No outer layer may be imported by an inner one. The `domain` layer has zero third-party dependencies.
+No outer layer may be imported by an inner one. The `domain` layer remains the business core, but it currently uses a small number of external crates for timestamps and typed errors (`chrono` and `thiserror`).
 
 ### Layer-first structure
 
@@ -156,7 +156,7 @@ At the root, `shared.rs` remains as the small shared value module used across la
 ### Layers
 
 #### `01_domain/*`
-The core of the application. Contains pure Rust business logic with no external crates.
+The core of the application. Contains the business logic and domain concepts. It is still isolated from application, infrastructure, and presentation code, but it currently depends on a small number of external crates for timestamps and typed errors.
 
 - **Entities** — `Container`, `Volume`, `Image`. Each entity encapsulates its own business rules (e.g. `Container::can_be_started()`, `Container::uses_volume()`).
 - **Value Objects** — `ContainerId`, `PortMapping`, `NetworkInfo`, `MountInfo`, `VolumeId`, `ImageId`. Immutable, identity-free wrappers.

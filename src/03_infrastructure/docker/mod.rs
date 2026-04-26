@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 //! Transitional bridge for infrastructure Docker integration.
 //!
 //! `client.rs` is now the canonical home of the shared Docker client wrapper.

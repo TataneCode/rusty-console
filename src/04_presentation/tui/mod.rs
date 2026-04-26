@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 pub mod app;
 pub mod common;
 pub mod container;

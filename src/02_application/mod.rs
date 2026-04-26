@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 //! Transitional bridge for the target application layer.
 //!
 //! Boundary rules for this layer:
@@ -19,8 +17,6 @@ pub mod stack;
 
 pub mod error;
 
-pub use error::AppError;
-
 pub mod shared {
-    pub use crate::shared::PruneResultDto;
+    pub type PruneResultDto = crate::shared::PruneResultDto;
 }

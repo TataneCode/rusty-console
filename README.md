@@ -92,6 +92,28 @@ ui  →  application  →  domain  ←  infrastructure
 
 No outer layer may be imported by an inner one. The `domain` layer has zero third-party dependencies.
 
+### Refactor target and migration staging
+
+The codebase is currently being refactored toward a **numbered, layer-first** layout to make the architecture easier to read:
+
+```text
+src/
+  01_domain/
+  02_application/
+  03_infrastructure/
+  04_presentation/
+```
+
+Rust module names remain valid identifiers (`domain`, `application`, `infrastructure`, `presentation`) and are mapped onto these numbered directories with `#[path = "..."]`.
+
+During the migration, the current feature-first modules remain in place and the numbered layer modules act as **compatibility bridges**. The dependency rules for the target structure are:
+
+1. `01_domain` contains business concepts and invariants only.
+2. `02_application` orchestrates use cases and defines ports/DTOs.
+3. `03_infrastructure` contains Docker/Bollard and adapter code.
+4. `04_presentation` owns TUI rendering, presenters, actions, and app flow.
+5. Dependencies always point inward; outer layers may depend on inner ones, never the reverse.
+
 ### Folder layout
 
 Source code is organized **feature-first**: each domain concept gets its own top-level folder containing all its layers as sub-folders.

@@ -1,5 +1,5 @@
-use crate::ui::common::{render_help, render_table, Theme};
-use crate::volume::application::VolumeDto;
+use crate::application::volume::VolumeDto;
+use crate::presentation::tui::common::{render_help, render_table, Theme};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Cell, Row, TableState},

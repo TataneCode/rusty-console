@@ -1,4 +1,4 @@
-use crate::image::domain::{Image, ImageId, ImageSize};
+use crate::domain::image::{Image, ImageId, ImageSize};
 use bollard::models::ImageSummary;
 use chrono::{TimeZone, Utc};
 use std::collections::HashSet;

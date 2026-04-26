@@ -1,4 +1,4 @@
-use crate::container::domain::ContainerState;
+use crate::domain::container::ContainerState;
 
 #[derive(Debug, Clone)]
 pub struct ContainerDto {

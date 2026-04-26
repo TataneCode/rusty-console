@@ -1,5 +1,5 @@
-use crate::container::application::{ContainerDto, ContainerLogsDto, ContainerService};
-use crate::errors::AppError;
+use crate::application::container::{ContainerDto, ContainerLogsDto, ContainerService};
+use crate::application::error::AppError;
 use crate::shared::PruneResultDto;
 
 pub struct ContainerActions {

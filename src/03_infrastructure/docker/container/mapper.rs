@@ -1,4 +1,4 @@
-use crate::container::domain::{
+use crate::domain::container::{
     Container, ContainerId, ContainerState, MountInfo, NetworkInfo, PortMapping,
 };
 use bollard::models::{ContainerInspectResponse, ContainerSummary};

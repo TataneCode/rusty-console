@@ -1,5 +1,5 @@
-use crate::image::application::dto::ImageDto;
-use crate::image::domain::Image;
+use crate::application::image::dto::ImageDto;
+use crate::domain::image::Image;
 
 pub struct ImageMapper;
 
@@ -27,7 +27,7 @@ impl ImageMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::image::domain::{ImageId, ImageSize};
+    use crate::domain::image::{ImageId, ImageSize};
     use chrono::{TimeZone, Utc};
 
     fn create_test_image() -> Image {

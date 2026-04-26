@@ -92,9 +92,9 @@ The project follows **Domain-Driven Design (DDD)** with a clean, strictly inward
 
 No outer layer may be imported by an inner one. The `domain` layer has zero third-party dependencies.
 
-### Refactor target and migration staging
+### Layer-first structure
 
-The codebase is currently being refactored toward a **numbered, layer-first** layout to make the architecture easier to read:
+The codebase now uses a **numbered, layer-first** layout to make the architecture easier to read:
 
 ```text
 src/
@@ -106,7 +106,7 @@ src/
 
 Rust module names remain valid identifiers (`domain`, `application`, `infrastructure`, `presentation`) and are mapped onto these numbered directories with `#[path = "..."]`.
 
-The numbered layer modules are now the **primary navigation and import surface**. During the remaining migration, the older feature-first modules stay in the tree as **internal compatibility bridges** behind that public layer-first structure. The dependency rules for the target structure are:
+The numbered layer modules are now the **primary navigation and import surface**. The older feature-first directory trees and temporary remap files have been removed. The dependency rules for the target structure are:
 
 1. `01_domain` contains business concepts and invariants only.
 2. `02_application` orchestrates use cases and defines ports/DTOs.
@@ -119,8 +119,6 @@ The shared Docker client wrapper now lives under `03_infrastructure/docker/clien
 - `01_domain/error.rs`
 - `02_application/error.rs`
 - `03_infrastructure/error.rs`
-
-Legacy `src/docker/` and `src/errors/` paths remain as compatibility shims during the migration.
 
 ### Folder layout
 
@@ -153,26 +151,7 @@ src/
       stack/
 ```
 
-Legacy feature-first folders still exist internally during the migration and currently back some of the layer-first modules:
-
-```
-src/
-  container/
-    domain/          Entity, ContainerState, value objects
-    application/     DTO, mapper, service, repository trait
-    infrastructure/  Bollard adapter and infra mapper
-    ui/              Actions, presenter, view
-  image/             (same structure)
-  volume/            (same structure)
-  stack/             (same structure — groups containers by compose label)
-  errors/            DomainError, AppError, InfraError
-  docker/            DockerClient (shared Bollard wrapper)
-  shared.rs          PruneResultDto
-  ui/
-    app.rs           Screen state-machine and event loop
-    event.rs         Terminal event handler
-    common/          Shared widgets, colour theme, key bindings
-```
+At the root, `shared.rs` remains as the small shared value module used across layers.
 
 ### Layers
 

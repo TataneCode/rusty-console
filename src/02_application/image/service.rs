@@ -1,7 +1,7 @@
-use crate::errors::AppError;
-use crate::image::application::dto::ImageDto;
-use crate::image::application::mapper::ImageMapper;
-use crate::image::application::traits::ImageRepository;
+use crate::application::error::AppError;
+use crate::application::image::dto::ImageDto;
+use crate::application::image::mapper::ImageMapper;
+use crate::application::image::traits::ImageRepository;
 use crate::shared::PruneResultDto;
 use std::sync::Arc;
 
@@ -36,8 +36,8 @@ impl ImageService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::image::application::traits::MockImageRepository;
-    use crate::image::domain::{Image, ImageId, ImageSize};
+    use crate::application::image::traits::MockImageRepository;
+    use crate::domain::image::{Image, ImageId, ImageSize};
     use chrono::Utc;
     use std::sync::Arc;
 

@@ -1,6 +1,6 @@
-use crate::errors::AppError;
+use crate::application::error::AppError;
+use crate::application::volume::{VolumeDto, VolumeService};
 use crate::shared::PruneResultDto;
-use crate::volume::application::{VolumeDto, VolumeService};
 
 pub struct VolumeActions {
     service: VolumeService,

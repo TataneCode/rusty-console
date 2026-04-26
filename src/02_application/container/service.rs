@@ -1,7 +1,7 @@
-use crate::container::application::dto::{ContainerDto, ContainerLogsDto};
-use crate::container::application::mapper::ContainerMapper;
-use crate::container::application::traits::ContainerRepository;
-use crate::errors::AppError;
+use crate::application::container::dto::{ContainerDto, ContainerLogsDto};
+use crate::application::container::mapper::ContainerMapper;
+use crate::application::container::traits::ContainerRepository;
+use crate::application::error::AppError;
 use crate::shared::PruneResultDto;
 use std::sync::Arc;
 
@@ -70,8 +70,8 @@ impl ContainerService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::application::traits::MockContainerRepository;
-    use crate::container::domain::{Container, ContainerId, ContainerState};
+    use crate::application::container::traits::MockContainerRepository;
+    use crate::domain::container::{Container, ContainerId, ContainerState};
     use chrono::Utc;
     use std::sync::Arc;
 

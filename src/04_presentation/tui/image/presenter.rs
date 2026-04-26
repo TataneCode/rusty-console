@@ -1,5 +1,5 @@
-use crate::image::application::ImageDto;
-use crate::ui::common::TableSelection;
+use crate::application::image::ImageDto;
+use crate::presentation::tui::common::TableSelection;
 
 pub struct ImagePresenter {
     pub images: Vec<ImageDto>,

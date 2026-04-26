@@ -1,5 +1,5 @@
-use crate::ui::common::TableSelection;
-use crate::volume::application::VolumeDto;
+use crate::application::volume::VolumeDto;
+use crate::presentation::tui::common::TableSelection;
 
 pub struct VolumePresenter {
     pub volumes: Vec<VolumeDto>,

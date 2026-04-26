@@ -1,4 +1,4 @@
-use crate::stack::domain::StackContainerState;
+use crate::domain::stack::StackContainerState;
 
 #[derive(Debug, Clone)]
 pub struct StackContainerDto {

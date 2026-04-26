@@ -1,5 +1,5 @@
-use crate::errors::AppError;
-use crate::image::domain::Image;
+use crate::application::error::AppError;
+use crate::domain::image::Image;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 

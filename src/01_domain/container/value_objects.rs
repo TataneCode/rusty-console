@@ -1,4 +1,4 @@
-use crate::errors::DomainError;
+use crate::domain::error::DomainError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContainerId(String);

@@ -9,14 +9,7 @@ mod infrastructure;
 #[path = "04_presentation/mod.rs"]
 mod presentation;
 
-mod container;
-mod docker;
-mod errors;
-mod image;
 mod shared;
-mod stack;
-mod ui;
-mod volume;
 
 use application::container::ContainerService;
 use application::image::ImageService;

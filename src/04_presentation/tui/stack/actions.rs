@@ -1,5 +1,5 @@
-use crate::errors::AppError;
-use crate::stack::application::{StackDto, StackService};
+use crate::application::error::AppError;
+use crate::application::stack::{StackDto, StackService};
 
 pub struct StackActions {
     service: StackService,

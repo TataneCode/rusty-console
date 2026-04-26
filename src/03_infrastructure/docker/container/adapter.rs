@@ -1,8 +1,8 @@
-use crate::container::application::ContainerRepository;
-use crate::container::domain::Container;
-use crate::container::infrastructure::mapper::ContainerInfraMapper;
-use crate::docker::DockerClient;
-use crate::errors::AppError;
+use crate::application::container::ContainerRepository;
+use crate::application::error::AppError;
+use crate::domain::container::Container;
+use crate::infrastructure::docker::client::DockerClient;
+use crate::infrastructure::docker::container::mapper::ContainerInfraMapper;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::container::{

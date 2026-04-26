@@ -1,5 +1,5 @@
-use crate::container::application::dto::ContainerDto;
-use crate::container::domain::Container;
+use crate::application::container::dto::ContainerDto;
+use crate::domain::container::Container;
 
 pub struct ContainerMapper;
 
@@ -38,7 +38,7 @@ impl ContainerMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::domain::{ContainerId, ContainerState, NetworkInfo, PortMapping};
+    use crate::domain::container::{ContainerId, ContainerState, NetworkInfo, PortMapping};
     use chrono::{TimeZone, Utc};
 
     fn create_running_container() -> Container {

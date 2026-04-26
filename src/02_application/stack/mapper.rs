@@ -1,5 +1,5 @@
-use crate::stack::application::dto::{StackContainerDto, StackDto};
-use crate::stack::domain::{Stack, StackContainer};
+use crate::application::stack::dto::{StackContainerDto, StackDto};
+use crate::domain::stack::{Stack, StackContainer};
 
 pub struct StackMapper;
 
@@ -38,7 +38,7 @@ impl StackMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stack::domain::{StackContainer, StackContainerState, StackName};
+    use crate::domain::stack::{StackContainer, StackContainerState, StackName};
 
     fn make_container(state: StackContainerState) -> StackContainer {
         StackContainer::new("abc123", "/web", "nginx:latest", state, "Up", "80/tcp")

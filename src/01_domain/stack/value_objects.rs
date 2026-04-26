@@ -1,4 +1,4 @@
-use crate::errors::DomainError;
+use crate::domain::error::DomainError;
 
 pub const STANDALONE: &str = "(standalone)";
 

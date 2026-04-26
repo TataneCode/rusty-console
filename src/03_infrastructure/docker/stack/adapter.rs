@@ -1,8 +1,8 @@
-use crate::docker::DockerClient;
-use crate::errors::AppError;
-use crate::stack::application::traits::StackRepository;
-use crate::stack::domain::Stack;
-use crate::stack::infrastructure::mapper::StackInfraMapper;
+use crate::application::error::AppError;
+use crate::application::stack::traits::StackRepository;
+use crate::domain::stack::Stack;
+use crate::infrastructure::docker::client::DockerClient;
+use crate::infrastructure::docker::stack::mapper::StackInfraMapper;
 use async_trait::async_trait;
 use bollard::container::{
     ListContainersOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions,

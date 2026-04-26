@@ -1,5 +1,5 @@
-use crate::container::application::{ContainerDto, ContainerLogsDto};
-use crate::ui::common::TableSelection;
+use crate::application::container::{ContainerDto, ContainerLogsDto};
+use crate::presentation::tui::common::TableSelection;
 
 pub struct ContainerPresenter {
     pub containers: Vec<ContainerDto>,
@@ -133,7 +133,7 @@ impl Default for ContainerPresenter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::domain::ContainerState;
+    use crate::domain::container::ContainerState;
 
     fn make_container(name: &str, image: &str) -> ContainerDto {
         ContainerDto {

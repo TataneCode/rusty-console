@@ -1,5 +1,5 @@
-use crate::errors::AppError;
-use crate::image::application::{ImageDto, ImageService};
+use crate::application::error::AppError;
+use crate::application::image::{ImageDto, ImageService};
 use crate::shared::PruneResultDto;
 
 pub struct ImageActions {

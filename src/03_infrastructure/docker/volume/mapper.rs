@@ -1,4 +1,4 @@
-use crate::volume::domain::{Volume, VolumeId, VolumeSize};
+use crate::domain::volume::{Volume, VolumeId, VolumeSize};
 use bollard::models::Volume as BollardVolume;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;

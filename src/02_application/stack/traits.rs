@@ -1,5 +1,5 @@
-use crate::errors::AppError;
-use crate::stack::domain::Stack;
+use crate::application::error::AppError;
+use crate::domain::stack::Stack;
 use async_trait::async_trait;
 
 #[cfg_attr(test, mockall::automock)]

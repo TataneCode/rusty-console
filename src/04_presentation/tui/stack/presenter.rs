@@ -1,5 +1,5 @@
-use crate::stack::application::{StackContainerDto, StackDto};
-use crate::ui::common::TableSelection;
+use crate::application::stack::{StackContainerDto, StackDto};
+use crate::presentation::tui::common::TableSelection;
 
 pub struct StackPresenter {
     pub stacks: Vec<StackDto>,
@@ -320,7 +320,7 @@ mod tests {
                 id: "1".to_string(),
                 name: "web".to_string(),
                 image: "nginx:latest".to_string(),
-                state: crate::stack::domain::StackContainerState::Running,
+                state: crate::domain::stack::StackContainerState::Running,
                 status: "Up".to_string(),
                 ports: "80/tcp".to_string(),
                 can_start: false,
@@ -330,7 +330,7 @@ mod tests {
                 id: "2".to_string(),
                 name: "db".to_string(),
                 image: "postgres:16".to_string(),
-                state: crate::stack::domain::StackContainerState::Stopped,
+                state: crate::domain::stack::StackContainerState::Stopped,
                 status: "Exited".to_string(),
                 ports: "-".to_string(),
                 can_start: true,

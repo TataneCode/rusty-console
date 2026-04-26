@@ -1,5 +1,5 @@
-use crate::image::application::ImageDto;
-use crate::ui::common::{render_help, render_table, Theme};
+use crate::application::image::ImageDto;
+use crate::presentation::tui::common::{render_help, render_table, Theme};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Cell, Paragraph, Row, TableState, Wrap},

@@ -1,4 +1,4 @@
-use crate::errors::DomainError;
+use crate::domain::error::DomainError;
 
 pub type ImageSize = crate::shared::ByteSize;
 

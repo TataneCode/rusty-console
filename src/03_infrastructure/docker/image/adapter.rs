@@ -1,8 +1,8 @@
-use crate::docker::DockerClient;
-use crate::errors::AppError;
-use crate::image::application::ImageRepository;
-use crate::image::domain::Image;
-use crate::image::infrastructure::mapper::ImageInfraMapper;
+use crate::application::error::AppError;
+use crate::application::image::ImageRepository;
+use crate::domain::image::Image;
+use crate::infrastructure::docker::client::DockerClient;
+use crate::infrastructure::docker::image::mapper::ImageInfraMapper;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::container::ListContainersOptions;

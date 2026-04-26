@@ -1,9 +1,9 @@
-use crate::docker::DockerClient;
-use crate::errors::AppError;
+use crate::application::error::AppError;
+use crate::application::volume::VolumeRepository;
+use crate::domain::volume::Volume;
+use crate::infrastructure::docker::client::DockerClient;
+use crate::infrastructure::docker::volume::mapper::VolumeInfraMapper;
 use crate::shared::PruneResultDto;
-use crate::volume::application::VolumeRepository;
-use crate::volume::domain::Volume;
-use crate::volume::infrastructure::mapper::VolumeInfraMapper;
 use async_trait::async_trait;
 use bollard::container::ListContainersOptions;
 use bollard::volume::{ListVolumesOptions, RemoveVolumeOptions};

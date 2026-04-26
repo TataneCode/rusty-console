@@ -1,4 +1,4 @@
-use crate::stack::domain::{Stack, StackContainer, StackContainerState, StackName, STANDALONE};
+use crate::domain::stack::{Stack, StackContainer, StackContainerState, StackName, STANDALONE};
 use bollard::models::{ContainerSummary, Port};
 use std::collections::HashMap;
 

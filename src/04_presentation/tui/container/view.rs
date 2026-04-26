@@ -1,6 +1,6 @@
-use crate::container::application::{ContainerDto, ContainerLogsDto};
-use crate::container::domain::ContainerState;
-use crate::ui::common::{render_help, render_table, Theme};
+use crate::application::container::{ContainerDto, ContainerLogsDto};
+use crate::domain::container::ContainerState;
+use crate::presentation::tui::common::{render_help, render_table, Theme};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Cell, Paragraph, Row, TableState, Wrap},

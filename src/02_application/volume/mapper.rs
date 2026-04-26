@@ -1,5 +1,5 @@
-use crate::volume::application::dto::VolumeDto;
-use crate::volume::domain::Volume;
+use crate::application::volume::dto::VolumeDto;
+use crate::domain::volume::Volume;
 
 pub struct VolumeMapper;
 
@@ -28,7 +28,7 @@ impl VolumeMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::volume::domain::{VolumeId, VolumeSize};
+    use crate::domain::volume::{VolumeId, VolumeSize};
     use chrono::{TimeZone, Utc};
 
     fn create_test_volume() -> Volume {

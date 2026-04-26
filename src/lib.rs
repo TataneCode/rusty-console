@@ -9,14 +9,7 @@ pub mod infrastructure;
 #[path = "04_presentation/mod.rs"]
 pub mod presentation;
 
-mod container;
-mod docker;
-mod errors;
-mod image;
 mod shared;
-mod stack;
-mod ui;
-mod volume;
 
 pub use application::container::{
     ContainerDto, ContainerLogsDto, ContainerRepository, ContainerService,

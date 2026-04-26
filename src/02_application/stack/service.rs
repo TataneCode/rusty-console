@@ -1,7 +1,7 @@
-use crate::errors::AppError;
-use crate::stack::application::dto::StackDto;
-use crate::stack::application::mapper::StackMapper;
-use crate::stack::application::traits::StackRepository;
+use crate::application::error::AppError;
+use crate::application::stack::dto::StackDto;
+use crate::application::stack::mapper::StackMapper;
+use crate::application::stack::traits::StackRepository;
 use std::sync::Arc;
 
 pub struct StackService {
@@ -33,8 +33,8 @@ impl StackService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stack::application::traits::MockStackRepository;
-    use crate::stack::domain::{Stack, StackName};
+    use crate::application::stack::traits::MockStackRepository;
+    use crate::domain::stack::{Stack, StackName};
     use mockall::predicate::eq;
 
     fn make_stack(name: &str) -> Stack {

@@ -1,6 +1,6 @@
-use crate::stack::application::{StackContainerDto, StackDto};
-use crate::stack::domain::StackContainerState;
-use crate::ui::common::{render_help, render_table, Theme};
+use crate::application::stack::{StackContainerDto, StackDto};
+use crate::domain::stack::StackContainerState;
+use crate::presentation::tui::common::{render_help, render_table, Theme};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Cell, Row, TableState},

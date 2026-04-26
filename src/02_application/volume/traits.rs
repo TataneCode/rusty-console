@@ -1,6 +1,6 @@
-use crate::errors::AppError;
+use crate::application::error::AppError;
+use crate::domain::volume::Volume;
 use crate::shared::PruneResultDto;
-use crate::volume::domain::Volume;
 use async_trait::async_trait;
 
 #[cfg_attr(test, mockall::automock)]

@@ -87,7 +87,7 @@ cargo build --release
 The project follows **Domain-Driven Design (DDD)** with a clean, strictly inward dependency graph:
 
 ```
-ui  →  application  →  domain  ←  infrastructure
+04_presentation  →  02_application  →  01_domain  ←  03_infrastructure
 ```
 
 No outer layer may be imported by an inner one. The `domain` layer has zero third-party dependencies.
@@ -106,7 +106,7 @@ src/
 
 Rust module names remain valid identifiers (`domain`, `application`, `infrastructure`, `presentation`) and are mapped onto these numbered directories with `#[path = "..."]`.
 
-During the migration, the current feature-first modules remain in place and the numbered layer modules act as **compatibility bridges**. The dependency rules for the target structure are:
+The numbered layer modules are now the **primary navigation and import surface**. During the remaining migration, the older feature-first modules stay in the tree as **internal compatibility bridges** behind that public layer-first structure. The dependency rules for the target structure are:
 
 1. `01_domain` contains business concepts and invariants only.
 2. `02_application` orchestrates use cases and defines ports/DTOs.
@@ -124,7 +124,36 @@ Legacy `src/docker/` and `src/errors/` paths remain as compatibility shims durin
 
 ### Folder layout
 
-Source code is organized **feature-first**: each domain concept gets its own top-level folder containing all its layers as sub-folders.
+The primary structure is now **layer-first**, with business modules inside each layer:
+
+```text
+src/
+  01_domain/
+    container/
+    image/
+    volume/
+    stack/
+  02_application/
+    container/
+    image/
+    volume/
+    stack/
+  03_infrastructure/
+    docker/
+      client.rs
+      container/
+      image/
+      volume/
+      stack/
+  04_presentation/
+    tui/
+      container/
+      image/
+      volume/
+      stack/
+```
+
+Legacy feature-first folders still exist internally during the migration and currently back some of the layer-first modules:
 
 ```
 src/
@@ -147,35 +176,35 @@ src/
 
 ### Layers
 
-#### `*/domain/`
+#### `01_domain/*`
 The core of the application. Contains pure Rust business logic with no external crates.
 
 - **Entities** — `Container`, `Volume`, `Image`. Each entity encapsulates its own business rules (e.g. `Container::can_be_started()`, `Container::uses_volume()`).
 - **Value Objects** — `ContainerId`, `PortMapping`, `NetworkInfo`, `MountInfo`, `VolumeId`, `ImageId`. Immutable, identity-free wrappers.
 - **Domain state** — `ContainerState` enum (`Running`, `Paused`, `Exited`, `Dead`, …) with derived predicates used to drive UI affordances.
-- **Errors** — `errors/domain.rs`, re-wrapped at each outer layer.
+- **Errors** — `01_domain/error.rs`, re-wrapped at each outer layer.
 
-#### `*/application/`
+#### `02_application/*`
 Orchestration layer. Defines the contracts the rest of the system depends on and provides use-case implementations.
 
-- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository` (in `traits.rs` of each feature). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
+- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository` (in each feature's `traits.rs`). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
 - **Services** — `ContainerService`, `VolumeService`, `ImageService`. Thin use-case coordinators that call a repository and return DTOs.
 - **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`. Plain data structs crossing the application→UI boundary.
 - **Mappers** — `ContainerMapper`, etc. Convert domain entities into DTOs.
 
-#### `*/infrastructure/`
+#### `03_infrastructure/*`
 Adapts the Docker daemon API to the application's repository traits using [bollard](https://crates.io/crates/bollard).
 
 - **Adapters** — `ContainerAdapter`, `VolumeAdapter`, `ImageAdapter`. Each implements the corresponding repository trait. Log streaming uses `futures_util::StreamExt` to consume bollard's async stream.
 - **Mappers** — `ContainerInfraMapper`, etc. Convert raw bollard API types into domain entities.
-- **`docker/`** — `DockerClient`, a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
+- **`docker/client.rs`** — `DockerClient`, a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
 
-#### `*/ui/`
+#### `04_presentation/tui/*`
 Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
 
-- **`ui/app.rs`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
+- **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
 - **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `StackList`, `StackContainers`.
-- **Per-feature triad** (e.g. `container/ui/`):
+- **Per-feature triad** (e.g. `04_presentation/tui/container/`):
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
   - `view.rs` — pure ratatui widget composition functions
   - `actions.rs` — async wrappers around application services; called from `app.rs` event handlers

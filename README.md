@@ -87,65 +87,103 @@ cargo build --release
 The project follows **Domain-Driven Design (DDD)** with a clean, strictly inward dependency graph:
 
 ```
-ui  →  application  →  domain  ←  infrastructure
+04_presentation  →  02_application  →  01_domain  ←  03_infrastructure
 ```
 
-No outer layer may be imported by an inner one. The `domain` layer has zero third-party dependencies.
+No outer layer may be imported by an inner one. The `domain` layer remains the business core, but it currently uses a small number of external crates for timestamps and typed errors (`chrono` and `thiserror`).
+
+### Layer-first structure
+
+The codebase now uses a **numbered, layer-first** layout to make the architecture easier to read:
+
+```text
+src/
+  01_domain/
+  02_application/
+  03_infrastructure/
+  04_presentation/
+```
+
+Rust module names remain valid identifiers (`domain`, `application`, `infrastructure`, `presentation`) and are mapped onto these numbered directories with `#[path = "..."]`.
+
+The numbered layer modules are now the **primary navigation and import surface**. The older feature-first directory trees and temporary remap files have been removed. The dependency rules for the target structure are:
+
+1. `01_domain` contains business concepts and invariants only.
+2. `02_application` orchestrates use cases and defines ports/DTOs.
+3. `03_infrastructure` contains Docker/Bollard and adapter code.
+4. `04_presentation` owns TUI rendering, presenters, actions, and app flow.
+5. Dependencies always point inward; outer layers may depend on inner ones, never the reverse.
+
+The shared Docker client wrapper now lives under `03_infrastructure/docker/client.rs`, and the layer error types live under:
+
+- `01_domain/error.rs`
+- `02_application/error.rs`
+- `03_infrastructure/error.rs`
 
 ### Folder layout
 
-Source code is organized **feature-first**: each domain concept gets its own top-level folder containing all its layers as sub-folders.
+The primary structure is now **layer-first**, with business modules inside each layer:
 
-```
+```text
 src/
-  container/
-    domain/          Entity, ContainerState, value objects
-    application/     DTO, mapper, service, repository trait
-    infrastructure/  Bollard adapter and infra mapper
-    ui/              Actions, presenter, view
-  image/             (same structure)
-  volume/            (same structure)
-  stack/             (same structure — groups containers by compose label)
-  errors/            DomainError, AppError, InfraError
-  docker/            DockerClient (shared Bollard wrapper)
-  shared.rs          PruneResultDto
-  ui/
-    app.rs           Screen state-machine and event loop
-    event.rs         Terminal event handler
-    common/          Shared widgets, colour theme, key bindings
+  01_domain/
+    container/
+    image/
+    volume/
+    stack/
+  02_application/
+    container/
+    image/
+    volume/
+    stack/
+  03_infrastructure/
+    docker/
+      client.rs
+      container/
+      image/
+      volume/
+      stack/
+  04_presentation/
+    tui/
+      container/
+      image/
+      volume/
+      stack/
 ```
+
+At the root, `shared.rs` remains as the small shared value module used across layers.
 
 ### Layers
 
-#### `*/domain/`
-The core of the application. Contains pure Rust business logic with no external crates.
+#### `01_domain/*`
+The core of the application. Contains the business logic and domain concepts. It is still isolated from application, infrastructure, and presentation code, but it currently depends on a small number of external crates for timestamps and typed errors.
 
 - **Entities** — `Container`, `Volume`, `Image`. Each entity encapsulates its own business rules (e.g. `Container::can_be_started()`, `Container::uses_volume()`).
 - **Value Objects** — `ContainerId`, `PortMapping`, `NetworkInfo`, `MountInfo`, `VolumeId`, `ImageId`. Immutable, identity-free wrappers.
 - **Domain state** — `ContainerState` enum (`Running`, `Paused`, `Exited`, `Dead`, …) with derived predicates used to drive UI affordances.
-- **Errors** — `errors/domain.rs`, re-wrapped at each outer layer.
+- **Errors** — `01_domain/error.rs`, re-wrapped at each outer layer.
 
-#### `*/application/`
+#### `02_application/*`
 Orchestration layer. Defines the contracts the rest of the system depends on and provides use-case implementations.
 
-- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository` (in `traits.rs` of each feature). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
+- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository` (in each feature's `traits.rs`). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
 - **Services** — `ContainerService`, `VolumeService`, `ImageService`. Thin use-case coordinators that call a repository and return DTOs.
 - **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`. Plain data structs crossing the application→UI boundary.
 - **Mappers** — `ContainerMapper`, etc. Convert domain entities into DTOs.
 
-#### `*/infrastructure/`
+#### `03_infrastructure/*`
 Adapts the Docker daemon API to the application's repository traits using [bollard](https://crates.io/crates/bollard).
 
 - **Adapters** — `ContainerAdapter`, `VolumeAdapter`, `ImageAdapter`. Each implements the corresponding repository trait. Log streaming uses `futures_util::StreamExt` to consume bollard's async stream.
 - **Mappers** — `ContainerInfraMapper`, etc. Convert raw bollard API types into domain entities.
-- **`docker/`** — `DockerClient`, a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
+- **`docker/client.rs`** — `DockerClient`, a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
 
-#### `*/ui/`
+#### `04_presentation/tui/*`
 Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
 
-- **`ui/app.rs`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
+- **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
 - **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `StackList`, `StackContainers`.
-- **Per-feature triad** (e.g. `container/ui/`):
+- **Per-feature triad** (e.g. `04_presentation/tui/container/`):
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
   - `view.rs` — pure ratatui widget composition functions
   - `actions.rs` — async wrappers around application services; called from `app.rs` event handlers

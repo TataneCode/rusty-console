@@ -1,33 +1,30 @@
 #![allow(dead_code)]
 
-pub mod container;
-pub mod docker;
-pub mod errors;
-pub mod image;
-pub mod shared;
-pub mod stack;
-pub mod ui;
-pub mod volume;
+#[path = "02_application/mod.rs"]
+pub mod application;
+#[path = "01_domain/mod.rs"]
+pub mod domain;
+#[path = "03_infrastructure/mod.rs"]
+pub mod infrastructure;
+#[path = "04_presentation/mod.rs"]
+pub mod presentation;
 
-pub use container::application::{
+mod shared;
+
+pub use application::container::{
     ContainerDto, ContainerLogsDto, ContainerRepository, ContainerService,
 };
-pub use container::domain::{Container, ContainerState};
-pub use container::infrastructure::adapter::ContainerAdapter;
-pub use container::ui::{ContainerActions, ContainerPresenter};
-pub use docker::DockerClient;
-pub use errors::{AppError, DomainError};
-pub use image::application::{ImageDto, ImageRepository, ImageService};
-pub use image::domain::Image;
-pub use image::infrastructure::adapter::ImageAdapter;
-pub use image::ui::{ImageActions, ImagePresenter};
-pub use shared::{ByteSize, PruneResultDto};
-pub use stack::application::traits::StackRepository;
-pub use stack::application::{StackDto, StackService};
-pub use stack::domain::{Stack, StackName};
-pub use stack::infrastructure::adapter::StackAdapter;
-pub use stack::ui::{StackActions, StackPresenter};
-pub use volume::application::{VolumeDto, VolumeRepository, VolumeService};
-pub use volume::domain::Volume;
-pub use volume::infrastructure::adapter::VolumeAdapter;
-pub use volume::ui::{VolumeActions, VolumePresenter};
+pub use application::error::AppError;
+pub use application::image::{ImageDto, ImageRepository, ImageService};
+pub use application::shared::PruneResultDto;
+pub use application::stack::traits::StackRepository;
+pub use application::stack::{StackContainerDto, StackDto, StackService};
+pub use application::volume::{VolumeDto, VolumeRepository, VolumeService};
+pub use domain::container::{Container, ContainerState};
+pub use domain::error::DomainError;
+pub use domain::image::Image;
+pub use domain::shared::ByteSize;
+pub use domain::stack::{Stack, StackContainer, StackContainerState, StackName};
+pub use domain::volume::Volume;
+pub use infrastructure::docker::client::DockerClient;
+pub use presentation::tui::app::App;

@@ -1,28 +1,30 @@
 #![allow(dead_code)]
 
-mod container;
-mod docker;
-mod errors;
-mod image;
-mod shared;
-mod stack;
-mod ui;
-mod volume;
+#[path = "02_application/mod.rs"]
+mod application;
+#[path = "01_domain/mod.rs"]
+mod domain;
+#[path = "03_infrastructure/mod.rs"]
+mod infrastructure;
+#[path = "04_presentation/mod.rs"]
+mod presentation;
 
-use container::application::ContainerService;
-use container::infrastructure::adapter::ContainerAdapter;
-use container::ui::ContainerActions;
-use docker::DockerClient;
-use image::application::ImageService;
-use image::infrastructure::adapter::ImageAdapter;
-use image::ui::ImageActions;
-use stack::application::StackService;
-use stack::infrastructure::adapter::StackAdapter;
-use stack::ui::StackActions;
-use ui::app::App;
-use volume::application::VolumeService;
-use volume::infrastructure::adapter::VolumeAdapter;
-use volume::ui::VolumeActions;
+mod shared;
+
+use application::container::ContainerService;
+use application::image::ImageService;
+use application::stack::StackService;
+use application::volume::VolumeService;
+use infrastructure::docker::client::DockerClient;
+use infrastructure::docker::container::ContainerAdapter;
+use infrastructure::docker::image::ImageAdapter;
+use infrastructure::docker::stack::StackAdapter;
+use infrastructure::docker::volume::VolumeAdapter;
+use presentation::tui::app::App;
+use presentation::tui::container::ContainerActions;
+use presentation::tui::image::ImageActions;
+use presentation::tui::stack::StackActions;
+use presentation::tui::volume::VolumeActions;
 
 use std::sync::Arc;
 

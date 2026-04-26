@@ -1,9 +1,11 @@
-use crate::stack::application::StackDto;
+use crate::stack::application::{StackContainerDto, StackDto};
 use crate::ui::common::TableSelection;
 
 pub struct StackPresenter {
     pub stacks: Vec<StackDto>,
     pub selection: TableSelection,
+    pub stack_containers: Vec<StackContainerDto>,
+    pub container_selection: TableSelection,
     pub loading: bool,
     pub error: Option<String>,
     pub filter: String,
@@ -15,6 +17,8 @@ impl StackPresenter {
         StackPresenter {
             stacks: Vec::new(),
             selection: TableSelection::new(),
+            stack_containers: Vec::new(),
+            container_selection: TableSelection::new(),
             loading: false,
             error: None,
             filter: String::new(),
@@ -55,6 +59,34 @@ impl StackPresenter {
             .and_then(|i| filtered.get(i).copied())
     }
 
+    pub fn select_stack_by_name(&mut self, stack_name: &str) -> bool {
+        let selected = self
+            .filtered_stacks()
+            .iter()
+            .position(|stack| stack.name == stack_name);
+        self.selection.state.select(selected);
+        selected.is_some()
+    }
+
+    pub fn set_stack_containers(&mut self, containers: Vec<StackContainerDto>) {
+        self.stack_containers = containers;
+        self.update_container_selection();
+    }
+
+    pub fn selected_stack_container(&self) -> Option<&StackContainerDto> {
+        self.container_selection
+            .selected()
+            .and_then(|i| self.stack_containers.get(i))
+    }
+
+    pub fn navigate_container_up(&mut self) {
+        self.container_selection.previous();
+    }
+
+    pub fn navigate_container_down(&mut self) {
+        self.container_selection.next();
+    }
+
     pub fn navigate_up(&mut self) {
         self.selection.previous();
     }
@@ -86,6 +118,11 @@ impl StackPresenter {
     fn update_filtered_selection(&mut self) {
         let count = self.filtered_stacks().len();
         self.selection.set_items(count);
+    }
+
+    fn update_container_selection(&mut self) {
+        self.container_selection
+            .set_items(self.stack_containers.len());
     }
 }
 
@@ -121,6 +158,8 @@ mod tests {
         let p = StackPresenter::new();
         assert!(p.stacks.is_empty());
         assert!(p.selected_stack().is_none());
+        assert!(p.stack_containers.is_empty());
+        assert!(p.selected_stack_container().is_none());
         assert!(!p.loading);
         assert!(p.error.is_none());
         assert!(p.filter.is_empty());
@@ -263,5 +302,44 @@ mod tests {
         }
         assert_eq!(p.filtered_stacks().len(), 1);
         assert_eq!(p.selection.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_select_stack_by_name() {
+        let mut p = StackPresenter::new();
+        p.set_stacks(three_stacks());
+        assert!(p.select_stack_by_name("db-postgres"));
+        assert_eq!(p.selected_stack().unwrap().name, "db-postgres");
+    }
+
+    #[test]
+    fn test_set_stack_containers_selects_first() {
+        let mut p = StackPresenter::new();
+        p.set_stack_containers(vec![
+            StackContainerDto {
+                id: "1".to_string(),
+                name: "web".to_string(),
+                image: "nginx:latest".to_string(),
+                state: crate::stack::domain::StackContainerState::Running,
+                status: "Up".to_string(),
+                ports: "80/tcp".to_string(),
+                can_start: false,
+                can_stop: true,
+            },
+            StackContainerDto {
+                id: "2".to_string(),
+                name: "db".to_string(),
+                image: "postgres:16".to_string(),
+                state: crate::stack::domain::StackContainerState::Stopped,
+                status: "Exited".to_string(),
+                ports: "-".to_string(),
+                can_start: true,
+                can_stop: false,
+            },
+        ]);
+
+        assert_eq!(p.selected_stack_container().unwrap().name, "web");
+        p.navigate_container_down();
+        assert_eq!(p.selected_stack_container().unwrap().name, "db");
     }
 }

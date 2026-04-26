@@ -1,6 +1,5 @@
-use crate::container::application::ContainerDto;
-use crate::container::domain::ContainerState;
-use crate::stack::application::StackDto;
+use crate::stack::application::{StackContainerDto, StackDto};
+use crate::stack::domain::StackContainerState;
 use crate::ui::common::{render_help, render_table, Theme};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -64,7 +63,7 @@ pub fn render_stack_containers(
     frame: &mut Frame,
     area: Rect,
     stack_name: &str,
-    containers: &[ContainerDto],
+    containers: &[StackContainerDto],
     state: &mut TableState,
 ) {
     let chunks = Layout::default()
@@ -78,8 +77,10 @@ pub fn render_stack_containers(
         .iter()
         .map(|c| {
             let state_style = match c.state {
-                ContainerState::Running => Theme::running_style(),
-                ContainerState::Paused | ContainerState::Restarting => Theme::paused_style(),
+                StackContainerState::Running => Theme::running_style(),
+                StackContainerState::Paused | StackContainerState::Restarting => {
+                    Theme::paused_style()
+                }
                 _ => Theme::stopped_style(),
             };
 

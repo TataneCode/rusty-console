@@ -3,5 +3,5 @@ mod mapper;
 mod service;
 pub mod traits;
 
-pub use dto::StackDto;
+pub use dto::{StackContainerDto, StackDto};
 pub use service::StackService;

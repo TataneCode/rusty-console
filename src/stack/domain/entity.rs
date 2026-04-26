@@ -1,14 +1,13 @@
-use super::value_objects::StackName;
-use crate::container::domain::Container;
+use super::{StackContainer, StackName};
 
 #[derive(Debug, Clone)]
 pub struct Stack {
     name: StackName,
-    containers: Vec<Container>,
+    containers: Vec<StackContainer>,
 }
 
 impl Stack {
-    pub fn new(name: StackName, containers: Vec<Container>) -> Self {
+    pub fn new(name: StackName, containers: Vec<StackContainer>) -> Self {
         Stack { name, containers }
     }
 
@@ -16,7 +15,7 @@ impl Stack {
         &self.name
     }
 
-    pub fn containers(&self) -> &[Container] {
+    pub fn containers(&self) -> &[StackContainer] {
         &self.containers
     }
 
@@ -36,18 +35,9 @@ impl Stack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::domain::{ContainerId, ContainerState};
-    use chrono::Utc;
 
-    fn make_container(state: ContainerState) -> Container {
-        Container::new(
-            ContainerId::new("abc123").unwrap(),
-            "test",
-            "nginx:latest",
-            state,
-            "Up",
-            Utc::now(),
-        )
+    fn make_container(state: super::super::StackContainerState) -> StackContainer {
+        StackContainer::new("abc123", "test", "nginx:latest", state, "Up", "80/tcp")
     }
 
     #[test]
@@ -55,8 +45,8 @@ mod tests {
         let stack = Stack::new(
             StackName::new("my-app").unwrap(),
             vec![
-                make_container(ContainerState::Running),
-                make_container(ContainerState::Stopped),
+                make_container(super::super::StackContainerState::Running),
+                make_container(super::super::StackContainerState::Stopped),
             ],
         );
         assert_eq!(stack.container_count(), 2);
@@ -67,9 +57,9 @@ mod tests {
         let stack = Stack::new(
             StackName::new("my-app").unwrap(),
             vec![
-                make_container(ContainerState::Running),
-                make_container(ContainerState::Running),
-                make_container(ContainerState::Stopped),
+                make_container(super::super::StackContainerState::Running),
+                make_container(super::super::StackContainerState::Running),
+                make_container(super::super::StackContainerState::Stopped),
             ],
         );
         assert_eq!(stack.running_count(), 2);

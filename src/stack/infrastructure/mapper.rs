@@ -1,6 +1,5 @@
-use crate::container::infrastructure::mapper::ContainerInfraMapper;
-use crate::stack::domain::{Stack, StackName, STANDALONE};
-use bollard::models::ContainerSummary;
+use crate::stack::domain::{Stack, StackContainer, StackContainerState, StackName, STANDALONE};
+use bollard::models::{ContainerSummary, Port};
 use std::collections::HashMap;
 
 pub struct StackInfraMapper;
@@ -26,10 +25,7 @@ impl StackInfraMapper {
             .into_iter()
             .filter_map(|(name, summaries)| {
                 let stack_name = StackName::new(&name).ok()?;
-                let containers = summaries
-                    .iter()
-                    .filter_map(ContainerInfraMapper::from_docker)
-                    .collect();
+                let containers = summaries.iter().filter_map(Self::map_container).collect();
                 Some(Stack::new(stack_name, containers))
             })
             .collect();
@@ -46,5 +42,57 @@ impl StackInfraMapper {
         });
 
         stacks
+    }
+
+    fn map_container(summary: &ContainerSummary) -> Option<StackContainer> {
+        let id = summary.id.as_ref()?.clone();
+        let name = summary
+            .names
+            .as_ref()
+            .and_then(|n| n.first())
+            .cloned()
+            .unwrap_or_else(|| "unknown".to_string());
+        let image = summary
+            .image
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
+        let state = summary
+            .state
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(StackContainerState::Stopped);
+        let status = summary.status.clone().unwrap_or_default();
+        let ports = Self::map_ports(summary.ports.as_ref());
+
+        Some(StackContainer::new(id, name, image, state, status, ports))
+    }
+
+    fn map_ports(ports: Option<&Vec<Port>>) -> String {
+        let mapped = ports
+            .map(|ports| {
+                ports
+                    .iter()
+                    .map(|port| {
+                        let protocol = port
+                            .typ
+                            .as_ref()
+                            .map(|typ| format!("{:?}", typ).to_lowercase())
+                            .unwrap_or_else(|| "tcp".to_string());
+                        match port.public_port {
+                            Some(public) => {
+                                format!("{}:{}/{}", public, port.private_port, protocol)
+                            }
+                            None => format!("{}/{}", port.private_port, protocol),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        if mapped.is_empty() {
+            "-".to_string()
+        } else {
+            mapped.join(", ")
+        }
     }
 }

@@ -1,16 +1,32 @@
-use crate::container::application::mapper::ContainerMapper;
-use crate::stack::application::dto::StackDto;
-use crate::stack::domain::Stack;
+use crate::stack::application::dto::{StackContainerDto, StackDto};
+use crate::stack::domain::{Stack, StackContainer};
 
 pub struct StackMapper;
 
 impl StackMapper {
+    fn to_container_dto(container: &StackContainer) -> StackContainerDto {
+        StackContainerDto {
+            id: container.id().to_string(),
+            name: container.display_name().to_string(),
+            image: container.image().to_string(),
+            state: container.state(),
+            status: container.status().to_string(),
+            ports: container.ports().to_string(),
+            can_start: container.can_be_started(),
+            can_stop: container.can_be_stopped(),
+        }
+    }
+
     pub fn to_dto(stack: &Stack) -> StackDto {
         StackDto {
             name: stack.name().to_string(),
             container_count: stack.container_count(),
             running_count: stack.running_count(),
-            containers: ContainerMapper::to_dto_list(stack.containers()),
+            containers: stack
+                .containers()
+                .iter()
+                .map(Self::to_container_dto)
+                .collect(),
         }
     }
 
@@ -22,19 +38,10 @@ impl StackMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::domain::{Container, ContainerId, ContainerState};
-    use crate::stack::domain::StackName;
-    use chrono::Utc;
+    use crate::stack::domain::{StackContainer, StackContainerState, StackName};
 
-    fn make_container(state: ContainerState) -> Container {
-        Container::new(
-            ContainerId::new("abc123").unwrap(),
-            "web",
-            "nginx:latest",
-            state,
-            "Up",
-            Utc::now(),
-        )
+    fn make_container(state: StackContainerState) -> StackContainer {
+        StackContainer::new("abc123", "/web", "nginx:latest", state, "Up", "80/tcp")
     }
 
     #[test]
@@ -42,8 +49,8 @@ mod tests {
         let stack = Stack::new(
             StackName::new("my-app").unwrap(),
             vec![
-                make_container(ContainerState::Running),
-                make_container(ContainerState::Stopped),
+                make_container(StackContainerState::Running),
+                make_container(StackContainerState::Stopped),
             ],
         );
         let dto = StackMapper::to_dto(&stack);
@@ -51,6 +58,9 @@ mod tests {
         assert_eq!(dto.container_count, 2);
         assert_eq!(dto.running_count, 1);
         assert_eq!(dto.containers.len(), 2);
+        assert_eq!(dto.containers[0].name, "web");
+        assert!(!dto.containers[0].can_start);
+        assert!(dto.containers[0].can_stop);
     }
 
     #[test]

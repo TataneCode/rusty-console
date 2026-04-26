@@ -8,24 +8,4 @@
 //! - Translate user intent into application calls without embedding Docker or
 //!   persistence knowledge.
 
-pub mod tui {
-    pub use crate::ui::app;
-    pub use crate::ui::common;
-    pub use crate::ui::event;
-
-    pub mod container {
-        pub use crate::container::ui::*;
-    }
-
-    pub mod image {
-        pub use crate::image::ui::*;
-    }
-
-    pub mod volume {
-        pub use crate::volume::ui::*;
-    }
-
-    pub mod stack {
-        pub use crate::stack::ui::*;
-    }
-}
+pub mod tui;

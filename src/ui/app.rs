@@ -1,10 +1,10 @@
-use crate::container::application::ContainerDto;
-use crate::container::ui::{
+use crate::application::container::ContainerDto;
+use crate::image::application::ImageDto;
+use crate::image::ui::{render_image_details, render_image_list, ImageActions, ImagePresenter};
+use crate::presentation::tui::container::{
     render_container_details, render_container_list, render_container_logs, ContainerActions,
     ContainerPresenter,
 };
-use crate::image::application::ImageDto;
-use crate::image::ui::{render_image_details, render_image_list, ImageActions, ImagePresenter};
 use crate::stack::application::StackDto;
 use crate::stack::ui::{render_stack_containers, render_stack_list, StackActions, StackPresenter};
 use crate::ui::common::{map_key_to_action, render_confirm_dialog, render_error_popup, AppAction};

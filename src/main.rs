@@ -18,13 +18,13 @@ mod stack;
 mod ui;
 mod volume;
 
-use container::application::ContainerService;
-use container::infrastructure::adapter::ContainerAdapter;
-use container::ui::ContainerActions;
-use docker::DockerClient;
+use application::container::ContainerService;
 use image::application::ImageService;
 use image::infrastructure::adapter::ImageAdapter;
 use image::ui::ImageActions;
+use infrastructure::docker::client::DockerClient;
+use infrastructure::docker::container::ContainerAdapter;
+use presentation::tui::container::ContainerActions;
 use stack::application::StackService;
 use stack::infrastructure::adapter::StackAdapter;
 use stack::ui::StackActions;

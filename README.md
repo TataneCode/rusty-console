@@ -114,6 +114,14 @@ During the migration, the current feature-first modules remain in place and the 
 4. `04_presentation` owns TUI rendering, presenters, actions, and app flow.
 5. Dependencies always point inward; outer layers may depend on inner ones, never the reverse.
 
+The shared Docker client wrapper now lives under `03_infrastructure/docker/client.rs`, and the layer error types live under:
+
+- `01_domain/error.rs`
+- `02_application/error.rs`
+- `03_infrastructure/error.rs`
+
+Legacy `src/docker/` and `src/errors/` paths remain as compatibility shims during the migration.
+
 ### Folder layout
 
 Source code is organized **feature-first**: each domain concept gets its own top-level folder containing all its layers as sub-folders.

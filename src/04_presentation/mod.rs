@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 //! Transitional bridge for the target presentation layer.
 //!
 //! Boundary rules for this layer:

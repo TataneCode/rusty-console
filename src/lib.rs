@@ -18,25 +18,18 @@ pub mod stack;
 pub mod ui;
 pub mod volume;
 
+pub use application::error::AppError;
 pub use container::application::{
     ContainerDto, ContainerLogsDto, ContainerRepository, ContainerService,
 };
 pub use container::domain::{Container, ContainerState};
-pub use container::infrastructure::adapter::ContainerAdapter;
-pub use container::ui::{ContainerActions, ContainerPresenter};
 pub use docker::DockerClient;
-pub use errors::{AppError, DomainError};
+pub use domain::error::DomainError;
 pub use image::application::{ImageDto, ImageRepository, ImageService};
 pub use image::domain::Image;
-pub use image::infrastructure::adapter::ImageAdapter;
-pub use image::ui::{ImageActions, ImagePresenter};
 pub use shared::{ByteSize, PruneResultDto};
 pub use stack::application::traits::StackRepository;
 pub use stack::application::{StackDto, StackService};
 pub use stack::domain::{Stack, StackName};
-pub use stack::infrastructure::adapter::StackAdapter;
-pub use stack::ui::{StackActions, StackPresenter};
 pub use volume::application::{VolumeDto, VolumeRepository, VolumeService};
 pub use volume::domain::Volume;
-pub use volume::infrastructure::adapter::VolumeAdapter;
-pub use volume::ui::{VolumeActions, VolumePresenter};

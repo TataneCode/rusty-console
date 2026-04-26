@@ -1,5 +1,14 @@
 #![allow(dead_code)]
 
+#[path = "02_application/mod.rs"]
+mod application;
+#[path = "01_domain/mod.rs"]
+mod domain;
+#[path = "03_infrastructure/mod.rs"]
+mod infrastructure;
+#[path = "04_presentation/mod.rs"]
+mod presentation;
+
 mod container;
 mod docker;
 mod errors;

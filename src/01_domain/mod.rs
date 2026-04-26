@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 //! Transitional bridge for the target domain layer.
 //!
 //! The directory is intentionally prefixed with `01_` so the refactored layer
@@ -27,9 +29,9 @@ pub mod stack {
     pub use crate::stack::domain::*;
 }
 
-pub mod error {
-    pub use crate::errors::domain::DomainError;
-}
+pub mod error;
+
+pub use error::DomainError;
 
 pub mod shared {
     pub use crate::shared::ByteSize;

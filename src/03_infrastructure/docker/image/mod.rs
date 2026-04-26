@@ -1,4 +1,5 @@
-#![allow(unused_imports)]
+pub mod adapter;
+pub mod mapper;
 
-pub use crate::image::infrastructure::adapter::ImageAdapter;
-pub use crate::image::infrastructure::mapper::ImageInfraMapper;
+pub use adapter::ImageAdapter;
+pub use mapper::ImageInfraMapper;

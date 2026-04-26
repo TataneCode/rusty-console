@@ -1,3 +1,5 @@
-#![allow(unused_imports)]
+pub mod entity;
+pub mod value_objects;
 
-pub use crate::image::domain::*;
+pub use entity::Image;
+pub use value_objects::{ImageId, ImageSize};

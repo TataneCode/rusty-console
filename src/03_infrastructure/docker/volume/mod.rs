@@ -1,4 +1,5 @@
-#![allow(unused_imports)]
+pub mod adapter;
+pub mod mapper;
 
-pub use crate::volume::infrastructure::adapter::VolumeAdapter;
-pub use crate::volume::infrastructure::mapper::VolumeInfraMapper;
+pub use adapter::VolumeAdapter;
+pub use mapper::VolumeInfraMapper;

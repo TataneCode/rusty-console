@@ -1,6 +1,8 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders, Clear, Paragraph, Row, Table, TableState, Wrap},
+    widgets::{
+        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Row, Table, TableState, Wrap,
+    },
     Frame,
 };
 
@@ -26,6 +28,8 @@ pub const CONFIRM_DIALOG_WIDTH_PERCENT: u16 = 50;
 pub const CONFIRM_DIALOG_HEIGHT_PERCENT: u16 = 20;
 pub const ERROR_DIALOG_WIDTH_PERCENT: u16 = 60;
 pub const ERROR_DIALOG_HEIGHT_PERCENT: u16 = 20;
+pub const SELECTION_DIALOG_WIDTH_PERCENT: u16 = 40;
+pub const SELECTION_DIALOG_HEIGHT_PERCENT: u16 = 30;
 
 pub struct TableSelection {
     pub state: TableState,
@@ -241,6 +245,44 @@ pub fn render_popup_message(frame: &mut Frame, message: &PopupMessage) {
     frame.render_widget(popup_widget, area);
 }
 
+pub fn render_selection_dialog(
+    frame: &mut Frame,
+    title: &str,
+    options: &[&str],
+    state: &mut ListState,
+    help_text: &str,
+) {
+    let area = centered_rect(
+        SELECTION_DIALOG_WIDTH_PERCENT,
+        SELECTION_DIALOG_HEIGHT_PERCENT,
+        frame.area(),
+    );
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(HELP_BAR_HEIGHT)])
+        .split(area);
+
+    frame.render_widget(Clear, area);
+
+    let items: Vec<ListItem> = options.iter().copied().map(ListItem::new).collect();
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .title_style(Theme::title_style())
+                .border_style(Theme::selected_border_style()),
+        )
+        .highlight_style(Theme::highlight_style())
+        .highlight_symbol(resources::MAIN_MENU_HIGHLIGHT_SYMBOL);
+    let help = Paragraph::new(help_text)
+        .style(Theme::help_style())
+        .block(Block::default().borders(Borders::TOP));
+
+    frame.render_stateful_widget(list, chunks[0], state);
+    frame.render_widget(help, chunks[1]);
+}
+
 pub fn split_content_area(area: Rect) -> [Rect; 2] {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -306,7 +348,8 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 #[cfg(test)]
 mod tests {
-    use super::{truncate_text, PopupMessage, TableSelection};
+    use super::{render_selection_dialog, truncate_text, PopupMessage, TableSelection};
+    use ratatui::{backend::TestBackend, buffer::Buffer, widgets::ListState, Terminal};
 
     #[test]
     fn test_truncate_text_handles_utf8_boundaries() {
@@ -339,5 +382,39 @@ mod tests {
         let info = PopupMessage::Info("msg".to_string());
         assert!(matches!(error, PopupMessage::Error(_)));
         assert!(matches!(info, PopupMessage::Info(_)));
+    }
+
+    fn buffer_text(buffer: &Buffer) -> String {
+        buffer
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>()
+    }
+
+    #[test]
+    fn test_render_selection_dialog_shows_title_options_and_help() {
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut state = ListState::default();
+        state.select(Some(0));
+
+        terminal
+            .draw(|frame| {
+                render_selection_dialog(
+                    frame,
+                    " Exec Shell ",
+                    &["sh", "bash"],
+                    &mut state,
+                    " j/k: Navigate | Enter: Select | Esc/q: Cancel ",
+                )
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Exec Shell"));
+        assert!(text.contains("sh"));
+        assert!(text.contains("bash"));
+        assert!(text.contains("Enter: Select"));
     }
 }

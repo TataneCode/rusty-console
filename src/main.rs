@@ -20,7 +20,7 @@ use infrastructure::docker::container::ContainerAdapter;
 use infrastructure::docker::image::ImageAdapter;
 use infrastructure::docker::stack::StackAdapter;
 use infrastructure::docker::volume::VolumeAdapter;
-use presentation::tui::app::App;
+use presentation::tui::app::{App, ExecCommandConfig};
 use presentation::tui::container::ContainerActions;
 use presentation::tui::image::ImageActions;
 use presentation::tui::stack::StackActions;
@@ -53,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
         volume_actions,
         image_actions,
         stack_actions,
+        ExecCommandConfig::new(docker.cli_host()),
     );
     app.run().await?;
 

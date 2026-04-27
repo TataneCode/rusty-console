@@ -1,7 +1,7 @@
 use crate::application::container::ContainerDto;
 use crate::presentation::tui::common::{
-    map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message, resources,
-    AppAction, PopupMessage,
+    map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message,
+    render_selection_dialog, resources, AppAction, PopupMessage,
 };
 use crate::presentation::tui::container::{
     filter_containers, render_container_details, render_container_list, render_container_logs,
@@ -23,7 +23,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, widgets::ListState, Frame, Terminal};
-use std::io;
+use std::{io, process::Command};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Screen {
@@ -50,6 +50,122 @@ pub enum ConfirmAction {
     RemoveAllStackContainers,
 }
 
+const EXEC_SHELL_OPTIONS: [&str; 2] = ["sh", "bash"];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecCommandConfig {
+    docker_host: String,
+}
+
+impl ExecCommandConfig {
+    pub fn new(docker_host: impl Into<String>) -> Self {
+        ExecCommandConfig {
+            docker_host: docker_host.into(),
+        }
+    }
+
+    fn docker_host(&self) -> &str {
+        &self.docker_host
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExecShell {
+    Sh,
+    Bash,
+}
+
+impl ExecShell {
+    fn as_str(self) -> &'static str {
+        match self {
+            ExecShell::Sh => "sh",
+            ExecShell::Bash => "bash",
+        }
+    }
+
+    fn from_index(index: usize) -> Self {
+        match index {
+            1 => ExecShell::Bash,
+            _ => ExecShell::Sh,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExecRefreshTarget {
+    Containers,
+    StackContainers,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingExec {
+    container_id: String,
+    shell: ExecShell,
+    refresh_target: ExecRefreshTarget,
+}
+
+#[derive(Debug)]
+enum ExecCommandResult {
+    Status(std::process::ExitStatus),
+    SpawnError(io::Error),
+}
+
+#[derive(Debug)]
+struct ExecShellDialog {
+    container_id: String,
+    refresh_target: ExecRefreshTarget,
+    state: ListState,
+}
+
+impl ExecShellDialog {
+    fn new(container_id: String, refresh_target: ExecRefreshTarget) -> Self {
+        let mut state = ListState::default();
+        state.select(Some(0));
+
+        ExecShellDialog {
+            container_id,
+            refresh_target,
+            state,
+        }
+    }
+
+    fn navigate_up(&mut self) {
+        self.select_previous();
+    }
+
+    fn navigate_down(&mut self) {
+        self.select_next();
+    }
+
+    fn build_request(&self) -> PendingExec {
+        PendingExec {
+            container_id: self.container_id.clone(),
+            shell: ExecShell::from_index(self.state.selected().unwrap_or(0)),
+            refresh_target: self.refresh_target,
+        }
+    }
+
+    fn select_next(&mut self) {
+        let selected = self.state.selected().unwrap_or(0);
+        let next = if selected + 1 >= EXEC_SHELL_OPTIONS.len() {
+            0
+        } else {
+            selected + 1
+        };
+        self.state.select(Some(next));
+    }
+
+    fn select_previous(&mut self) {
+        let selected = self.state.selected().unwrap_or(0);
+        let previous = if selected == 0 {
+            EXEC_SHELL_OPTIONS.len() - 1
+        } else {
+            selected - 1
+        };
+        self.state.select(Some(previous));
+    }
+}
+
 pub struct App {
     pub screen: Screen,
     pub previous_screen: Option<Screen>,
@@ -65,6 +181,9 @@ pub struct App {
     pub stack_actions: StackActions,
     pub confirm_dialog: Option<(ConfirmAction, bool)>,
     pub popup_message: Option<PopupMessage>,
+    exec_command_config: ExecCommandConfig,
+    exec_shell_dialog: Option<ExecShellDialog>,
+    pending_exec: Option<PendingExec>,
 }
 
 fn record_cleanup_error(cleanup_error: &mut Option<io::Error>, result: io::Result<()>) {
@@ -93,6 +212,7 @@ impl App {
         volume_actions: VolumeActions,
         image_actions: ImageActions,
         stack_actions: StackActions,
+        exec_command_config: ExecCommandConfig,
     ) -> Self {
         let mut menu_state = ListState::default();
         menu_state.select(Some(0));
@@ -112,6 +232,9 @@ impl App {
             stack_actions,
             confirm_dialog: None,
             popup_message: None,
+            exec_command_config,
+            exec_shell_dialog: None,
+            pending_exec: None,
         }
     }
 
@@ -150,13 +273,20 @@ impl App {
 
             match event_handler.next()? {
                 AppEvent::Key(key) => {
-                    if self.is_filter_active() && self.handle_filter_key(key.code) {
+                    if !self.has_modal_overlay()
+                        && self.is_filter_active()
+                        && self.handle_filter_key(key.code)
+                    {
                         // Key consumed by filter input
                     } else if let Some(action) = map_key_to_action(key) {
                         self.handle_action(action).await;
                     }
                 }
                 AppEvent::Tick => {}
+            }
+
+            if let Some(request) = self.pending_exec.take() {
+                self.execute_pending_exec(terminal, request).await?;
             }
 
             if self.should_quit {
@@ -271,6 +401,16 @@ impl App {
         if let Some(message) = &self.popup_message {
             render_popup_message(frame, message);
         }
+
+        if let Some(dialog) = &mut self.exec_shell_dialog {
+            render_selection_dialog(
+                frame,
+                resources::EXEC_SHELL_DIALOG_TITLE,
+                &EXEC_SHELL_OPTIONS,
+                &mut dialog.state,
+                resources::EXEC_SHELL_DIALOG_HELP,
+            );
+        }
     }
 
     async fn handle_action(&mut self, action: AppAction) {
@@ -298,6 +438,11 @@ impl App {
                 }
                 _ => {}
             }
+            return;
+        }
+
+        if self.exec_shell_dialog.is_some() {
+            self.handle_exec_shell_action(action);
             return;
         }
 
@@ -417,6 +562,7 @@ impl App {
             AppAction::ActivateFilter => {
                 self.container_presenter.activate_filter();
             }
+            AppAction::Exec => self.open_exec_shell_dialog(),
             _ => {}
         }
     }
@@ -888,8 +1034,144 @@ impl App {
                 self.confirm_dialog = Some((ConfirmAction::RemoveAllStackContainers, true));
             }
             AppAction::Refresh => self.refresh_stack_containers().await,
+            AppAction::Exec => self.open_exec_shell_dialog(),
             _ => {}
         }
+    }
+
+    fn has_modal_overlay(&self) -> bool {
+        self.popup_message.is_some()
+            || self.confirm_dialog.is_some()
+            || self.exec_shell_dialog.is_some()
+    }
+
+    fn selected_exec_target(&self) -> Option<(String, ExecRefreshTarget)> {
+        match self.screen {
+            Screen::ContainerList => self
+                .container_presenter
+                .selected_container()
+                .map(|container| (container.id.clone(), ExecRefreshTarget::Containers)),
+            Screen::StackContainers => self
+                .stack_presenter
+                .selected_stack_container()
+                .map(|container| (container.id.clone(), ExecRefreshTarget::StackContainers)),
+            _ => None,
+        }
+    }
+
+    fn open_exec_shell_dialog(&mut self) {
+        if let Some((container_id, refresh_target)) = self.selected_exec_target() {
+            self.exec_shell_dialog = Some(ExecShellDialog::new(container_id, refresh_target));
+        }
+    }
+
+    fn handle_exec_shell_action(&mut self, action: AppAction) {
+        let Some(dialog) = &mut self.exec_shell_dialog else {
+            return;
+        };
+
+        match action {
+            AppAction::NavigateUp => dialog.navigate_up(),
+            AppAction::NavigateDown => dialog.navigate_down(),
+            AppAction::Select => {
+                let request = dialog.build_request();
+                self.exec_shell_dialog = None;
+                self.pending_exec = Some(request);
+            }
+            AppAction::Back | AppAction::Quit => {
+                self.exec_shell_dialog = None;
+            }
+            _ => {}
+        }
+    }
+
+    async fn execute_pending_exec(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        request: PendingExec,
+    ) -> io::Result<()> {
+        let result = self.run_exec_command(terminal, &request)?;
+
+        match request.refresh_target {
+            ExecRefreshTarget::Containers => self.load_containers().await,
+            ExecRefreshTarget::StackContainers => self.refresh_stack_containers().await,
+        }
+
+        match result {
+            ExecCommandResult::Status(status) if status.success() => {}
+            ExecCommandResult::Status(status) => {
+                self.popup_message = Some(PopupMessage::Error(format!(
+                    "`docker exec` exited with status {status}"
+                )));
+            }
+            ExecCommandResult::SpawnError(e) => {
+                self.popup_message = Some(PopupMessage::Error(self.format_exec_error(&e)));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn run_exec_command(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        request: &PendingExec,
+    ) -> io::Result<ExecCommandResult> {
+        self.suspend_tui(terminal)?;
+        let exec_result = self.build_exec_command(request).status();
+        let resume_result = self.resume_tui(terminal);
+
+        finalize_exec_command_result(exec_result, resume_result)
+    }
+
+    fn build_exec_command(&self, request: &PendingExec) -> Command {
+        let mut command = Command::new("docker");
+        command
+            .args(["--host", self.exec_command_config.docker_host()])
+            .arg("exec")
+            .arg("-it")
+            .arg(request.container_id.as_str())
+            .arg(request.shell.as_str());
+        command
+    }
+
+    fn format_exec_error(&self, error: &io::Error) -> String {
+        match error.kind() {
+            io::ErrorKind::NotFound => format!(
+                "Docker CLI not found on PATH. Install the `docker` binary to use Exec. Raw error: {error}"
+            ),
+            io::ErrorKind::PermissionDenied => format!(
+                "Docker CLI exists but is not executable. Check the `docker` binary permissions to use Exec. Raw error: {error}"
+            ),
+            _ => format!("Failed to start `docker exec`. Raw error: {error}"),
+        }
+    }
+
+    fn suspend_tui(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        disable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
+        terminal.show_cursor()
+    }
+
+    fn resume_tui(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        enable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            EnterAlternateScreen,
+            EnableMouseCapture
+        )?;
+        terminal.hide_cursor()?;
+        terminal.clear()
     }
 }
 
@@ -933,9 +1215,28 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
+fn finalize_exec_command_result(
+    exec_result: io::Result<std::process::ExitStatus>,
+    resume_result: io::Result<()>,
+) -> io::Result<ExecCommandResult> {
+    match (exec_result, resume_result) {
+        (Ok(status), Ok(())) => Ok(ExecCommandResult::Status(status)),
+        (Err(exec_err), Ok(())) => Ok(ExecCommandResult::SpawnError(exec_err)),
+        (Ok(_), Err(resume_err)) => Err(resume_err),
+        (Err(exec_err), Err(resume_err)) => Err(io::Error::new(
+            resume_err.kind(),
+            format!("{resume_err}; docker exec also failed: {exec_err}"),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{confirm_message, finalize_run_result, format_bytes, App, ConfirmAction, Screen};
+    use super::{
+        confirm_message, finalize_exec_command_result, finalize_run_result, format_bytes, App,
+        ConfirmAction, ExecCommandConfig, ExecCommandResult, ExecRefreshTarget, ExecShell,
+        ExecShellDialog, PendingExec, Screen,
+    };
     use crate::application::container::traits::MockContainerRepository;
     use crate::application::container::{ContainerDto, ContainerService};
     use crate::application::image::traits::MockImageRepository;
@@ -956,6 +1257,7 @@ mod tests {
     use crate::shared::PruneResultDto;
     use chrono::Utc;
     use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
+    use std::os::unix::process::ExitStatusExt;
     use std::{io, sync::Arc};
 
     fn buffer_text(buffer: &Buffer) -> String {
@@ -1103,6 +1405,7 @@ mod tests {
             volume_actions,
             image_actions,
             stack_actions,
+            ExecCommandConfig::new("unix:///var/run/docker.sock"),
         )
     }
 
@@ -1227,6 +1530,16 @@ mod tests {
         let rendered = render_app(&mut app);
         assert!(rendered.contains("all good"));
         assert!(rendered.contains(resources::INFO_TITLE.trim()));
+
+        app.popup_message = None;
+        app.exec_shell_dialog = Some(ExecShellDialog::new(
+            container.id.clone(),
+            ExecRefreshTarget::Containers,
+        ));
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains(resources::EXEC_SHELL_DIALOG_TITLE.trim()));
+        assert!(rendered.contains("sh"));
+        assert!(rendered.contains("bash"));
     }
 
     #[tokio::test]
@@ -1402,6 +1715,10 @@ mod tests {
             Some((ConfirmAction::PruneContainers, true))
         );
 
+        app.confirm_dialog = None;
+        app.handle_container_list_action(AppAction::Exec).await;
+        assert!(app.exec_shell_dialog.is_some());
+
         app.handle_container_list_action(AppAction::Back).await;
         assert_eq!(app.screen, Screen::MainMenu);
     }
@@ -1498,6 +1815,159 @@ mod tests {
             .await;
         assert!(app.image_presenter.is_filter_active());
         app.handle_image_list_action(AppAction::Refresh).await;
+    }
+
+    #[test]
+    fn test_selected_exec_target_uses_current_screen_selection() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+
+        assert_eq!(
+            app.selected_exec_target(),
+            Some(("abc123".to_string(), ExecRefreshTarget::Containers))
+        );
+
+        app.screen = Screen::StackContainers;
+        app.stack_presenter
+            .set_stack_containers(vec![make_stack_container(false, true)]);
+
+        assert_eq!(
+            app.selected_exec_target(),
+            Some(("stack-1".to_string(), ExecRefreshTarget::StackContainers))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_exec_shell_action_navigates_selects_and_cancels() {
+        let mut app = empty_app();
+        app.exec_shell_dialog = Some(ExecShellDialog::new(
+            "abc123".to_string(),
+            ExecRefreshTarget::Containers,
+        ));
+
+        app.handle_action(AppAction::NavigateDown).await;
+        app.handle_action(AppAction::Select).await;
+
+        assert!(app.exec_shell_dialog.is_none());
+        assert_eq!(
+            app.pending_exec,
+            Some(PendingExec {
+                container_id: "abc123".to_string(),
+                shell: ExecShell::Bash,
+                refresh_target: ExecRefreshTarget::Containers,
+            })
+        );
+
+        app.exec_shell_dialog = Some(ExecShellDialog::new(
+            "abc123".to_string(),
+            ExecRefreshTarget::Containers,
+        ));
+        app.pending_exec = None;
+
+        app.handle_action(AppAction::Quit).await;
+        assert!(app.exec_shell_dialog.is_none());
+        assert!(app.pending_exec.is_none());
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn test_build_exec_command_uses_configured_host_and_shell() {
+        let app = empty_app();
+        let request = PendingExec {
+            container_id: "abc123".to_string(),
+            shell: ExecShell::Bash,
+            refresh_target: ExecRefreshTarget::Containers,
+        };
+
+        let command = app.build_exec_command(&request);
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(command.get_program().to_string_lossy(), "docker");
+        assert_eq!(
+            args,
+            vec![
+                "--host",
+                "unix:///var/run/docker.sock",
+                "exec",
+                "-it",
+                "abc123",
+                "bash",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_format_exec_error_for_missing_docker_binary() {
+        let app = empty_app();
+        let error = io::Error::new(io::ErrorKind::NotFound, "missing");
+
+        assert_eq!(
+            app.format_exec_error(&error),
+            "Docker CLI not found on PATH. Install the `docker` binary to use Exec. Raw error: missing"
+        );
+    }
+
+    #[test]
+    fn test_format_exec_error_for_non_executable_docker_binary() {
+        let app = empty_app();
+        let error = io::Error::new(io::ErrorKind::PermissionDenied, "permission denied");
+
+        assert_eq!(
+            app.format_exec_error(&error),
+            "Docker CLI exists but is not executable. Check the `docker` binary permissions to use Exec. Raw error: permission denied"
+        );
+    }
+
+    #[test]
+    fn test_format_exec_error_for_other_startup_failure() {
+        let app = empty_app();
+        let error = io::Error::other("spawn failed");
+
+        assert_eq!(
+            app.format_exec_error(&error),
+            "Failed to start `docker exec`. Raw error: spawn failed"
+        );
+    }
+
+    #[test]
+    fn test_finalize_exec_command_result_treats_spawn_error_as_non_fatal() {
+        let result = finalize_exec_command_result(
+            Err(io::Error::new(io::ErrorKind::NotFound, "missing")),
+            Ok(()),
+        )
+        .unwrap();
+
+        assert!(matches!(result, ExecCommandResult::SpawnError(_)));
+    }
+
+    #[test]
+    fn test_finalize_exec_command_result_treats_resume_error_as_fatal() {
+        let result = finalize_exec_command_result(
+            Ok(std::process::ExitStatus::from_raw(0)),
+            Err(io::Error::other("resume failed")),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "resume failed");
+    }
+
+    #[test]
+    fn test_finalize_exec_command_result_prefers_resume_failure_when_both_fail() {
+        let result = finalize_exec_command_result(
+            Err(io::Error::new(io::ErrorKind::NotFound, "docker missing")),
+            Err(io::Error::other("resume failed")),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "resume failed; docker exec also failed: docker missing"
+        );
     }
 
     #[tokio::test]

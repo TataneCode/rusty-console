@@ -3,6 +3,7 @@ use crate::application::image::ImageRepository;
 use crate::domain::image::Image;
 use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::image::mapper::ImageInfraMapper;
+use crate::infrastructure::error::InfraError;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::container::ListContainersOptions;
@@ -18,16 +19,21 @@ impl ImageAdapter {
         ImageAdapter { docker }
     }
 
-    async fn get_in_use_image_ids(&self) -> HashSet<String> {
+    async fn get_in_use_image_ids(&self) -> Result<HashSet<String>, AppError> {
         let options = ListContainersOptions::<String> {
             all: true,
             ..Default::default()
         };
 
-        match self.docker.inner().list_containers(Some(options)).await {
-            Ok(containers) => containers.into_iter().filter_map(|c| c.image_id).collect(),
-            Err(_) => HashSet::new(),
-        }
+        let containers = self
+            .docker
+            .inner()
+            .list_containers(Some(options))
+            .await
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
+
+        Ok(containers.into_iter().filter_map(|c| c.image_id).collect())
     }
 }
 
@@ -44,9 +50,10 @@ impl ImageRepository for ImageAdapter {
             .inner()
             .list_images(Some(options))
             .await
-            .map_err(|e| AppError::repository(e.to_string()))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
-        let in_use_ids = self.get_in_use_image_ids().await;
+        let in_use_ids = self.get_in_use_image_ids().await?;
 
         Ok(images
             .iter()
@@ -71,7 +78,8 @@ impl ImageRepository for ImageAdapter {
             .inner()
             .remove_image(id, Some(options), None)
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to delete image: {}", e)))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
         Ok(())
     }
@@ -86,7 +94,8 @@ impl ImageRepository for ImageAdapter {
             .inner()
             .prune_images(Some(options))
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to prune images: {}", e)))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
         Ok(PruneResultDto {
             deleted_count: result.images_deleted.map(|i| i.len() as u32).unwrap_or(0),

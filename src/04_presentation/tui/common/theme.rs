@@ -46,6 +46,10 @@ impl Theme {
         Style::default().fg(Color::Red)
     }
 
+    pub fn info_style() -> Style {
+        Style::default().fg(Color::Cyan)
+    }
+
     pub fn error_style() -> Style {
         Style::default().fg(Color::Red)
     }
@@ -88,6 +92,7 @@ mod tests {
         assert_eq!(Theme::in_use_style().fg, Some(Color::Yellow));
         assert_eq!(Theme::dangling_style().fg, Some(Color::Red));
         assert_eq!(Theme::error_style().fg, Some(Color::Red));
+        assert_eq!(Theme::info_style().fg, Some(Color::Cyan));
         assert_eq!(Theme::success_style().fg, Some(Color::Green));
     }
 

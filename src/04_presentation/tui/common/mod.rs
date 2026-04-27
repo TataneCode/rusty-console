@@ -12,5 +12,5 @@ pub use resources::filter_prompt_title;
 pub use theme::Theme;
 pub use widgets::{
     render_confirm_dialog, render_error_popup, render_help, render_table, split_content_area,
-    split_menu_area, truncate_text, TableSelection,
+    split_menu_area, truncate_text, PopupMessage, TableSelection,
 };

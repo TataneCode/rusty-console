@@ -3,6 +3,7 @@ use crate::application::stack::traits::StackRepository;
 use crate::domain::stack::Stack;
 use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::stack::mapper::StackInfraMapper;
+use crate::infrastructure::error::InfraError;
 use async_trait::async_trait;
 use bollard::container::{
     ListContainersOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions,
@@ -47,7 +48,8 @@ impl StackRepository for StackAdapter {
             .inner()
             .list_containers(Some(options))
             .await
-            .map_err(|e| AppError::repository(e.to_string()))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
         Ok(StackInfraMapper::group_into_stacks(summaries))
     }
@@ -58,9 +60,8 @@ impl StackRepository for StackAdapter {
                 .inner()
                 .start_container(id, None::<StartContainerOptions<String>>)
                 .await
-                .map_err(|e| {
-                    AppError::operation_failed(format!("Failed to start container {}: {}", id, e))
-                })?;
+                .map_err(InfraError::from)
+                .map_err(AppError::from)?;
         }
         Ok(())
     }
@@ -71,9 +72,8 @@ impl StackRepository for StackAdapter {
                 .inner()
                 .stop_container(id, Some(StopContainerOptions { t: 10 }))
                 .await
-                .map_err(|e| {
-                    AppError::operation_failed(format!("Failed to stop container {}: {}", id, e))
-                })?;
+                .map_err(InfraError::from)
+                .map_err(AppError::from)?;
         }
         Ok(())
     }
@@ -90,9 +90,8 @@ impl StackRepository for StackAdapter {
                     }),
                 )
                 .await
-                .map_err(|e| {
-                    AppError::operation_failed(format!("Failed to remove container {}: {}", id, e))
-                })?;
+                .map_err(InfraError::from)
+                .map_err(AppError::from)?;
         }
         Ok(())
     }

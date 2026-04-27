@@ -3,6 +3,7 @@ use crate::application::error::AppError;
 use crate::domain::container::Container;
 use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::container::mapper::ContainerInfraMapper;
+use crate::infrastructure::error::InfraError;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::container::{
@@ -50,7 +51,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .list_containers(Some(options))
             .await
-            .map_err(|e| AppError::repository(e.to_string()))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
         Ok(containers
             .iter()
@@ -64,7 +66,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .inspect_container(id, None)
             .await
-            .map_err(|e| AppError::repository(e.to_string()))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
         Ok(ContainerInfraMapper::from_inspect(&response))
     }
@@ -88,7 +91,7 @@ impl ContainerRepository for ContainerAdapter {
                     logs.push_str(&output.to_string());
                 }
                 Err(e) => {
-                    return Err(AppError::repository(format!("Failed to get logs: {}", e)));
+                    return Err(AppError::from(InfraError::from(e)));
                 }
             }
         }
@@ -101,7 +104,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .start_container(id, None::<StartContainerOptions<String>>)
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to start container: {}", e)))
+            .map_err(InfraError::from)
+            .map_err(AppError::from)
     }
 
     async fn stop(&self, id: &str) -> Result<(), AppError> {
@@ -111,7 +115,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .stop_container(id, Some(options))
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to stop container: {}", e)))
+            .map_err(InfraError::from)
+            .map_err(AppError::from)
     }
 
     async fn delete(&self, id: &str, force: bool) -> Result<(), AppError> {
@@ -124,7 +129,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .remove_container(id, Some(options))
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to delete container: {}", e)))
+            .map_err(InfraError::from)
+            .map_err(AppError::from)
     }
 
     async fn restart(&self, id: &str) -> Result<(), AppError> {
@@ -134,7 +140,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .restart_container(id, Some(options))
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to restart container: {}", e)))
+            .map_err(InfraError::from)
+            .map_err(AppError::from)
     }
 
     async fn pause(&self, id: &str) -> Result<(), AppError> {
@@ -142,7 +149,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .pause_container(id)
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to pause container: {}", e)))
+            .map_err(InfraError::from)
+            .map_err(AppError::from)
     }
 
     async fn unpause(&self, id: &str) -> Result<(), AppError> {
@@ -150,7 +158,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .unpause_container(id)
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to unpause container: {}", e)))
+            .map_err(InfraError::from)
+            .map_err(AppError::from)
     }
 
     async fn prune(&self) -> Result<PruneResultDto, AppError> {
@@ -159,9 +168,8 @@ impl ContainerRepository for ContainerAdapter {
             .inner()
             .prune_containers(None::<PruneContainersOptions<String>>)
             .await
-            .map_err(|e| {
-                AppError::operation_failed(format!("Failed to prune containers: {}", e))
-            })?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
         Ok(PruneResultDto {
             deleted_count: result

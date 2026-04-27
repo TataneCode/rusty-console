@@ -3,6 +3,7 @@ use crate::application::volume::VolumeRepository;
 use crate::domain::volume::Volume;
 use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::volume::mapper::VolumeInfraMapper;
+use crate::infrastructure::error::InfraError;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::container::ListContainersOptions;
@@ -18,40 +19,50 @@ impl VolumeAdapter {
         VolumeAdapter { docker }
     }
 
-    async fn get_volume_sizes(&self) -> HashMap<String, i64> {
-        match self.docker.inner().df().await {
-            Ok(response) => response
-                .volumes
-                .unwrap_or_default()
-                .into_iter()
-                .map(|v| {
-                    let name = v.name;
-                    let size = v.usage_data.as_ref().map(|u| u.size).unwrap_or(-1);
-                    (name, size)
-                })
-                .collect(),
-            Err(_) => HashMap::new(),
-        }
+    async fn get_volume_sizes(&self) -> Result<HashMap<String, i64>, AppError> {
+        let response = self
+            .docker
+            .inner()
+            .df()
+            .await
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
+
+        Ok(response
+            .volumes
+            .unwrap_or_default()
+            .into_iter()
+            .map(|v| {
+                let name = v.name;
+                let size = v.usage_data.as_ref().map(|u| u.size).unwrap_or(-1);
+                (name, size)
+            })
+            .collect())
     }
 
-    async fn get_in_use_volumes(&self) -> Vec<String> {
+    async fn get_in_use_volumes(&self) -> Result<Vec<String>, AppError> {
         let options = ListContainersOptions::<String> {
             all: true,
             ..Default::default()
         };
 
-        match self.docker.inner().list_containers(Some(options)).await {
-            Ok(containers) => containers
-                .into_iter()
-                .flat_map(|c| {
-                    c.mounts
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter_map(|m| m.name)
-                })
-                .collect(),
-            Err(_) => Vec::new(),
-        }
+        let containers = self
+            .docker
+            .inner()
+            .list_containers(Some(options))
+            .await
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
+
+        Ok(containers
+            .into_iter()
+            .flat_map(|c| {
+                c.mounts
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|m| m.name)
+            })
+            .collect())
     }
 }
 
@@ -63,10 +74,11 @@ impl VolumeRepository for VolumeAdapter {
             .inner()
             .list_volumes(None::<ListVolumesOptions<String>>)
             .await
-            .map_err(|e| AppError::repository(e.to_string()))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
-        let size_map = self.get_volume_sizes().await;
-        let in_use_volumes = self.get_in_use_volumes().await;
+        let size_map = self.get_volume_sizes().await?;
+        let in_use_volumes = self.get_in_use_volumes().await?;
 
         let volumes = volumes_response
             .volumes
@@ -90,7 +102,8 @@ impl VolumeRepository for VolumeAdapter {
             .inner()
             .remove_volume(name, Some(options))
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to delete volume: {}", e)))
+            .map_err(InfraError::from)
+            .map_err(AppError::from)
     }
 
     async fn prune(&self) -> Result<PruneResultDto, AppError> {
@@ -99,7 +112,8 @@ impl VolumeRepository for VolumeAdapter {
             .inner()
             .prune_volumes(None::<bollard::volume::PruneVolumesOptions<String>>)
             .await
-            .map_err(|e| AppError::operation_failed(format!("Failed to prune volumes: {}", e)))?;
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
 
         Ok(PruneResultDto {
             deleted_count: result.volumes_deleted.map(|v| v.len() as u32).unwrap_or(0),

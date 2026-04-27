@@ -15,6 +15,7 @@ pub const MAIN_MENU_ITEMS: [&str; 5] = [
 
 pub const CONFIRM_TITLE: &str = " Confirm ";
 pub const ERROR_TITLE: &str = " Error ";
+pub const INFO_TITLE: &str = " Info ";
 pub const CONFIRM_YES_LABEL: &str = "  [Yes]";
 pub const CONFIRM_NO_LABEL: &str = "  [No]";
 pub const CONFIRM_YES_BUTTON_WIDTH: u16 = 7;

@@ -6,6 +6,20 @@ use ratatui::{
 
 use super::{resources, theme::Theme};
 
+#[derive(Debug, Clone)]
+pub enum PopupMessage {
+    Error(String),
+    Info(String),
+}
+
+impl PopupMessage {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PopupMessage::Error(msg) | PopupMessage::Info(msg) => msg,
+        }
+    }
+}
+
 pub const HELP_BAR_HEIGHT: u16 = 2;
 pub const MAIN_MENU_TITLE_HEIGHT: u16 = 3;
 pub const CONFIRM_DIALOG_WIDTH_PERCENT: u16 = 50;
@@ -199,7 +213,7 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
     frame.render_widget(no_text, no_area);
 }
 
-pub fn render_error_popup(frame: &mut Frame, error: &str) {
+pub fn render_popup_message(frame: &mut Frame, message: &PopupMessage) {
     let area = centered_rect(
         ERROR_DIALOG_WIDTH_PERCENT,
         ERROR_DIALOG_HEIGHT_PERCENT,
@@ -208,18 +222,23 @@ pub fn render_error_popup(frame: &mut Frame, error: &str) {
 
     frame.render_widget(Clear, area);
 
-    let error_widget = Paragraph::new(error)
-        .style(Theme::error_style())
+    let (style, title) = match message {
+        PopupMessage::Error(_) => (Theme::error_style(), resources::ERROR_TITLE),
+        PopupMessage::Info(_) => (Theme::info_style(), resources::INFO_TITLE),
+    };
+
+    let popup_widget = Paragraph::new(message.as_str())
+        .style(style)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(resources::ERROR_TITLE)
-                .title_style(Theme::error_style())
-                .border_style(Theme::error_style()),
+                .title(title)
+                .title_style(style)
+                .border_style(style),
         )
         .wrap(Wrap { trim: true });
 
-    frame.render_widget(error_widget, area);
+    frame.render_widget(popup_widget, area);
 }
 
 pub fn split_content_area(area: Rect) -> [Rect; 2] {
@@ -287,7 +306,7 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 #[cfg(test)]
 mod tests {
-    use super::{truncate_text, TableSelection};
+    use super::{truncate_text, PopupMessage, TableSelection};
 
     #[test]
     fn test_truncate_text_handles_utf8_boundaries() {
@@ -303,5 +322,22 @@ mod tests {
         selection.select(Some(99));
 
         assert_eq!(selection.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_popup_message_as_str_returns_inner_text() {
+        let error = PopupMessage::Error("oops".to_string());
+        assert_eq!(error.as_str(), "oops");
+
+        let info = PopupMessage::Info("done".to_string());
+        assert_eq!(info.as_str(), "done");
+    }
+
+    #[test]
+    fn test_popup_message_variants_are_distinct() {
+        let error = PopupMessage::Error("msg".to_string());
+        let info = PopupMessage::Info("msg".to_string());
+        assert!(matches!(error, PopupMessage::Error(_)));
+        assert!(matches!(info, PopupMessage::Info(_)));
     }
 }

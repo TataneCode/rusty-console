@@ -27,6 +27,12 @@ cargo build --release
 ./target/release/rusty_console
 ```
 
+## Learning Path
+
+This repository now includes a project-based Rust learning path under [`xx_learning/`](./xx_learning/).
+
+Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then follow the numbered lessons from basic ownership and control flow through traits, async, terminal rendering, testing, and the full architecture used in this application.
+
 ## Key Bindings
 
 ### Global
@@ -166,9 +172,9 @@ The core of the application. Contains the business logic and domain concepts. It
 #### `02_application/*`
 Orchestration layer. Defines the contracts the rest of the system depends on and provides use-case implementations.
 
-- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository` (in each feature's `traits.rs`). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
-- **Services** — `ContainerService`, `VolumeService`, `ImageService`. Thin use-case coordinators that call a repository and return DTOs.
-- **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`. Plain data structs crossing the application→UI boundary.
+- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository`, `StackRepository` (in each feature's `traits.rs`). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
+- **Services** — `ContainerService`, `VolumeService`, `ImageService`, `StackService`. Thin use-case coordinators that call a repository and return DTOs.
+- **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`, `StackDto`, `StackContainerDto`. Plain data structs crossing the application→UI boundary.
 - **Mappers** — `ContainerMapper`, etc. Convert domain entities into DTOs.
 
 #### `03_infrastructure/*`
@@ -181,13 +187,13 @@ Adapts the Docker daemon API to the application's repository traits using [bolla
 #### `04_presentation/tui/*`
 Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
 
-- **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `error_message`) are evaluated before any screen-specific handler.
+- **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `popup_message`) are evaluated before any screen-specific handler.
 - **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `StackList`, `StackContainers`.
 - **Per-feature triad** (e.g. `04_presentation/tui/container/`):
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
   - `view.rs` — pure ratatui widget composition functions
   - `actions.rs` — async wrappers around application services; called from `app.rs` event handlers
-- **`ui/common/`** — shared widgets, colour theme, and `keys.rs` which maps raw `KeyEvent`s to `AppAction` variants.
+- **`tui/common/`** — shared widgets, colour theme, and `keys.rs` which maps raw `KeyEvent`s to `AppAction` variants.
 
 ### Data Flow
 

@@ -14,6 +14,17 @@ pub struct StackAdapter {
     docker: DockerClient,
 }
 
+fn container_operation_error(operation: &str, id: &str, err: InfraError) -> AppError {
+    match err {
+        InfraError::Connection(message) => {
+            AppError::connection(format!("Failed to {operation} container '{id}': {message}"))
+        }
+        InfraError::Docker(message) | InfraError::Serialization(message) => {
+            AppError::repository(format!("Failed to {operation} container '{id}': {message}"))
+        }
+    }
+}
+
 impl StackAdapter {
     pub fn new(docker: DockerClient) -> Self {
         StackAdapter { docker }
@@ -61,7 +72,7 @@ impl StackRepository for StackAdapter {
                 .start_container(id, None::<StartContainerOptions<String>>)
                 .await
                 .map_err(InfraError::from)
-                .map_err(AppError::from)?;
+                .map_err(|err| container_operation_error("start", id, err))?;
         }
         Ok(())
     }
@@ -73,7 +84,7 @@ impl StackRepository for StackAdapter {
                 .stop_container(id, Some(StopContainerOptions { t: 10 }))
                 .await
                 .map_err(InfraError::from)
-                .map_err(AppError::from)?;
+                .map_err(|err| container_operation_error("stop", id, err))?;
         }
         Ok(())
     }
@@ -91,8 +102,39 @@ impl StackRepository for StackAdapter {
                 )
                 .await
                 .map_err(InfraError::from)
-                .map_err(AppError::from)?;
+                .map_err(|err| container_operation_error("remove", id, err))?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::container_operation_error;
+    use crate::application::error::AppError;
+    use crate::infrastructure::error::InfraError;
+
+    #[test]
+    fn container_operation_error_keeps_container_id_for_repository_errors() {
+        let err =
+            container_operation_error("start", "abc123", InfraError::Docker("timeout".into()));
+
+        assert!(matches!(err, AppError::Repository(_)));
+        assert_eq!(
+            err.to_string(),
+            "Repository error: Failed to start container 'abc123': timeout"
+        );
+    }
+
+    #[test]
+    fn container_operation_error_keeps_container_id_for_connection_errors() {
+        let err =
+            container_operation_error("stop", "xyz789", InfraError::Connection("refused".into()));
+
+        assert!(matches!(err, AppError::Connection(_)));
+        assert_eq!(
+            err.to_string(),
+            "Connection error: Failed to stop container 'xyz789': refused"
+        );
     }
 }

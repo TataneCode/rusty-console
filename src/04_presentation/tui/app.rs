@@ -1,6 +1,6 @@
 use crate::application::container::ContainerDto;
 use crate::presentation::tui::common::{
-    map_key_to_action, render_confirm_dialog, render_error_popup, render_main_menu, resources,
+    map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message, resources,
     AppAction, PopupMessage,
 };
 use crate::presentation::tui::container::{
@@ -67,6 +67,26 @@ pub struct App {
     pub popup_message: Option<PopupMessage>,
 }
 
+fn record_cleanup_error(cleanup_error: &mut Option<io::Error>, result: io::Result<()>) {
+    if let Err(err) = result {
+        if cleanup_error.is_none() {
+            *cleanup_error = Some(err);
+        }
+    }
+}
+
+fn finalize_run_result(result: io::Result<()>, cleanup_error: Option<io::Error>) -> io::Result<()> {
+    match (result, cleanup_error) {
+        (Ok(()), None) => Ok(()),
+        (Ok(()), Some(cleanup_err)) => Err(cleanup_err),
+        (Err(err), None) => Err(err),
+        (Err(err), Some(cleanup_err)) => Err(io::Error::new(
+            err.kind(),
+            format!("{err}; cleanup also failed: {cleanup_err}"),
+        )),
+    }
+}
+
 impl App {
     pub fn new(
         container_actions: ContainerActions,
@@ -103,16 +123,20 @@ impl App {
         let mut terminal = Terminal::new(backend)?;
 
         let result = self.run_inner(&mut terminal).await;
+        let mut cleanup_error = None;
 
-        let _ = disable_raw_mode();
-        let _ = execute!(
-            terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
+        record_cleanup_error(&mut cleanup_error, disable_raw_mode());
+        record_cleanup_error(
+            &mut cleanup_error,
+            execute!(
+                terminal.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            ),
         );
-        let _ = terminal.show_cursor();
+        record_cleanup_error(&mut cleanup_error, terminal.show_cursor());
 
-        result
+        finalize_run_result(result, cleanup_error)
     }
 
     async fn run_inner(
@@ -245,7 +269,7 @@ impl App {
         }
 
         if let Some(message) = &self.popup_message {
-            render_error_popup(frame, message);
+            render_popup_message(frame, message);
         }
     }
 
@@ -911,7 +935,7 @@ fn format_bytes(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{confirm_message, format_bytes, App, ConfirmAction, Screen};
+    use super::{confirm_message, finalize_run_result, format_bytes, App, ConfirmAction, Screen};
     use crate::application::container::traits::MockContainerRepository;
     use crate::application::container::{ContainerDto, ContainerService};
     use crate::application::image::traits::MockImageRepository;
@@ -932,7 +956,7 @@ mod tests {
     use crate::shared::PruneResultDto;
     use chrono::Utc;
     use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
-    use std::sync::Arc;
+    use std::{io, sync::Arc};
 
     fn buffer_text(buffer: &Buffer) -> String {
         buffer
@@ -1123,6 +1147,30 @@ mod tests {
         assert_eq!(format_bytes(2 * 1024), "2.0 KB");
         assert_eq!(format_bytes(3 * 1024 * 1024), "3.0 MB");
         assert_eq!(format_bytes(4 * 1024 * 1024 * 1024), "4.0 GB");
+    }
+
+    #[test]
+    fn test_finalize_run_result_returns_cleanup_error_after_success() {
+        let err =
+            finalize_run_result(Ok(()), Some(io::Error::other("show_cursor failed"))).unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::Other);
+        assert_eq!(err.to_string(), "show_cursor failed");
+    }
+
+    #[test]
+    fn test_finalize_run_result_preserves_run_error_and_attaches_cleanup_error() {
+        let err = finalize_run_result(
+            Err(io::Error::other("event loop failed")),
+            Some(io::Error::other("disable_raw_mode failed")),
+        )
+        .unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::Other);
+        assert_eq!(
+            err.to_string(),
+            "event loop failed; cleanup also failed: disable_raw_mode failed"
+        );
     }
 
     #[test]

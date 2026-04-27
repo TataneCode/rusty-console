@@ -213,7 +213,7 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
     frame.render_widget(no_text, no_area);
 }
 
-pub fn render_error_popup(frame: &mut Frame, message: &PopupMessage) {
+pub fn render_popup_message(frame: &mut Frame, message: &PopupMessage) {
     let area = centered_rect(
         ERROR_DIALOG_WIDTH_PERCENT,
         ERROR_DIALOG_HEIGHT_PERCENT,

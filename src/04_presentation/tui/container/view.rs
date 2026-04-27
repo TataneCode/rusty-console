@@ -201,6 +201,7 @@ mod tests {
         assert!(text.contains("Containers"));
         assert!(text.contains("web"));
         assert!(text.contains("Running"));
+        assert!(text.contains("Exec"));
         assert!(text.contains("Logs"));
     }
 

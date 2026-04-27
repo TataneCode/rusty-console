@@ -25,11 +25,13 @@ pub const CONFIRM_BUTTON_SPACING: u16 = 9;
 pub const CONTAINER_TITLE: &str = "Containers";
 pub const CONTAINER_HEADERS: [&str; 5] = ["Name", "Image", "State", "Status", "Ports"];
 pub const CONTAINER_LIST_HELP: &str =
-    " q: Quit | /: Filter | j/k: Navigate | l: Logs | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart | X: Prune";
+    " q: Quit | /: Filter | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart | X: Prune";
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
 pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back ";
 pub const CONTAINER_LOGS_HELP: &str = " Esc/q: Back | Ctrl+u/d: Scroll ";
 pub const CONTAINER_DETAILS_ENV_VARS_LABEL: &str = "Environment Variables";
+pub const EXEC_SHELL_DIALOG_TITLE: &str = " Exec Shell ";
+pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc/q: Cancel ";
 
 pub const VOLUME_TITLE: &str = "Volumes";
 pub const VOLUME_HEADERS: [&str; 5] = ["Name", "Driver", "Size", "In Use", "Created"];
@@ -49,7 +51,7 @@ pub const STACK_LIST_HELP: &str =
     " q: Quit | /: Filter | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | r: Refresh | Esc: Back ";
 pub const STACK_CONTAINER_HEADERS: [&str; 5] = ["Name", "Image", "State", "Status", "Ports"];
 pub const STACK_CONTAINERS_HELP: &str =
-    " Esc/q: Back | j/k: Navigate | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | d: Delete | r: Refresh ";
+    " Esc/q: Back | j/k: Navigate | e: Exec | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | d: Delete | r: Refresh ";
 
 pub const LABEL_ID: &str = "ID:";
 pub const LABEL_NAME: &str = "Name:";

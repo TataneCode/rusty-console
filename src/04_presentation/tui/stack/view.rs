@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_render_stack_containers_shows_containers_and_help() {
-        let backend = TestBackend::new(100, 20);
+        let backend = TestBackend::new(140, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         let containers = vec![make_stack_container()];
         let mut state = TableState::default();
@@ -179,6 +179,7 @@ mod tests {
         assert!(text.contains("Stack: compose-app"));
         assert!(text.contains("web"));
         assert!(text.contains("Running"));
-        assert!(text.contains("Remove All"));
+        assert!(text.contains("Exec"));
+        assert!(text.contains("Refresh"));
     }
 }

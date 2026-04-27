@@ -4,7 +4,7 @@ A terminal user interface (TUI) for managing Docker containers, volumes, and ima
 
 ## Features
 
-- **Containers** — list all containers regardless of state, start/stop, pause/unpause, restart, view real-time logs, inspect details (incl. env vars), delete (with force option for running containers), prune stopped containers, filter by name
+- **Containers** — list all containers regardless of state, start/stop, pause/unpause, restart, open an interactive exec shell (`sh` or `bash`), view real-time logs, inspect details (incl. env vars), delete (with force option for running containers), prune stopped containers, filter by name
 - **Volumes** — list all volumes, detect which ones are in use, delete unused volumes, prune unused volumes, filter by name
 - **Images** — list all images with usage status, inspect details, delete (with force option for in-use images), prune dangling images, filter by name
 - **Stacks** — detect Docker Compose stacks from container labels, list stacks with running/total counts, drill down into a stack's containers, start/stop/remove all containers in a stack at once
@@ -15,6 +15,7 @@ A terminal user interface (TUI) for managing Docker containers, volumes, and ima
 
 - Rust toolchain (`rustup` recommended)
 - A running Docker daemon (accessible via the default socket)
+- Docker CLI installed and available on `PATH` (`docker`) for interactive exec/shell access
 
 ## Build & Run
 
@@ -53,6 +54,7 @@ Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then
 | `s` | Start or stop the selected container |
 | `p` | Pause or unpause the selected container |
 | `R` | Restart the selected container |
+| `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` |
 | `l` | View container logs |
 | `c` | View container details |
 | `d` | Delete (opens confirmation dialog) |
@@ -73,6 +75,7 @@ Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then
 | Key | Action |
 |-----|--------|
 | `s` | Start or stop the selected container |
+| `e` | Open the exec shell picker for the selected container |
 | `d` | Delete the selected container |
 | `Ctrl+S` | Start All containers in the stack |
 | `S` | Stop All containers in the stack |
@@ -187,7 +190,7 @@ Adapts the Docker daemon API to the application's repository traits using [bolla
 #### `04_presentation/tui/*`
 Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
 
-- **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `popup_message`) are evaluated before any screen-specific handler.
+- **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `popup_message`, exec shell picker) are evaluated before any screen-specific handler.
 - **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `StackList`, `StackContainers`.
 - **Per-feature triad** (e.g. `04_presentation/tui/container/`):
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)

@@ -1,6 +1,8 @@
 use crate::infrastructure::error::InfraError;
 use bollard::Docker;
 
+pub const DEFAULT_DOCKER_SOCKET_HOST: &str = "unix:///var/run/docker.sock";
+
 pub fn create_docker_client() -> Result<Docker, InfraError> {
     Docker::connect_with_socket_defaults()
         .map_err(|e| InfraError::Connection(format!("Failed to connect to Docker: {}", e)))
@@ -18,6 +20,10 @@ impl DockerClient {
 
     pub fn inner(&self) -> &Docker {
         &self.client
+    }
+
+    pub fn cli_host(&self) -> &'static str {
+        DEFAULT_DOCKER_SOCKET_HOST
     }
 }
 

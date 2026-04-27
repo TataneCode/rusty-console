@@ -437,8 +437,9 @@ impl App {
                     if volume.can_delete {
                         self.confirm_dialog = Some((ConfirmAction::DeleteVolume, true));
                     } else {
-                        self.popup_message =
-                            Some(PopupMessage::Error(resources::VOLUME_IN_USE_DELETE_MESSAGE.to_string()));
+                        self.popup_message = Some(PopupMessage::Error(
+                            resources::VOLUME_IN_USE_DELETE_MESSAGE.to_string(),
+                        ));
                     }
                 }
             }
@@ -531,11 +532,12 @@ impl App {
             ConfirmAction::PruneContainers => {
                 match self.container_actions.prune_containers().await {
                     Ok(result) => {
-                        self.popup_message = Some(PopupMessage::Info(resources::prune_result_message(
-                            "container",
-                            result.deleted_count,
-                            &format_bytes(result.space_freed),
-                        )));
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::prune_result_message(
+                                "container",
+                                result.deleted_count,
+                                &format_bytes(result.space_freed),
+                            )));
                         self.load_containers().await;
                     }
                     Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
@@ -639,7 +641,9 @@ impl App {
         match self.container_actions.load_container_details(id).await {
             Ok(Some(container)) => self.container_presenter.set_details(container),
             Ok(None) => {
-                self.popup_message = Some(PopupMessage::Error(resources::CONTAINER_NOT_FOUND_MESSAGE.to_string()))
+                self.popup_message = Some(PopupMessage::Error(
+                    resources::CONTAINER_NOT_FOUND_MESSAGE.to_string(),
+                ))
             }
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
@@ -908,7 +912,6 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{confirm_message, format_bytes, App, ConfirmAction, Screen};
-    use crate::presentation::tui::common::PopupMessage;
     use crate::application::container::traits::MockContainerRepository;
     use crate::application::container::{ContainerDto, ContainerService};
     use crate::application::image::traits::MockImageRepository;
@@ -920,6 +923,7 @@ mod tests {
     use crate::domain::container::ContainerState;
     use crate::domain::image::{Image, ImageId, ImageSize};
     use crate::domain::stack::{Stack, StackContainerState, StackName};
+    use crate::presentation::tui::common::PopupMessage;
     use crate::presentation::tui::common::{resources, AppAction};
     use crate::presentation::tui::container::ContainerActions;
     use crate::presentation::tui::image::ImageActions;
@@ -1401,11 +1405,13 @@ mod tests {
         app.volume_presenter
             .set_volumes(vec![make_volume_dto(true, false)]);
         app.handle_volume_list_action(AppAction::Delete).await;
-        assert!(matches!(
-            app.popup_message,
-            Some(PopupMessage::Error(_))
-        ));
-        assert!(app.popup_message.as_ref().unwrap().as_str().contains(resources::VOLUME_IN_USE_DELETE_MESSAGE));
+        assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains(resources::VOLUME_IN_USE_DELETE_MESSAGE));
         app.popup_message = None;
         app.volume_presenter
             .set_volumes(vec![make_volume_dto(false, true)]);
@@ -1511,20 +1517,35 @@ mod tests {
         app.execute_confirm_action(ConfirmAction::PruneContainers)
             .await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
-        assert!(app.popup_message.as_ref().unwrap().as_str().contains("Pruned 2 container(s)"));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pruned 2 container(s)"));
 
         app.execute_confirm_action(ConfirmAction::DeleteVolume)
             .await;
         app.execute_confirm_action(ConfirmAction::PruneVolumes)
             .await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
-        assert!(app.popup_message.as_ref().unwrap().as_str().contains("Pruned 1 volume(s)"));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pruned 1 volume(s)"));
 
         app.execute_confirm_action(ConfirmAction::DeleteImage(true))
             .await;
         app.execute_confirm_action(ConfirmAction::PruneImages).await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
-        assert!(app.popup_message.as_ref().unwrap().as_str().contains("Pruned 3 image(s)"));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pruned 3 image(s)"));
 
         app.screen = Screen::StackContainers;
         app.execute_confirm_action(ConfirmAction::DeleteContainer(true))
@@ -1568,7 +1589,12 @@ mod tests {
         app.load_stacks().await;
         app.load_container_details("missing").await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
-        assert!(app.popup_message.as_ref().unwrap().as_str().contains(resources::CONTAINER_NOT_FOUND_MESSAGE));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains(resources::CONTAINER_NOT_FOUND_MESSAGE));
     }
 
     #[tokio::test]

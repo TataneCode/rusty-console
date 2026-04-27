@@ -1,5 +1,5 @@
 use crate::application::image::ImageDto;
-use crate::presentation::tui::common::TableSelection;
+use crate::presentation::tui::common::{FilterState, TableSelection};
 
 pub struct ImagePresenter {
     pub images: Vec<ImageDto>,
@@ -7,8 +7,22 @@ pub struct ImagePresenter {
     pub selected_image: Option<ImageDto>,
     pub loading: bool,
     pub error: Option<String>,
-    pub filter: String,
-    pub filter_active: bool,
+    pub filter: FilterState,
+}
+
+pub fn filter_images<'a>(images: &'a [ImageDto], filter: &str) -> Vec<&'a ImageDto> {
+    if filter.is_empty() {
+        images.iter().collect()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        images
+            .iter()
+            .filter(|image| {
+                image.repository.to_lowercase().contains(&filter_lower)
+                    || image.tag.to_lowercase().contains(&filter_lower)
+            })
+            .collect()
+    }
 }
 
 impl ImagePresenter {
@@ -19,8 +33,7 @@ impl ImagePresenter {
             selected_image: None,
             loading: false,
             error: None,
-            filter: String::new(),
-            filter_active: false,
+            filter: FilterState::new(),
         }
     }
 
@@ -39,18 +52,7 @@ impl ImagePresenter {
     }
 
     pub fn filtered_images(&self) -> Vec<&ImageDto> {
-        if self.filter.is_empty() {
-            self.images.iter().collect()
-        } else {
-            let filter_lower = self.filter.to_lowercase();
-            self.images
-                .iter()
-                .filter(|i| {
-                    i.repository.to_lowercase().contains(&filter_lower)
-                        || i.tag.to_lowercase().contains(&filter_lower)
-                })
-                .collect()
-        }
+        filter_images(&self.images, self.filter.value())
     }
 
     pub fn selected_image(&self) -> Option<&ImageDto> {
@@ -77,23 +79,30 @@ impl ImagePresenter {
     }
 
     pub fn activate_filter(&mut self) {
-        self.filter_active = true;
+        self.filter.activate();
     }
 
     pub fn deactivate_filter(&mut self) {
-        self.filter_active = false;
-        self.filter.clear();
+        self.filter.deactivate();
         self.update_filtered_selection();
     }
 
     pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push(c);
+        self.filter.push_char(c);
         self.update_filtered_selection();
     }
 
     pub fn pop_filter_char(&mut self) {
-        self.filter.pop();
+        self.filter.pop_char();
         self.update_filtered_selection();
+    }
+
+    pub fn is_filter_active(&self) -> bool {
+        self.filter.is_active()
+    }
+
+    pub fn active_filter(&self) -> Option<&str> {
+        self.filter.active_value()
     }
 
     fn update_filtered_selection(&mut self) {
@@ -186,11 +195,11 @@ mod tests {
         let mut p = ImagePresenter::new();
         p.set_images(three_images());
         p.activate_filter();
-        assert!(p.filter_active);
+        assert!(p.filter.is_active());
         p.push_filter_char('z');
         p.deactivate_filter();
-        assert!(!p.filter_active);
-        assert!(p.filter.is_empty());
+        assert!(!p.filter.is_active());
+        assert!(p.filter.value().is_empty());
         assert_eq!(p.filtered_images().len(), 3);
     }
 

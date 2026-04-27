@@ -26,3 +26,33 @@ impl StackActions {
         self.service.remove_all(container_ids).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::StackActions;
+    use crate::application::stack::traits::MockStackRepository;
+    use crate::application::stack::StackService;
+    use crate::domain::stack::{Stack, StackName};
+    use std::sync::Arc;
+
+    fn make_stack() -> Stack {
+        Stack::new(StackName::new("compose-app").unwrap(), vec![])
+    }
+
+    #[tokio::test]
+    async fn test_stack_actions_delegate_all_operations() {
+        let mut mock = MockStackRepository::new();
+        mock.expect_get_all().returning(|| Ok(vec![make_stack()]));
+        mock.expect_start_all().returning(|_| Ok(()));
+        mock.expect_stop_all().returning(|_| Ok(()));
+        mock.expect_remove_all().returning(|_| Ok(()));
+
+        let actions = StackActions::new(StackService::new(Arc::new(mock)));
+        let ids = vec!["1".to_string(), "2".to_string()];
+
+        assert_eq!(actions.load_stacks().await.unwrap().len(), 1);
+        assert!(actions.start_all(&ids).await.is_ok());
+        assert!(actions.stop_all(&ids).await.is_ok());
+        assert!(actions.remove_all(&ids).await.is_ok());
+    }
+}

@@ -1,8 +1,11 @@
 use crate::application::stack::{StackContainerDto, StackDto};
 use crate::domain::stack::StackContainerState;
-use crate::presentation::tui::common::{render_help, render_table, Theme};
+use crate::presentation::tui::common::{
+    filter_prompt_title, render_help, render_table, resources, split_content_area, truncate_text,
+    Theme,
+};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Rect},
     widgets::{Cell, Row, TableState},
     Frame,
 };
@@ -10,19 +13,15 @@ use ratatui::{
 pub fn render_stack_list(
     frame: &mut Frame,
     area: Rect,
-    stacks: &[StackDto],
+    stacks: &[&StackDto],
     state: &mut TableState,
     active_filter: Option<&str>,
 ) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(2)])
-        .split(area);
-
-    let headers = vec!["Stack", "Containers", "Running"];
+    let [content_area, help_area] = split_content_area(area);
 
     let rows: Vec<Row> = stacks
         .iter()
+        .copied()
         .map(|s| {
             let running_style = if s.running_count > 0 && s.running_count == s.container_count {
                 Theme::in_use_style()
@@ -45,18 +44,18 @@ pub fn render_stack_list(
         Constraint::Percentage(20),
     ];
 
-    let title = match active_filter {
-        Some(f) => format!(" Stacks [/: {}▏] ", f),
-        None => " Stacks ".to_string(),
-    };
-
-    render_table(frame, chunks[0], &title, headers, rows, widths, state);
-
-    render_help(
+    let title = filter_prompt_title(resources::STACK_TITLE, active_filter);
+    render_table(
         frame,
-        chunks[1],
-        " q: Quit | /: Filter | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | r: Refresh | Esc: Back ",
+        content_area,
+        &title,
+        resources::STACK_HEADERS.to_vec(),
+        rows,
+        widths,
+        state,
     );
+
+    render_help(frame, help_area, resources::STACK_LIST_HELP);
 }
 
 pub fn render_stack_containers(
@@ -66,12 +65,7 @@ pub fn render_stack_containers(
     containers: &[StackContainerDto],
     state: &mut TableState,
 ) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(2)])
-        .split(area);
-
-    let headers = vec!["Name", "Image", "State", "Status", "Ports"];
+    let [content_area, help_area] = split_content_area(area);
 
     let rows: Vec<Row> = containers
         .iter()
@@ -84,23 +78,12 @@ pub fn render_stack_containers(
                 _ => Theme::stopped_style(),
             };
 
-            let image = if c.image.chars().count() > 30 {
-                format!("{}…", c.image.chars().take(29).collect::<String>())
-            } else {
-                c.image.clone()
-            };
-            let ports = if c.ports.chars().count() > 25 {
-                format!("{}…", c.ports.chars().take(24).collect::<String>())
-            } else {
-                c.ports.clone()
-            };
-
             Row::new(vec![
                 Cell::from(c.name.clone()),
-                Cell::from(image),
+                Cell::from(truncate_text(&c.image, 30)),
                 Cell::from(c.state_display()).style(state_style),
                 Cell::from(c.status.clone()),
-                Cell::from(ports),
+                Cell::from(truncate_text(&c.ports, 25)),
             ])
         })
         .collect();
@@ -113,12 +96,89 @@ pub fn render_stack_containers(
         Constraint::Percentage(20),
     ];
 
-    let title = format!(" Stack: {} ", stack_name);
-    render_table(frame, chunks[0], &title, headers, rows, widths, state);
-
-    render_help(
+    let title = resources::stack_containers_title(stack_name);
+    render_table(
         frame,
-        chunks[1],
-        " Esc/q: Back | j/k: Navigate | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | d: Delete | r: Refresh ",
+        content_area,
+        &title,
+        resources::STACK_CONTAINER_HEADERS.to_vec(),
+        rows,
+        widths,
+        state,
     );
+
+    render_help(frame, help_area, resources::STACK_CONTAINERS_HELP);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{render_stack_containers, render_stack_list};
+    use crate::application::stack::{StackContainerDto, StackDto};
+    use crate::domain::stack::StackContainerState;
+    use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
+
+    fn buffer_text(buffer: &Buffer) -> String {
+        buffer
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>()
+    }
+
+    fn make_stack_container() -> StackContainerDto {
+        StackContainerDto {
+            id: "1".to_string(),
+            name: "web".to_string(),
+            image: "nginx:latest".to_string(),
+            state: StackContainerState::Running,
+            status: "Up".to_string(),
+            ports: "80/tcp".to_string(),
+            can_start: false,
+            can_stop: true,
+        }
+    }
+
+    #[test]
+    fn test_render_stack_list_shows_stack_summary() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let stack = StackDto {
+            name: "compose-app".to_string(),
+            container_count: 2,
+            running_count: 1,
+            containers: vec![make_stack_container()],
+        };
+        let items = vec![&stack];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| render_stack_list(frame, frame.area(), &items, &mut state, Some("app")))
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Stacks"));
+        assert!(text.contains("compose-app"));
+        assert!(text.contains("1/2"));
+        assert!(text.contains("Start All"));
+    }
+
+    #[test]
+    fn test_render_stack_containers_shows_containers_and_help() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let containers = vec![make_stack_container()];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_stack_containers(frame, frame.area(), "compose-app", &containers, &mut state)
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Stack: compose-app"));
+        assert!(text.contains("web"));
+        assert!(text.contains("Running"));
+        assert!(text.contains("Remove All"));
+    }
 }

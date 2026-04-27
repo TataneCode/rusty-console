@@ -1,13 +1,24 @@
 use crate::application::volume::VolumeDto;
-use crate::presentation::tui::common::TableSelection;
+use crate::presentation::tui::common::{FilterState, TableSelection};
 
 pub struct VolumePresenter {
     pub volumes: Vec<VolumeDto>,
     pub selection: TableSelection,
     pub loading: bool,
     pub error: Option<String>,
-    pub filter: String,
-    pub filter_active: bool,
+    pub filter: FilterState,
+}
+
+pub fn filter_volumes<'a>(volumes: &'a [VolumeDto], filter: &str) -> Vec<&'a VolumeDto> {
+    if filter.is_empty() {
+        volumes.iter().collect()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        volumes
+            .iter()
+            .filter(|volume| volume.name.to_lowercase().contains(&filter_lower))
+            .collect()
+    }
 }
 
 impl VolumePresenter {
@@ -17,8 +28,7 @@ impl VolumePresenter {
             selection: TableSelection::new(),
             loading: false,
             error: None,
-            filter: String::new(),
-            filter_active: false,
+            filter: FilterState::new(),
         }
     }
 
@@ -37,15 +47,7 @@ impl VolumePresenter {
     }
 
     pub fn filtered_volumes(&self) -> Vec<&VolumeDto> {
-        if self.filter.is_empty() {
-            self.volumes.iter().collect()
-        } else {
-            let filter_lower = self.filter.to_lowercase();
-            self.volumes
-                .iter()
-                .filter(|v| v.name.to_lowercase().contains(&filter_lower))
-                .collect()
-        }
+        filter_volumes(&self.volumes, self.filter.value())
     }
 
     pub fn selected_volume(&self) -> Option<&VolumeDto> {
@@ -64,23 +66,30 @@ impl VolumePresenter {
     }
 
     pub fn activate_filter(&mut self) {
-        self.filter_active = true;
+        self.filter.activate();
     }
 
     pub fn deactivate_filter(&mut self) {
-        self.filter_active = false;
-        self.filter.clear();
+        self.filter.deactivate();
         self.update_filtered_selection();
     }
 
     pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push(c);
+        self.filter.push_char(c);
         self.update_filtered_selection();
     }
 
     pub fn pop_filter_char(&mut self) {
-        self.filter.pop();
+        self.filter.pop_char();
         self.update_filtered_selection();
+    }
+
+    pub fn is_filter_active(&self) -> bool {
+        self.filter.is_active()
+    }
+
+    pub fn active_filter(&self) -> Option<&str> {
+        self.filter.active_value()
     }
 
     fn update_filtered_selection(&mut self) {
@@ -159,11 +168,11 @@ mod tests {
         let mut p = VolumePresenter::new();
         p.set_volumes(three_volumes());
         p.activate_filter();
-        assert!(p.filter_active);
+        assert!(p.filter.is_active());
         p.push_filter_char('x');
         p.deactivate_filter();
-        assert!(!p.filter_active);
-        assert!(p.filter.is_empty());
+        assert!(!p.filter.is_active());
+        assert!(p.filter.value().is_empty());
         // All items visible again
         assert_eq!(p.filtered_volumes().len(), 3);
     }

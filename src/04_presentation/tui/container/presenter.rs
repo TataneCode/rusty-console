@@ -1,5 +1,5 @@
 use crate::application::container::{ContainerDto, ContainerLogsDto};
-use crate::presentation::tui::common::TableSelection;
+use crate::presentation::tui::common::{FilterState, TableSelection};
 
 pub struct ContainerPresenter {
     pub containers: Vec<ContainerDto>,
@@ -9,8 +9,25 @@ pub struct ContainerPresenter {
     pub selected_container: Option<ContainerDto>,
     pub loading: bool,
     pub error: Option<String>,
-    pub filter: String,
-    pub filter_active: bool,
+    pub filter: FilterState,
+}
+
+pub fn filter_containers<'a>(
+    containers: &'a [ContainerDto],
+    filter: &str,
+) -> Vec<&'a ContainerDto> {
+    if filter.is_empty() {
+        containers.iter().collect()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        containers
+            .iter()
+            .filter(|container| {
+                container.name.to_lowercase().contains(&filter_lower)
+                    || container.image.to_lowercase().contains(&filter_lower)
+            })
+            .collect()
+    }
 }
 
 impl ContainerPresenter {
@@ -23,8 +40,7 @@ impl ContainerPresenter {
             selected_container: None,
             loading: false,
             error: None,
-            filter: String::new(),
-            filter_active: false,
+            filter: FilterState::new(),
         }
     }
 
@@ -43,18 +59,7 @@ impl ContainerPresenter {
     }
 
     pub fn filtered_containers(&self) -> Vec<&ContainerDto> {
-        if self.filter.is_empty() {
-            self.containers.iter().collect()
-        } else {
-            let filter_lower = self.filter.to_lowercase();
-            self.containers
-                .iter()
-                .filter(|c| {
-                    c.name.to_lowercase().contains(&filter_lower)
-                        || c.image.to_lowercase().contains(&filter_lower)
-                })
-                .collect()
-        }
+        filter_containers(&self.containers, self.filter.value())
     }
 
     pub fn selected_container(&self) -> Option<&ContainerDto> {
@@ -99,23 +104,30 @@ impl ContainerPresenter {
     }
 
     pub fn activate_filter(&mut self) {
-        self.filter_active = true;
+        self.filter.activate();
     }
 
     pub fn deactivate_filter(&mut self) {
-        self.filter_active = false;
-        self.filter.clear();
+        self.filter.deactivate();
         self.update_filtered_selection();
     }
 
     pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push(c);
+        self.filter.push_char(c);
         self.update_filtered_selection();
     }
 
     pub fn pop_filter_char(&mut self) {
-        self.filter.pop();
+        self.filter.pop_char();
         self.update_filtered_selection();
+    }
+
+    pub fn is_filter_active(&self) -> bool {
+        self.filter.is_active()
+    }
+
+    pub fn active_filter(&self) -> Option<&str> {
+        self.filter.active_value()
     }
 
     fn update_filtered_selection(&mut self) {
@@ -173,8 +185,8 @@ mod tests {
         assert!(p.selected_container.is_none());
         assert!(!p.loading);
         assert!(p.error.is_none());
-        assert!(p.filter.is_empty());
-        assert!(!p.filter_active);
+        assert!(p.filter.value().is_empty());
+        assert!(!p.filter.is_active());
         assert!(p.selection.selected().is_none());
     }
 
@@ -256,12 +268,12 @@ mod tests {
         let mut p = ContainerPresenter::new();
         p.set_containers(three_containers());
         p.activate_filter();
-        assert!(p.filter_active);
+        assert!(p.filter.is_active());
         p.push_filter_char('a');
-        assert_eq!(p.filter, "a");
+        assert_eq!(p.filter.value(), "a");
         p.deactivate_filter();
-        assert!(!p.filter_active);
-        assert!(p.filter.is_empty());
+        assert!(!p.filter.is_active());
+        assert!(p.filter.value().is_empty());
     }
 
     #[test]
@@ -270,11 +282,11 @@ mod tests {
         p.set_containers(three_containers());
         p.push_filter_char('a');
         p.push_filter_char('b');
-        assert_eq!(p.filter, "ab");
+        assert_eq!(p.filter.value(), "ab");
         p.pop_filter_char();
-        assert_eq!(p.filter, "a");
+        assert_eq!(p.filter.value(), "a");
         p.pop_filter_char();
-        assert!(p.filter.is_empty());
+        assert!(p.filter.value().is_empty());
     }
 
     #[test]

@@ -1,9 +1,7 @@
 use crate::application::container::ContainerDto;
-use crate::application::image::ImageDto;
-use crate::application::stack::StackDto;
-use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
-    map_key_to_action, render_confirm_dialog, render_error_popup, AppAction,
+    map_key_to_action, render_confirm_dialog, render_error_popup, render_main_menu, resources,
+    AppAction,
 };
 use crate::presentation::tui::container::{
     render_container_details, render_container_list, render_container_logs, ContainerActions,
@@ -22,13 +20,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
-    Frame, Terminal,
-};
+use ratatui::{backend::CrosstermBackend, widgets::ListState, Frame, Terminal};
 use std::io;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,25 +136,30 @@ impl App {
         let area = frame.area();
 
         match &self.screen {
-            Screen::MainMenu => self.render_main_menu(frame, area),
+            Screen::MainMenu => render_main_menu(frame, area, &mut self.menu_state),
             Screen::ContainerList => {
-                let filtered: Vec<ContainerDto> = self
-                    .container_presenter
-                    .filtered_containers()
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                let active_filter = if self.container_presenter.filter_active {
-                    Some(self.container_presenter.filter.as_str())
-                } else {
-                    None
+                let active_filter = self.container_presenter.active_filter().map(str::to_string);
+                let filtered = {
+                    let containers = &self.container_presenter.containers;
+                    if self.container_presenter.filter.value().is_empty() {
+                        containers.iter().collect::<Vec<_>>()
+                    } else {
+                        let filter_lower = self.container_presenter.filter.value().to_lowercase();
+                        containers
+                            .iter()
+                            .filter(|container| {
+                                container.name.to_lowercase().contains(&filter_lower)
+                                    || container.image.to_lowercase().contains(&filter_lower)
+                            })
+                            .collect::<Vec<_>>()
+                    }
                 };
                 render_container_list(
                     frame,
                     area,
                     &filtered,
                     &mut self.container_presenter.selection.state,
-                    active_filter,
+                    active_filter.as_deref(),
                 );
             }
             Screen::ContainerLogs => {
@@ -176,43 +173,50 @@ impl App {
                 }
             }
             Screen::VolumeList => {
-                let filtered: Vec<VolumeDto> = self
-                    .volume_presenter
-                    .filtered_volumes()
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                let active_filter = if self.volume_presenter.filter_active {
-                    Some(self.volume_presenter.filter.as_str())
-                } else {
-                    None
+                let active_filter = self.volume_presenter.active_filter().map(str::to_string);
+                let filtered = {
+                    let volumes = &self.volume_presenter.volumes;
+                    if self.volume_presenter.filter.value().is_empty() {
+                        volumes.iter().collect::<Vec<_>>()
+                    } else {
+                        let filter_lower = self.volume_presenter.filter.value().to_lowercase();
+                        volumes
+                            .iter()
+                            .filter(|volume| volume.name.to_lowercase().contains(&filter_lower))
+                            .collect::<Vec<_>>()
+                    }
                 };
                 render_volume_list(
                     frame,
                     area,
                     &filtered,
                     &mut self.volume_presenter.selection.state,
-                    active_filter,
+                    active_filter.as_deref(),
                 );
             }
             Screen::ImageList => {
-                let filtered: Vec<ImageDto> = self
-                    .image_presenter
-                    .filtered_images()
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                let active_filter = if self.image_presenter.filter_active {
-                    Some(self.image_presenter.filter.as_str())
-                } else {
-                    None
+                let active_filter = self.image_presenter.active_filter().map(str::to_string);
+                let filtered = {
+                    let images = &self.image_presenter.images;
+                    if self.image_presenter.filter.value().is_empty() {
+                        images.iter().collect::<Vec<_>>()
+                    } else {
+                        let filter_lower = self.image_presenter.filter.value().to_lowercase();
+                        images
+                            .iter()
+                            .filter(|image| {
+                                image.repository.to_lowercase().contains(&filter_lower)
+                                    || image.tag.to_lowercase().contains(&filter_lower)
+                            })
+                            .collect::<Vec<_>>()
+                    }
                 };
                 render_image_list(
                     frame,
                     area,
                     &filtered,
                     &mut self.image_presenter.selection.state,
-                    active_filter,
+                    active_filter.as_deref(),
                 );
             }
             Screen::ImageDetails => {
@@ -221,23 +225,25 @@ impl App {
                 }
             }
             Screen::StackList => {
-                let filtered: Vec<StackDto> = self
-                    .stack_presenter
-                    .filtered_stacks()
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                let active_filter = if self.stack_presenter.filter_active {
-                    Some(self.stack_presenter.filter.as_str())
-                } else {
-                    None
+                let active_filter = self.stack_presenter.active_filter().map(str::to_string);
+                let filtered = {
+                    let stacks = &self.stack_presenter.stacks;
+                    if self.stack_presenter.filter.value().is_empty() {
+                        stacks.iter().collect::<Vec<_>>()
+                    } else {
+                        let filter_lower = self.stack_presenter.filter.value().to_lowercase();
+                        stacks
+                            .iter()
+                            .filter(|stack| stack.name.to_lowercase().contains(&filter_lower))
+                            .collect::<Vec<_>>()
+                    }
                 };
                 render_stack_list(
                     frame,
                     area,
                     &filtered,
                     &mut self.stack_presenter.selection.state,
-                    active_filter,
+                    active_filter.as_deref(),
                 );
             }
             Screen::StackContainers => {
@@ -258,84 +264,12 @@ impl App {
         }
 
         if let Some((action, selected_yes)) = &self.confirm_dialog {
-            let message = match action {
-                ConfirmAction::DeleteContainer(force) => {
-                    if *force {
-                        "Force delete this container?"
-                    } else {
-                        "Delete this container?"
-                    }
-                }
-                ConfirmAction::DeleteVolume => "Delete this volume?",
-                ConfirmAction::DeleteImage(force) => {
-                    if *force {
-                        "Force delete this image?"
-                    } else {
-                        "Delete this image?"
-                    }
-                }
-                ConfirmAction::PruneContainers => "Prune all stopped containers?",
-                ConfirmAction::PruneVolumes => "Prune all unused volumes?",
-                ConfirmAction::PruneImages => "Prune all dangling images?",
-                ConfirmAction::RemoveAllStackContainers => {
-                    "Remove ALL containers in this stack? (force)"
-                }
-            };
-            render_confirm_dialog(frame, message, *selected_yes);
+            render_confirm_dialog(frame, confirm_message(*action), *selected_yes);
         }
 
         if let Some(error) = &self.error_message {
             render_error_popup(frame, error);
         }
-    }
-
-    fn render_main_menu(&mut self, frame: &mut Frame, area: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Min(0),
-                Constraint::Length(2),
-            ])
-            .split(area);
-
-        let title = Paragraph::new("Rusty Console - Docker Manager")
-            .style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .block(Block::default().borders(Borders::ALL));
-        frame.render_widget(title, chunks[0]);
-
-        let items: Vec<ListItem> = vec![
-            ListItem::new("  Containers"),
-            ListItem::new("  Volumes"),
-            ListItem::new("  Images"),
-            ListItem::new("  Stacks"),
-            ListItem::new("  Quit"),
-        ];
-
-        let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Menu ")
-                    .title_style(Style::default().fg(Color::Yellow)),
-            )
-            .highlight_style(
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol("> ");
-
-        frame.render_stateful_widget(list, chunks[1], &mut self.menu_state);
-
-        let help = Paragraph::new(" j/k: Navigate | Enter: Select | q: Quit ")
-            .style(Style::default().fg(Color::DarkGray))
-            .block(Block::default().borders(Borders::TOP));
-        frame.render_widget(help, chunks[2]);
     }
 
     async fn handle_action(&mut self, action: AppAction) {
@@ -384,13 +318,23 @@ impl App {
             AppAction::Quit => self.should_quit = true,
             AppAction::NavigateUp => {
                 if let Some(selected) = self.menu_state.selected() {
-                    let new_selected = if selected == 0 { 4 } else { selected - 1 };
+                    let last_index = resources::MAIN_MENU_ITEMS.len() - 1;
+                    let new_selected = if selected == 0 {
+                        last_index
+                    } else {
+                        selected - 1
+                    };
                     self.menu_state.select(Some(new_selected));
                 }
             }
             AppAction::NavigateDown => {
                 if let Some(selected) = self.menu_state.selected() {
-                    let new_selected = if selected >= 4 { 0 } else { selected + 1 };
+                    let last_index = resources::MAIN_MENU_ITEMS.len() - 1;
+                    let new_selected = if selected >= last_index {
+                        0
+                    } else {
+                        selected + 1
+                    };
                     self.menu_state.select(Some(new_selected));
                 }
             }
@@ -516,7 +460,8 @@ impl App {
                     if volume.can_delete {
                         self.confirm_dialog = Some((ConfirmAction::DeleteVolume, true));
                     } else {
-                        self.error_message = Some("Cannot delete volume: it is in use".to_string());
+                        self.error_message =
+                            Some(resources::VOLUME_IN_USE_DELETE_MESSAGE.to_string());
                     }
                 }
             }
@@ -609,10 +554,10 @@ impl App {
             ConfirmAction::PruneContainers => {
                 match self.container_actions.prune_containers().await {
                     Ok(result) => {
-                        self.error_message = Some(format!(
-                            "Pruned {} container(s), freed {}",
+                        self.error_message = Some(resources::prune_result_message(
+                            "container",
                             result.deleted_count,
-                            format_bytes(result.space_freed)
+                            &format_bytes(result.space_freed),
                         ));
                         self.load_containers().await;
                     }
@@ -621,10 +566,10 @@ impl App {
             }
             ConfirmAction::PruneVolumes => match self.volume_actions.prune_volumes().await {
                 Ok(result) => {
-                    self.error_message = Some(format!(
-                        "Pruned {} volume(s), freed {}",
+                    self.error_message = Some(resources::prune_result_message(
+                        "volume",
                         result.deleted_count,
-                        format_bytes(result.space_freed)
+                        &format_bytes(result.space_freed),
                     ));
                     self.load_volumes().await;
                 }
@@ -632,10 +577,10 @@ impl App {
             },
             ConfirmAction::PruneImages => match self.image_actions.prune_images().await {
                 Ok(result) => {
-                    self.error_message = Some(format!(
-                        "Pruned {} image(s), freed {}",
+                    self.error_message = Some(resources::prune_result_message(
+                        "image",
                         result.deleted_count,
-                        format_bytes(result.space_freed)
+                        &format_bytes(result.space_freed),
                     ));
                     self.load_images().await;
                 }
@@ -661,10 +606,10 @@ impl App {
 
     fn is_filter_active(&self) -> bool {
         match self.screen {
-            Screen::ContainerList => self.container_presenter.filter_active,
-            Screen::VolumeList => self.volume_presenter.filter_active,
-            Screen::ImageList => self.image_presenter.filter_active,
-            Screen::StackList => self.stack_presenter.filter_active,
+            Screen::ContainerList => self.container_presenter.is_filter_active(),
+            Screen::VolumeList => self.volume_presenter.is_filter_active(),
+            Screen::ImageList => self.image_presenter.is_filter_active(),
+            Screen::StackList => self.stack_presenter.is_filter_active(),
             _ => false,
         }
     }
@@ -716,7 +661,9 @@ impl App {
     async fn load_container_details(&mut self, id: &str) {
         match self.container_actions.load_container_details(id).await {
             Ok(Some(container)) => self.container_presenter.set_details(container),
-            Ok(None) => self.error_message = Some("Container not found".to_string()),
+            Ok(None) => {
+                self.error_message = Some(resources::CONTAINER_NOT_FOUND_MESSAGE.to_string())
+            }
             Err(e) => self.error_message = Some(e.to_string()),
         }
     }
@@ -941,6 +888,30 @@ impl App {
     }
 }
 
+fn confirm_message(action: ConfirmAction) -> &'static str {
+    match action {
+        ConfirmAction::DeleteContainer(force) => {
+            if force {
+                resources::FORCE_DELETE_CONTAINER_MESSAGE
+            } else {
+                resources::DELETE_CONTAINER_MESSAGE
+            }
+        }
+        ConfirmAction::DeleteVolume => resources::DELETE_VOLUME_MESSAGE,
+        ConfirmAction::DeleteImage(force) => {
+            if force {
+                resources::FORCE_DELETE_IMAGE_MESSAGE
+            } else {
+                resources::DELETE_IMAGE_MESSAGE
+            }
+        }
+        ConfirmAction::PruneContainers => resources::PRUNE_CONTAINERS_MESSAGE,
+        ConfirmAction::PruneVolumes => resources::PRUNE_VOLUMES_MESSAGE,
+        ConfirmAction::PruneImages => resources::PRUNE_IMAGES_MESSAGE,
+        ConfirmAction::RemoveAllStackContainers => resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE,
+    }
+}
+
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -954,5 +925,743 @@ fn format_bytes(bytes: u64) -> String {
         format!("{:.1} KB", bytes as f64 / KB as f64)
     } else {
         format!("{} B", bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{confirm_message, format_bytes, App, ConfirmAction, Screen};
+    use crate::application::container::traits::MockContainerRepository;
+    use crate::application::container::{ContainerDto, ContainerService};
+    use crate::application::image::traits::MockImageRepository;
+    use crate::application::image::{ImageDto, ImageService};
+    use crate::application::stack::traits::MockStackRepository;
+    use crate::application::stack::{StackContainerDto, StackDto, StackService};
+    use crate::application::volume::traits::MockVolumeRepository;
+    use crate::application::volume::{VolumeDto, VolumeService};
+    use crate::domain::container::ContainerState;
+    use crate::domain::image::{Image, ImageId, ImageSize};
+    use crate::domain::stack::{Stack, StackContainerState, StackName};
+    use crate::presentation::tui::common::{resources, AppAction};
+    use crate::presentation::tui::container::ContainerActions;
+    use crate::presentation::tui::image::ImageActions;
+    use crate::presentation::tui::stack::StackActions;
+    use crate::presentation::tui::volume::VolumeActions;
+    use crate::shared::PruneResultDto;
+    use chrono::Utc;
+    use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
+    use std::sync::Arc;
+
+    fn buffer_text(buffer: &Buffer) -> String {
+        buffer
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>()
+    }
+
+    fn make_container_dto() -> ContainerDto {
+        ContainerDto {
+            id: "abc123".to_string(),
+            short_id: "abc123".to_string(),
+            name: "web".to_string(),
+            image: "nginx:latest".to_string(),
+            state: ContainerState::Running,
+            status: "Up 5 minutes".to_string(),
+            created: "2024-01-01".to_string(),
+            ports: "80:80".to_string(),
+            networks: "bridge".to_string(),
+            can_start: false,
+            can_stop: true,
+            can_delete: true,
+            can_restart: true,
+            can_pause: true,
+            can_unpause: false,
+            env_vars: vec!["RUST_LOG=info".to_string()],
+        }
+    }
+
+    fn make_stopped_container_dto() -> ContainerDto {
+        ContainerDto {
+            can_start: true,
+            can_stop: false,
+            can_pause: false,
+            can_unpause: false,
+            can_restart: false,
+            state: ContainerState::Stopped,
+            status: "Exited".to_string(),
+            ..make_container_dto()
+        }
+    }
+
+    fn make_volume_dto(in_use: bool, can_delete: bool) -> VolumeDto {
+        VolumeDto {
+            id: "vol-1".to_string(),
+            name: "db-data".to_string(),
+            driver: "local".to_string(),
+            mountpoint: "/var/lib/docker/volumes/db-data/_data".to_string(),
+            size: "10 MB".to_string(),
+            created: "2024-01-01".to_string(),
+            in_use,
+            can_delete,
+        }
+    }
+
+    fn make_image_dto(in_use: bool) -> ImageDto {
+        ImageDto {
+            id: "sha256:abc".to_string(),
+            short_id: "abc".to_string(),
+            repository: "nginx".to_string(),
+            tag: "latest".to_string(),
+            full_name: "nginx:latest".to_string(),
+            size: "12 MB".to_string(),
+            created: "2024-01-01".to_string(),
+            in_use,
+            is_dangling: false,
+            can_delete: true,
+        }
+    }
+
+    fn make_stack_container(can_start: bool, can_stop: bool) -> StackContainerDto {
+        StackContainerDto {
+            id: "stack-1".to_string(),
+            name: "web".to_string(),
+            image: "nginx:latest".to_string(),
+            state: if can_stop {
+                StackContainerState::Running
+            } else {
+                StackContainerState::Stopped
+            },
+            status: if can_stop {
+                "Up".to_string()
+            } else {
+                "Exited".to_string()
+            },
+            ports: "80/tcp".to_string(),
+            can_start,
+            can_stop,
+        }
+    }
+
+    fn make_stack_dto(containers: Vec<StackContainerDto>) -> StackDto {
+        StackDto {
+            name: "compose-app".to_string(),
+            container_count: containers.len(),
+            running_count: containers
+                .iter()
+                .filter(|container| container.can_stop)
+                .count(),
+            containers,
+        }
+    }
+
+    fn make_image() -> Image {
+        Image::new(
+            ImageId::new("sha256:abc").unwrap(),
+            "nginx",
+            "latest",
+            ImageSize::new(1_000_000),
+            Utc::now(),
+        )
+    }
+
+    fn make_stack(containers: usize) -> Stack {
+        let domain_containers = (0..containers)
+            .map(|index| {
+                crate::domain::stack::StackContainer::new(
+                    format!("id-{index}"),
+                    format!("svc-{index}"),
+                    "nginx:latest",
+                    crate::domain::stack::StackContainerState::Running,
+                    "Up",
+                    "80/tcp",
+                )
+            })
+            .collect();
+        Stack::new(StackName::new("compose-app").unwrap(), domain_containers)
+    }
+
+    fn build_app(
+        container_repo: MockContainerRepository,
+        volume_repo: MockVolumeRepository,
+        image_repo: MockImageRepository,
+        stack_repo: MockStackRepository,
+    ) -> App {
+        let container_actions =
+            ContainerActions::new(ContainerService::new(Arc::new(container_repo)));
+        let volume_actions = VolumeActions::new(VolumeService::new(Arc::new(volume_repo)));
+        let image_actions = ImageActions::new(ImageService::new(Arc::new(image_repo)));
+        let stack_actions = StackActions::new(StackService::new(Arc::new(stack_repo)));
+        App::new(
+            container_actions,
+            volume_actions,
+            image_actions,
+            stack_actions,
+        )
+    }
+
+    fn empty_app() -> App {
+        build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+        )
+    }
+
+    fn render_app(app: &mut App) -> String {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|frame| app.render(frame)).unwrap();
+        buffer_text(terminal.backend().buffer())
+    }
+
+    #[test]
+    fn test_new_render_confirm_message_and_format_bytes() {
+        let mut app = empty_app();
+        let rendered = render_app(&mut app);
+        assert_eq!(app.screen, Screen::MainMenu);
+        assert_eq!(app.menu_state.selected(), Some(0));
+        assert!(rendered.contains(resources::MAIN_MENU_TITLE));
+
+        assert_eq!(
+            confirm_message(ConfirmAction::DeleteContainer(false)),
+            resources::DELETE_CONTAINER_MESSAGE
+        );
+        assert_eq!(
+            confirm_message(ConfirmAction::DeleteContainer(true)),
+            resources::FORCE_DELETE_CONTAINER_MESSAGE
+        );
+        assert_eq!(
+            confirm_message(ConfirmAction::RemoveAllStackContainers),
+            resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE
+        );
+
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(2 * 1024), "2.0 KB");
+        assert_eq!(format_bytes(3 * 1024 * 1024), "3.0 MB");
+        assert_eq!(format_bytes(4 * 1024 * 1024 * 1024), "4.0 GB");
+    }
+
+    #[test]
+    fn test_render_for_all_screens_and_overlays() {
+        let mut app = empty_app();
+        let container = make_container_dto();
+        let volume = make_volume_dto(false, true);
+        let image = make_image_dto(true);
+        let stack = make_stack_dto(vec![make_stack_container(false, true)]);
+
+        app.container_presenter
+            .set_containers(vec![container.clone()]);
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: container.id.clone(),
+                container_name: container.name.clone(),
+                logs: "line1".to_string(),
+            });
+        app.container_presenter.set_details(container.clone());
+        app.volume_presenter.set_volumes(vec![volume]);
+        app.image_presenter.set_images(vec![image.clone()]);
+        app.image_presenter.set_details(image);
+        app.stack_presenter.set_stacks(vec![stack.clone()]);
+        app.stack_presenter
+            .set_stack_containers(stack.containers.clone());
+
+        app.screen = Screen::ContainerList;
+        assert!(render_app(&mut app).contains("Containers"));
+        app.screen = Screen::ContainerLogs;
+        assert!(render_app(&mut app).contains("line1"));
+        app.screen = Screen::ContainerDetails;
+        assert!(render_app(&mut app).contains("Container Details"));
+        app.screen = Screen::VolumeList;
+        assert!(render_app(&mut app).contains("Volumes"));
+        app.screen = Screen::ImageList;
+        assert!(render_app(&mut app).contains("Images"));
+        app.screen = Screen::ImageDetails;
+        assert!(render_app(&mut app).contains("Image Details"));
+        app.screen = Screen::StackList;
+        assert!(render_app(&mut app).contains("Stacks"));
+        app.screen = Screen::StackContainers;
+        assert!(render_app(&mut app).contains("compose-app"));
+
+        app.confirm_dialog = Some((ConfirmAction::DeleteVolume, true));
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains(resources::DELETE_VOLUME_MESSAGE));
+
+        app.error_message = Some("boom".to_string());
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("boom"));
+    }
+
+    #[tokio::test]
+    async fn test_handle_action_clears_error_and_handles_confirm_dialog() {
+        let mut app = empty_app();
+        app.error_message = Some("boom".to_string());
+        app.handle_action(AppAction::Quit).await;
+        assert!(app.error_message.is_none());
+        assert!(!app.should_quit);
+
+        app.confirm_dialog = Some((ConfirmAction::DeleteVolume, true));
+        app.handle_action(AppAction::NavigateDown).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::DeleteVolume, false))
+        );
+
+        app.handle_action(AppAction::Back).await;
+        assert!(app.confirm_dialog.is_none());
+
+        app.confirm_dialog = Some((ConfirmAction::DeleteVolume, false));
+        app.handle_action(AppAction::Select).await;
+        assert!(app.confirm_dialog.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_handle_main_menu_navigation_and_quit() {
+        let mut app = empty_app();
+
+        app.handle_main_menu_action(AppAction::NavigateUp).await;
+        assert_eq!(
+            app.menu_state.selected(),
+            Some(resources::MAIN_MENU_ITEMS.len() - 1)
+        );
+
+        app.handle_main_menu_action(AppAction::NavigateDown).await;
+        assert_eq!(app.menu_state.selected(), Some(0));
+
+        app.handle_main_menu_action(AppAction::Quit).await;
+        assert!(app.should_quit);
+    }
+
+    #[tokio::test]
+    async fn test_handle_main_menu_select_loads_each_screen() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_get_all().returning(|| {
+            Ok(vec![crate::domain::container::Container::new(
+                crate::domain::container::ContainerId::new("abc123").unwrap(),
+                "web",
+                "nginx:latest",
+                ContainerState::Running,
+                "Up",
+                Utc::now(),
+            )])
+        });
+        let mut volume_repo = MockVolumeRepository::new();
+        volume_repo.expect_get_all().returning(|| {
+            Ok(vec![crate::domain::volume::Volume::new(
+                crate::domain::volume::VolumeId::new("vol1").unwrap(),
+                "db-data",
+                "local",
+                "/tmp".to_string(),
+            )])
+        });
+        let mut image_repo = MockImageRepository::new();
+        image_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_image()]));
+        let mut stack_repo = MockStackRepository::new();
+        stack_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_stack(1)]));
+
+        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+
+        app.menu_state.select(Some(0));
+        app.handle_main_menu_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::ContainerList);
+        assert_eq!(app.container_presenter.containers.len(), 1);
+
+        app.screen = Screen::MainMenu;
+        app.menu_state.select(Some(1));
+        app.handle_main_menu_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::VolumeList);
+        assert_eq!(app.volume_presenter.volumes.len(), 1);
+
+        app.screen = Screen::MainMenu;
+        app.menu_state.select(Some(2));
+        app.handle_main_menu_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::ImageList);
+        assert_eq!(app.image_presenter.images.len(), 1);
+
+        app.screen = Screen::MainMenu;
+        app.menu_state.select(Some(3));
+        app.handle_main_menu_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::StackList);
+        assert_eq!(app.stack_presenter.stacks.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_handle_container_list_actions_cover_navigation_and_mutations() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo
+            .expect_get_logs()
+            .returning(|_, _| Ok("line1\nline2".to_string()));
+        container_repo.expect_get_by_id().returning(|_| {
+            Ok(Some(crate::domain::container::Container::new(
+                crate::domain::container::ContainerId::new("abc123").unwrap(),
+                "web",
+                "nginx:latest",
+                ContainerState::Running,
+                "Up",
+                Utc::now(),
+            )))
+        });
+        container_repo.expect_stop().returning(|_| Ok(()));
+        container_repo.expect_pause().returning(|_| Ok(()));
+        container_repo.expect_restart().returning(|_| Ok(()));
+        container_repo.expect_get_all().times(4).returning(|| {
+            Ok(vec![crate::domain::container::Container::new(
+                crate::domain::container::ContainerId::new("abc123").unwrap(),
+                "web",
+                "nginx:latest",
+                ContainerState::Running,
+                "Up",
+                Utc::now(),
+            )])
+        });
+
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+
+        app.handle_container_list_action(AppAction::NavigateDown)
+            .await;
+        app.handle_container_list_action(AppAction::NavigateUp)
+            .await;
+        app.handle_container_list_action(AppAction::ActivateFilter)
+            .await;
+        assert!(app.container_presenter.is_filter_active());
+
+        app.handle_container_list_action(AppAction::ViewLogs).await;
+        assert_eq!(app.screen, Screen::ContainerLogs);
+
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::ViewDetails)
+            .await;
+        assert_eq!(app.screen, Screen::ContainerDetails);
+
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::StartStop).await;
+        app.handle_container_list_action(AppAction::PauseUnpause)
+            .await;
+        app.handle_container_list_action(AppAction::Restart).await;
+        app.handle_container_list_action(AppAction::Refresh).await;
+
+        app.handle_container_list_action(AppAction::Delete).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::DeleteContainer(true), true))
+        );
+
+        app.confirm_dialog = None;
+        app.handle_container_list_action(AppAction::Prune).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::PruneContainers, true))
+        );
+
+        app.handle_container_list_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::MainMenu);
+    }
+
+    #[tokio::test]
+    async fn test_handle_container_log_and_details_actions() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                logs: "line1".to_string(),
+            });
+        app.handle_container_logs_action(AppAction::ScrollDown);
+        app.handle_container_logs_action(AppAction::ScrollUp);
+        app.handle_container_logs_action(AppAction::Back);
+        assert_eq!(app.screen, Screen::ContainerList);
+        assert!(app.container_presenter.logs.is_none());
+
+        app.screen = Screen::ContainerDetails;
+        app.container_presenter.set_details(make_container_dto());
+        app.handle_details_action(AppAction::Quit);
+        assert_eq!(app.screen, Screen::ContainerList);
+
+        app.screen = Screen::ImageDetails;
+        app.image_presenter.set_details(make_image_dto(true));
+        app.handle_details_action(AppAction::Back);
+        assert_eq!(app.screen, Screen::ImageList);
+    }
+
+    #[tokio::test]
+    async fn test_volume_and_image_list_actions() {
+        let mut volume_repo = MockVolumeRepository::new();
+        volume_repo.expect_get_all().returning(|| Ok(vec![]));
+        let mut image_repo = MockImageRepository::new();
+        image_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_image()]));
+
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            volume_repo,
+            image_repo,
+            MockStackRepository::new(),
+        );
+
+        app.screen = Screen::VolumeList;
+        app.volume_presenter
+            .set_volumes(vec![make_volume_dto(true, false)]);
+        app.handle_volume_list_action(AppAction::Delete).await;
+        assert_eq!(
+            app.error_message,
+            Some(resources::VOLUME_IN_USE_DELETE_MESSAGE.to_string())
+        );
+        app.error_message = None;
+        app.volume_presenter
+            .set_volumes(vec![make_volume_dto(false, true)]);
+        app.handle_volume_list_action(AppAction::Delete).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::DeleteVolume, true))
+        );
+        app.confirm_dialog = None;
+        app.handle_volume_list_action(AppAction::Prune).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::PruneVolumes, true))
+        );
+        app.confirm_dialog = None;
+        app.handle_volume_list_action(AppAction::ActivateFilter)
+            .await;
+        assert!(app.volume_presenter.is_filter_active());
+        app.handle_volume_list_action(AppAction::Refresh).await;
+
+        app.screen = Screen::ImageList;
+        app.image_presenter.set_images(vec![make_image_dto(true)]);
+        app.handle_image_list_action(AppAction::ViewDetails).await;
+        assert_eq!(app.screen, Screen::ImageDetails);
+        app.screen = Screen::ImageList;
+        app.handle_image_list_action(AppAction::Delete).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::DeleteImage(true), true))
+        );
+        app.confirm_dialog = None;
+        app.handle_image_list_action(AppAction::Prune).await;
+        assert_eq!(app.confirm_dialog, Some((ConfirmAction::PruneImages, true)));
+        app.confirm_dialog = None;
+        app.handle_image_list_action(AppAction::ActivateFilter)
+            .await;
+        assert!(app.image_presenter.is_filter_active());
+        app.handle_image_list_action(AppAction::Refresh).await;
+    }
+
+    #[tokio::test]
+    async fn test_execute_confirm_action_delete_and_prune_paths() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo
+            .expect_delete()
+            .times(2)
+            .returning(|_, _| Ok(()));
+        container_repo.expect_prune().returning(|| {
+            Ok(PruneResultDto {
+                deleted_count: 2,
+                space_freed: 1024,
+            })
+        });
+        container_repo
+            .expect_get_all()
+            .times(2)
+            .returning(|| Ok(vec![]));
+        let mut volume_repo = MockVolumeRepository::new();
+        volume_repo.expect_delete().returning(|_| Ok(()));
+        volume_repo.expect_prune().returning(|| {
+            Ok(PruneResultDto {
+                deleted_count: 1,
+                space_freed: 256,
+            })
+        });
+        volume_repo
+            .expect_get_all()
+            .times(2)
+            .returning(|| Ok(vec![]));
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_delete().returning(|_, _| Ok(()));
+        image_repo.expect_prune().returning(|| {
+            Ok(PruneResultDto {
+                deleted_count: 3,
+                space_freed: 2048,
+            })
+        });
+        image_repo
+            .expect_get_all()
+            .times(2)
+            .returning(|| Ok(vec![make_image()]));
+        let mut stack_repo = MockStackRepository::new();
+        stack_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_stack(1)]));
+        stack_repo.expect_remove_all().returning(|_| Ok(()));
+
+        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.volume_presenter
+            .set_volumes(vec![make_volume_dto(false, true)]);
+        app.image_presenter.set_images(vec![make_image_dto(true)]);
+        app.stack_presenter
+            .set_stacks(vec![make_stack_dto(vec![make_stack_container(
+                false, true,
+            )])]);
+        app.stack_presenter
+            .set_stack_containers(vec![make_stack_container(false, true)]);
+
+        app.execute_confirm_action(ConfirmAction::DeleteContainer(true))
+            .await;
+        app.execute_confirm_action(ConfirmAction::PruneContainers)
+            .await;
+        assert!(app
+            .error_message
+            .as_ref()
+            .unwrap()
+            .contains("Pruned 2 container(s)"));
+
+        app.execute_confirm_action(ConfirmAction::DeleteVolume)
+            .await;
+        app.execute_confirm_action(ConfirmAction::PruneVolumes)
+            .await;
+        assert!(app
+            .error_message
+            .as_ref()
+            .unwrap()
+            .contains("Pruned 1 volume(s)"));
+
+        app.execute_confirm_action(ConfirmAction::DeleteImage(true))
+            .await;
+        app.execute_confirm_action(ConfirmAction::PruneImages).await;
+        assert!(app
+            .error_message
+            .as_ref()
+            .unwrap()
+            .contains("Pruned 3 image(s)"));
+
+        app.screen = Screen::StackContainers;
+        app.execute_confirm_action(ConfirmAction::DeleteContainer(true))
+            .await;
+        app.execute_confirm_action(ConfirmAction::RemoveAllStackContainers)
+            .await;
+        assert_eq!(app.screen, Screen::StackList);
+    }
+
+    #[tokio::test]
+    async fn test_filter_key_and_load_helpers() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_get_all().returning(|| Ok(vec![]));
+        container_repo.expect_get_by_id().returning(|_| Ok(None));
+        let mut volume_repo = MockVolumeRepository::new();
+        volume_repo.expect_get_all().returning(|| Ok(vec![]));
+        let mut image_repo = MockImageRepository::new();
+        image_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_image()]));
+        let mut stack_repo = MockStackRepository::new();
+        stack_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_stack(1)]));
+
+        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+
+        app.screen = Screen::ContainerList;
+        app.container_presenter.activate_filter();
+        assert!(app.handle_filter_key(crossterm::event::KeyCode::Char('a')));
+        assert_eq!(app.container_presenter.filter.value(), "a");
+        assert!(app.handle_filter_key(crossterm::event::KeyCode::Backspace));
+        assert!(app.container_presenter.filter.value().is_empty());
+        assert!(app.handle_filter_key(crossterm::event::KeyCode::Esc));
+        assert!(!app.container_presenter.is_filter_active());
+        assert!(!app.handle_filter_key(crossterm::event::KeyCode::Enter));
+
+        app.load_containers().await;
+        app.load_volumes().await;
+        app.load_images().await;
+        app.load_stacks().await;
+        app.load_container_details("missing").await;
+        assert_eq!(
+            app.error_message,
+            Some(resources::CONTAINER_NOT_FOUND_MESSAGE.to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_toggle_pause_restart_and_stack_actions() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_start().returning(|_| Ok(()));
+        container_repo.expect_pause().returning(|_| Ok(()));
+        container_repo.expect_unpause().returning(|_| Ok(()));
+        container_repo.expect_restart().returning(|_| Ok(()));
+        container_repo.expect_get_all().returning(|| Ok(vec![]));
+        let mut stack_repo = MockStackRepository::new();
+        stack_repo
+            .expect_get_all()
+            .times(4)
+            .returning(|| Ok(vec![make_stack(1)]));
+        stack_repo.expect_start_all().times(1).returning(|_| Ok(()));
+        stack_repo.expect_stop_all().times(2).returning(|_| Ok(()));
+
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            stack_repo,
+        );
+
+        app.toggle_container(&make_stopped_container_dto()).await;
+        let mut unpause_container = make_stopped_container_dto();
+        unpause_container.can_unpause = true;
+        app.pause_unpause_container(&make_container_dto()).await;
+        app.pause_unpause_container(&unpause_container).await;
+        app.restart_container(&make_container_dto()).await;
+        app.restart_container(&make_stopped_container_dto()).await;
+
+        let stack = make_stack_dto(vec![
+            make_stack_container(true, false),
+            make_stack_container(false, true),
+        ]);
+        app.stack_presenter.set_stacks(vec![stack.clone()]);
+        app.screen = Screen::StackList;
+        app.handle_stack_list_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::StackContainers);
+
+        app.screen = Screen::StackList;
+        app.handle_stack_list_action(AppAction::StartStop).await;
+        app.handle_stack_list_action(AppAction::StopAll).await;
+        app.handle_stack_list_action(AppAction::ActivateFilter)
+            .await;
+        assert!(app.stack_presenter.is_filter_active());
+
+        app.stack_presenter.set_stack_containers(stack.containers);
+        app.screen = Screen::StackContainers;
+        app.handle_stack_containers_action(AppAction::StartStop)
+            .await;
+        app.handle_stack_containers_action(AppAction::Delete).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::DeleteContainer(true), true))
+        );
+        app.confirm_dialog = None;
+        app.handle_stack_containers_action(AppAction::StopAll).await;
+        app.handle_stack_containers_action(AppAction::StartAll)
+            .await;
+        app.handle_stack_containers_action(AppAction::RemoveAll)
+            .await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::RemoveAllStackContainers, true))
+        );
     }
 }

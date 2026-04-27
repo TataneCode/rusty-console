@@ -1,10 +1,17 @@
 use ratatui::{
-    layout::{Constraint, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Clear, Paragraph, Row, Table, TableState, Wrap},
     Frame,
 };
 
-use super::theme::Theme;
+use super::{resources, theme::Theme};
+
+pub const HELP_BAR_HEIGHT: u16 = 2;
+pub const MAIN_MENU_TITLE_HEIGHT: u16 = 3;
+pub const CONFIRM_DIALOG_WIDTH_PERCENT: u16 = 50;
+pub const CONFIRM_DIALOG_HEIGHT_PERCENT: u16 = 20;
+pub const ERROR_DIALOG_WIDTH_PERCENT: u16 = 60;
+pub const ERROR_DIALOG_HEIGHT_PERCENT: u16 = 20;
 
 pub struct TableSelection {
     pub state: TableState,
@@ -69,6 +76,14 @@ impl TableSelection {
     pub fn selected(&self) -> Option<usize> {
         self.state.selected()
     }
+
+    pub fn select(&mut self, index: Option<usize>) {
+        match index {
+            Some(index) if index < self.items_count => self.state.select(Some(index)),
+            Some(_) if self.items_count > 0 => self.state.select(Some(self.items_count - 1)),
+            _ => self.state.select(None),
+        }
+    }
 }
 
 impl Default for TableSelection {
@@ -116,7 +131,11 @@ pub fn render_help(frame: &mut Frame, area: Rect, help_text: &str) {
 }
 
 pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: bool) {
-    let area = centered_rect(50, 20, frame.area());
+    let area = centered_rect(
+        CONFIRM_DIALOG_WIDTH_PERCENT,
+        CONFIRM_DIALOG_HEIGHT_PERCENT,
+        frame.area(),
+    );
 
     frame.render_widget(Clear, area);
 
@@ -132,13 +151,18 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
         Theme::default_style()
     };
 
-    let text = format!("{}\n\n  [Yes]  [No]", message);
+    let text = format!(
+        "{}\n\n{}  {}",
+        message,
+        resources::CONFIRM_YES_LABEL,
+        resources::CONFIRM_NO_LABEL
+    );
 
     let dialog = Paragraph::new(text)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Confirm ")
+                .title(resources::CONFIRM_TITLE)
                 .title_style(Theme::title_style())
                 .border_style(Theme::selected_border_style()),
         )
@@ -154,20 +178,20 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
         height: 1,
     };
 
-    let yes_text = Paragraph::new("  [Yes]").style(yes_style);
-    let no_text = Paragraph::new("  [No]").style(no_style);
+    let yes_text = Paragraph::new(resources::CONFIRM_YES_LABEL).style(yes_style);
+    let no_text = Paragraph::new(resources::CONFIRM_NO_LABEL).style(no_style);
 
     let yes_area = Rect {
         x: button_area.x,
         y: button_area.y,
-        width: 7,
+        width: resources::CONFIRM_YES_BUTTON_WIDTH,
         height: 1,
     };
 
     let no_area = Rect {
-        x: button_area.x + 9,
+        x: button_area.x + resources::CONFIRM_BUTTON_SPACING,
         y: button_area.y,
-        width: 6,
+        width: resources::CONFIRM_NO_BUTTON_WIDTH,
         height: 1,
     };
 
@@ -176,7 +200,11 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
 }
 
 pub fn render_error_popup(frame: &mut Frame, error: &str) {
-    let area = centered_rect(60, 20, frame.area());
+    let area = centered_rect(
+        ERROR_DIALOG_WIDTH_PERCENT,
+        ERROR_DIALOG_HEIGHT_PERCENT,
+        frame.area(),
+    );
 
     frame.render_widget(Clear, area);
 
@@ -185,13 +213,54 @@ pub fn render_error_popup(frame: &mut Frame, error: &str) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Error ")
+                .title(resources::ERROR_TITLE)
                 .title_style(Theme::error_style())
                 .border_style(Theme::error_style()),
         )
         .wrap(Wrap { trim: true });
 
     frame.render_widget(error_widget, area);
+}
+
+pub fn split_content_area(area: Rect) -> [Rect; 2] {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(HELP_BAR_HEIGHT)])
+        .split(area);
+
+    [chunks[0], chunks[1]]
+}
+
+pub fn split_menu_area(area: Rect) -> [Rect; 3] {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(MAIN_MENU_TITLE_HEIGHT),
+            Constraint::Min(0),
+            Constraint::Length(HELP_BAR_HEIGHT),
+        ])
+        .split(area);
+
+    [chunks[0], chunks[1], chunks[2]]
+}
+
+pub fn truncate_text(text: &str, max_chars: usize) -> String {
+    let text_len = text.chars().count();
+    if text_len <= max_chars {
+        return text.to_string();
+    }
+
+    let marker_len = resources::TRUNCATION_MARKER.chars().count();
+    if max_chars <= marker_len {
+        return resources::TRUNCATION_MARKER
+            .chars()
+            .take(max_chars)
+            .collect();
+    }
+
+    let visible_chars = max_chars - marker_len;
+    let truncated: String = text.chars().take(visible_chars).collect();
+    format!("{truncated}{}", resources::TRUNCATION_MARKER)
 }
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -205,5 +274,26 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         y: r.y + popup_y,
         width: popup_width,
         height: popup_height,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{truncate_text, TableSelection};
+
+    #[test]
+    fn test_truncate_text_handles_utf8_boundaries() {
+        assert_eq!(truncate_text("ééééé", 4), "é...");
+        assert_eq!(truncate_text("🦀🦀🦀🦀🦀", 4), "🦀...");
+    }
+
+    #[test]
+    fn test_table_selection_select_clamps_to_last_item() {
+        let mut selection = TableSelection::new();
+        selection.set_items(2);
+
+        selection.select(Some(99));
+
+        assert_eq!(selection.selected(), Some(1));
     }
 }

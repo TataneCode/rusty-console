@@ -1,5 +1,5 @@
 use crate::application::stack::{StackContainerDto, StackDto};
-use crate::presentation::tui::common::TableSelection;
+use crate::presentation::tui::common::{FilterState, TableSelection};
 
 pub struct StackPresenter {
     pub stacks: Vec<StackDto>,
@@ -8,8 +8,7 @@ pub struct StackPresenter {
     pub container_selection: TableSelection,
     pub loading: bool,
     pub error: Option<String>,
-    pub filter: String,
-    pub filter_active: bool,
+    pub filter: FilterState,
 }
 
 impl StackPresenter {
@@ -21,8 +20,7 @@ impl StackPresenter {
             container_selection: TableSelection::new(),
             loading: false,
             error: None,
-            filter: String::new(),
-            filter_active: false,
+            filter: FilterState::new(),
         }
     }
 
@@ -41,10 +39,10 @@ impl StackPresenter {
     }
 
     pub fn filtered_stacks(&self) -> Vec<&StackDto> {
-        if self.filter.is_empty() {
+        if self.filter.value().is_empty() {
             self.stacks.iter().collect()
         } else {
-            let filter_lower = self.filter.to_lowercase();
+            let filter_lower = self.filter.value().to_lowercase();
             self.stacks
                 .iter()
                 .filter(|s| s.name.to_lowercase().contains(&filter_lower))
@@ -64,7 +62,7 @@ impl StackPresenter {
             .filtered_stacks()
             .iter()
             .position(|stack| stack.name == stack_name);
-        self.selection.state.select(selected);
+        self.selection.select(selected);
         selected.is_some()
     }
 
@@ -96,23 +94,30 @@ impl StackPresenter {
     }
 
     pub fn activate_filter(&mut self) {
-        self.filter_active = true;
+        self.filter.activate();
     }
 
     pub fn deactivate_filter(&mut self) {
-        self.filter_active = false;
-        self.filter.clear();
+        self.filter.deactivate();
         self.update_filtered_selection();
     }
 
     pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push(c);
+        self.filter.push_char(c);
         self.update_filtered_selection();
     }
 
     pub fn pop_filter_char(&mut self) {
-        self.filter.pop();
+        self.filter.pop_char();
         self.update_filtered_selection();
+    }
+
+    pub fn is_filter_active(&self) -> bool {
+        self.filter.is_active()
+    }
+
+    pub fn active_filter(&self) -> Option<&str> {
+        self.filter.active_value()
     }
 
     fn update_filtered_selection(&mut self) {
@@ -162,8 +167,8 @@ mod tests {
         assert!(p.selected_stack_container().is_none());
         assert!(!p.loading);
         assert!(p.error.is_none());
-        assert!(p.filter.is_empty());
-        assert!(!p.filter_active);
+        assert!(p.filter.value().is_empty());
+        assert!(!p.filter.is_active());
     }
 
     #[test]
@@ -282,11 +287,11 @@ mod tests {
         let mut p = StackPresenter::new();
         p.set_stacks(three_stacks());
         p.activate_filter();
-        assert!(p.filter_active);
+        assert!(p.filter.is_active());
         p.push_filter_char('x');
         p.deactivate_filter();
-        assert!(!p.filter_active);
-        assert!(p.filter.is_empty());
+        assert!(!p.filter.is_active());
+        assert!(p.filter.value().is_empty());
         assert_eq!(p.filtered_stacks().len(), 3);
     }
 

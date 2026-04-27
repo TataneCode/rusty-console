@@ -10,6 +10,21 @@ pub struct ImagePresenter {
     pub filter: FilterState,
 }
 
+pub fn filter_images<'a>(images: &'a [ImageDto], filter: &str) -> Vec<&'a ImageDto> {
+    if filter.is_empty() {
+        images.iter().collect()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        images
+            .iter()
+            .filter(|image| {
+                image.repository.to_lowercase().contains(&filter_lower)
+                    || image.tag.to_lowercase().contains(&filter_lower)
+            })
+            .collect()
+    }
+}
+
 impl ImagePresenter {
     pub fn new() -> Self {
         ImagePresenter {
@@ -37,18 +52,7 @@ impl ImagePresenter {
     }
 
     pub fn filtered_images(&self) -> Vec<&ImageDto> {
-        if self.filter.value().is_empty() {
-            self.images.iter().collect()
-        } else {
-            let filter_lower = self.filter.value().to_lowercase();
-            self.images
-                .iter()
-                .filter(|i| {
-                    i.repository.to_lowercase().contains(&filter_lower)
-                        || i.tag.to_lowercase().contains(&filter_lower)
-                })
-                .collect()
-        }
+        filter_images(&self.images, self.filter.value())
     }
 
     pub fn selected_image(&self) -> Option<&ImageDto> {

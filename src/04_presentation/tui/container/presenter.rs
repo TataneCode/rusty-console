@@ -12,6 +12,24 @@ pub struct ContainerPresenter {
     pub filter: FilterState,
 }
 
+pub fn filter_containers<'a>(
+    containers: &'a [ContainerDto],
+    filter: &str,
+) -> Vec<&'a ContainerDto> {
+    if filter.is_empty() {
+        containers.iter().collect()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        containers
+            .iter()
+            .filter(|container| {
+                container.name.to_lowercase().contains(&filter_lower)
+                    || container.image.to_lowercase().contains(&filter_lower)
+            })
+            .collect()
+    }
+}
+
 impl ContainerPresenter {
     pub fn new() -> Self {
         ContainerPresenter {
@@ -41,18 +59,7 @@ impl ContainerPresenter {
     }
 
     pub fn filtered_containers(&self) -> Vec<&ContainerDto> {
-        if self.filter.value().is_empty() {
-            self.containers.iter().collect()
-        } else {
-            let filter_lower = self.filter.value().to_lowercase();
-            self.containers
-                .iter()
-                .filter(|c| {
-                    c.name.to_lowercase().contains(&filter_lower)
-                        || c.image.to_lowercase().contains(&filter_lower)
-                })
-                .collect()
-        }
+        filter_containers(&self.containers, self.filter.value())
     }
 
     pub fn selected_container(&self) -> Option<&ContainerDto> {

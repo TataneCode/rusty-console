@@ -4,17 +4,19 @@ use crate::presentation::tui::common::{
     AppAction,
 };
 use crate::presentation::tui::container::{
-    render_container_details, render_container_list, render_container_logs, ContainerActions,
-    ContainerPresenter,
+    filter_containers, render_container_details, render_container_list, render_container_logs,
+    ContainerActions, ContainerPresenter,
 };
 use crate::presentation::tui::event::{AppEvent, EventHandler};
 use crate::presentation::tui::image::{
-    render_image_details, render_image_list, ImageActions, ImagePresenter,
+    filter_images, render_image_details, render_image_list, ImageActions, ImagePresenter,
 };
 use crate::presentation::tui::stack::{
-    render_stack_containers, render_stack_list, StackActions, StackPresenter,
+    filter_stacks, render_stack_containers, render_stack_list, StackActions, StackPresenter,
 };
-use crate::presentation::tui::volume::{render_volume_list, VolumeActions, VolumePresenter};
+use crate::presentation::tui::volume::{
+    filter_volumes, render_volume_list, VolumeActions, VolumePresenter,
+};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, KeyCode},
     execute,
@@ -138,27 +140,17 @@ impl App {
         match &self.screen {
             Screen::MainMenu => render_main_menu(frame, area, &mut self.menu_state),
             Screen::ContainerList => {
-                let active_filter = self.container_presenter.active_filter().map(str::to_string);
-                let filtered = {
-                    let containers = &self.container_presenter.containers;
-                    if self.container_presenter.filter.value().is_empty() {
-                        containers.iter().collect::<Vec<_>>()
-                    } else {
-                        let filter_lower = self.container_presenter.filter.value().to_lowercase();
-                        containers
-                            .iter()
-                            .filter(|container| {
-                                container.name.to_lowercase().contains(&filter_lower)
-                                    || container.image.to_lowercase().contains(&filter_lower)
-                            })
-                            .collect::<Vec<_>>()
-                    }
-                };
+                let presenter = &mut self.container_presenter;
+                let active_filter = presenter.active_filter().map(str::to_string);
+                let filter = presenter.filter.value().to_string();
+                let containers = &presenter.containers;
+                let selection_state = &mut presenter.selection.state;
+                let filtered = filter_containers(containers, &filter);
                 render_container_list(
                     frame,
                     area,
                     &filtered,
-                    &mut self.container_presenter.selection.state,
+                    selection_state,
                     active_filter.as_deref(),
                 );
             }
@@ -173,49 +165,32 @@ impl App {
                 }
             }
             Screen::VolumeList => {
-                let active_filter = self.volume_presenter.active_filter().map(str::to_string);
-                let filtered = {
-                    let volumes = &self.volume_presenter.volumes;
-                    if self.volume_presenter.filter.value().is_empty() {
-                        volumes.iter().collect::<Vec<_>>()
-                    } else {
-                        let filter_lower = self.volume_presenter.filter.value().to_lowercase();
-                        volumes
-                            .iter()
-                            .filter(|volume| volume.name.to_lowercase().contains(&filter_lower))
-                            .collect::<Vec<_>>()
-                    }
-                };
+                let presenter = &mut self.volume_presenter;
+                let active_filter = presenter.active_filter().map(str::to_string);
+                let filter = presenter.filter.value().to_string();
+                let volumes = &presenter.volumes;
+                let selection_state = &mut presenter.selection.state;
+                let filtered = filter_volumes(volumes, &filter);
                 render_volume_list(
                     frame,
                     area,
                     &filtered,
-                    &mut self.volume_presenter.selection.state,
+                    selection_state,
                     active_filter.as_deref(),
                 );
             }
             Screen::ImageList => {
-                let active_filter = self.image_presenter.active_filter().map(str::to_string);
-                let filtered = {
-                    let images = &self.image_presenter.images;
-                    if self.image_presenter.filter.value().is_empty() {
-                        images.iter().collect::<Vec<_>>()
-                    } else {
-                        let filter_lower = self.image_presenter.filter.value().to_lowercase();
-                        images
-                            .iter()
-                            .filter(|image| {
-                                image.repository.to_lowercase().contains(&filter_lower)
-                                    || image.tag.to_lowercase().contains(&filter_lower)
-                            })
-                            .collect::<Vec<_>>()
-                    }
-                };
+                let presenter = &mut self.image_presenter;
+                let active_filter = presenter.active_filter().map(str::to_string);
+                let filter = presenter.filter.value().to_string();
+                let images = &presenter.images;
+                let selection_state = &mut presenter.selection.state;
+                let filtered = filter_images(images, &filter);
                 render_image_list(
                     frame,
                     area,
                     &filtered,
-                    &mut self.image_presenter.selection.state,
+                    selection_state,
                     active_filter.as_deref(),
                 );
             }
@@ -225,24 +200,17 @@ impl App {
                 }
             }
             Screen::StackList => {
-                let active_filter = self.stack_presenter.active_filter().map(str::to_string);
-                let filtered = {
-                    let stacks = &self.stack_presenter.stacks;
-                    if self.stack_presenter.filter.value().is_empty() {
-                        stacks.iter().collect::<Vec<_>>()
-                    } else {
-                        let filter_lower = self.stack_presenter.filter.value().to_lowercase();
-                        stacks
-                            .iter()
-                            .filter(|stack| stack.name.to_lowercase().contains(&filter_lower))
-                            .collect::<Vec<_>>()
-                    }
-                };
+                let presenter = &mut self.stack_presenter;
+                let active_filter = presenter.active_filter().map(str::to_string);
+                let filter = presenter.filter.value().to_string();
+                let stacks = &presenter.stacks;
+                let selection_state = &mut presenter.selection.state;
+                let filtered = filter_stacks(stacks, &filter);
                 render_stack_list(
                     frame,
                     area,
                     &filtered,
-                    &mut self.stack_presenter.selection.state,
+                    selection_state,
                     active_filter.as_deref(),
                 );
             }

@@ -245,11 +245,6 @@ pub fn split_menu_area(area: Rect) -> [Rect; 3] {
 }
 
 pub fn truncate_text(text: &str, max_chars: usize) -> String {
-    let text_len = text.chars().count();
-    if text_len <= max_chars {
-        return text.to_string();
-    }
-
     let marker_len = resources::TRUNCATION_MARKER.chars().count();
     if max_chars <= marker_len {
         return resources::TRUNCATION_MARKER
@@ -259,8 +254,21 @@ pub fn truncate_text(text: &str, max_chars: usize) -> String {
     }
 
     let visible_chars = max_chars - marker_len;
-    let truncated: String = text.chars().take(visible_chars).collect();
-    format!("{truncated}{}", resources::TRUNCATION_MARKER)
+    let mut visible_end = text.len();
+    let mut chars_seen = 0;
+
+    for (idx, _) in text.char_indices() {
+        if chars_seen == visible_chars {
+            visible_end = idx;
+        }
+
+        chars_seen += 1;
+        if chars_seen > max_chars {
+            return format!("{}{}", &text[..visible_end], resources::TRUNCATION_MARKER);
+        }
+    }
+
+    text.to_string()
 }
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

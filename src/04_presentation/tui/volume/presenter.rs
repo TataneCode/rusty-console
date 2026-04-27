@@ -9,6 +9,18 @@ pub struct VolumePresenter {
     pub filter: FilterState,
 }
 
+pub fn filter_volumes<'a>(volumes: &'a [VolumeDto], filter: &str) -> Vec<&'a VolumeDto> {
+    if filter.is_empty() {
+        volumes.iter().collect()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        volumes
+            .iter()
+            .filter(|volume| volume.name.to_lowercase().contains(&filter_lower))
+            .collect()
+    }
+}
+
 impl VolumePresenter {
     pub fn new() -> Self {
         VolumePresenter {
@@ -35,15 +47,7 @@ impl VolumePresenter {
     }
 
     pub fn filtered_volumes(&self) -> Vec<&VolumeDto> {
-        if self.filter.value().is_empty() {
-            self.volumes.iter().collect()
-        } else {
-            let filter_lower = self.filter.value().to_lowercase();
-            self.volumes
-                .iter()
-                .filter(|v| v.name.to_lowercase().contains(&filter_lower))
-                .collect()
-        }
+        filter_volumes(&self.volumes, self.filter.value())
     }
 
     pub fn selected_volume(&self) -> Option<&VolumeDto> {

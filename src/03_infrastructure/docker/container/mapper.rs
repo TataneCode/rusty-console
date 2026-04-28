@@ -243,6 +243,7 @@ impl ContainerInfraMapper {
 
     pub fn stats_update(container_id: &str, stats: &Stats) -> ContainerStatsUpdate {
         let memory_usage = Self::memory_working_set(stats);
+        let (network_rx, network_tx) = Self::network_totals(stats);
         ContainerStatsUpdate {
             container_id: container_id.to_string(),
             stats: ContainerRuntimeStatsDto {
@@ -250,8 +251,8 @@ impl ContainerInfraMapper {
                 memory_usage: Self::to_byte_size(memory_usage),
                 memory_limit: Self::to_byte_size(stats.memory_stats.limit.unwrap_or(0)),
                 memory_percent: Self::memory_percent(stats),
-                network_rx: Self::to_byte_size(Self::network_totals(stats).0),
-                network_tx: Self::to_byte_size(Self::network_totals(stats).1),
+                network_rx: Self::to_byte_size(network_rx),
+                network_tx: Self::to_byte_size(network_tx),
             },
         }
     }
@@ -900,10 +901,7 @@ mod tests {
         let update = ContainerInfraMapper::stats_update("abc123", &stats);
 
         // Working set = 512MB - 128MB = 384MB
-        assert_eq!(
-            update.stats.memory_usage.bytes(),
-            384 * 1024 * 1024
-        );
+        assert_eq!(update.stats.memory_usage.bytes(), 384 * 1024 * 1024);
         // Percent = 384 / 1024 = 37.5%
         assert!((update.stats.memory_percent - 37.5).abs() < 0.1);
     }
@@ -952,10 +950,7 @@ mod tests {
         let update = ContainerInfraMapper::stats_update("abc123", &stats);
 
         // Working set = 256MB - 64MB = 192MB
-        assert_eq!(
-            update.stats.memory_usage.bytes(),
-            192 * 1024 * 1024
-        );
+        assert_eq!(update.stats.memory_usage.bytes(), 192 * 1024 * 1024);
         // Percent = 192 / 1024 = 18.75%
         assert!((update.stats.memory_percent - 18.75).abs() < 0.1);
     }
@@ -963,7 +958,7 @@ mod tests {
     #[test]
     fn stats_update_uses_raw_usage_when_no_memory_substats() {
         let stats = make_base_stats(
-            300 * 1024 * 1024,  // 300 MB raw usage, no sub-stats
+            300 * 1024 * 1024, // 300 MB raw usage, no sub-stats
             1024 * 1024 * 1024,
             None,
         );

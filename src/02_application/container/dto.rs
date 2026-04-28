@@ -83,11 +83,15 @@ impl ContainerRuntimeStatsDto {
     }
 
     pub fn memory_list_display(&self) -> String {
-        format!(
-            "{} ({:.0}%)",
-            self.memory_usage.human_readable(),
-            self.memory_percent
-        )
+        if self.memory_limit.bytes() > 0 {
+            format!(
+                "{} ({:.0}%)",
+                self.memory_usage.human_readable(),
+                self.memory_percent
+            )
+        } else {
+            self.memory_usage.human_readable()
+        }
     }
 
     pub fn memory_details_display(&self) -> String {
@@ -187,6 +191,16 @@ mod tests {
             "512.00 MB / 1.00 GB (50.0%)"
         );
         assert_eq!(stats.network_io_display(), "RX 2.00 KB / TX 1.00 KB");
+    }
+
+    #[test]
+    fn memory_list_display_omits_percentage_without_limit() {
+        let mut stats = make_runtime_stats();
+        stats.memory_limit = ByteSize::new(0);
+        stats.memory_percent = 0.0;
+
+        assert_eq!(stats.memory_list_display(), "512.00 MB");
+        assert_eq!(stats.memory_details_display(), "512.00 MB");
     }
 
     #[test]

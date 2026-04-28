@@ -16,6 +16,8 @@ use futures_util::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
+const STATS_EVENT_BUFFER: usize = 128;
+
 pub struct ContainerAdapter {
     docker: DockerClient,
 }
@@ -187,7 +189,7 @@ impl ContainerRepository for ContainerAdapter {
         &self,
         container_ids: Vec<String>,
     ) -> Result<ContainerStatsSubscription, AppError> {
-        let (sender, receiver) = mpsc::channel(128);
+        let (sender, receiver) = mpsc::channel(STATS_EVENT_BUFFER);
         let tasks = container_ids
             .into_iter()
             .map(|container_id| {

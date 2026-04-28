@@ -26,6 +26,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, widgets::ListState, Frame, Terminal};
 use std::{collections::HashSet, io, process::Command};
+use tokio::sync::mpsc::error::TryRecvError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Screen {
@@ -1061,11 +1062,24 @@ impl App {
 
     fn drain_container_stats(&mut self) {
         let mut drained_events = Vec::new();
+        let mut disconnected = false;
 
         if let Some(subscription) = self.container_stats_subscription.as_mut() {
-            while let Ok(event) = subscription.try_recv() {
-                drained_events.push(event);
+            loop {
+                match subscription.try_recv() {
+                    Ok(event) => drained_events.push(event),
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        disconnected = true;
+                        break;
+                    }
+                }
             }
+        }
+
+        if disconnected {
+            self.container_stats_subscription = None;
+            self.container_presenter.clear_runtime_stats();
         }
 
         for event in drained_events {
@@ -1982,6 +1996,26 @@ mod tests {
             .unwrap()
             .as_str()
             .contains("Stats stream failed for abc123"));
+    }
+
+    #[tokio::test]
+    async fn test_drain_container_stats_clears_dead_subscription_on_disconnect() {
+        let mut app = empty_app();
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        drop(sender);
+
+        app.container_stats_subscription =
+            Some(ContainerStatsSubscription::new(receiver, Vec::new()));
+        app.drain_container_stats();
+
+        assert!(app.container_stats_subscription.is_none());
+        assert!(app
+            .container_presenter
+            .containers
+            .iter()
+            .all(|container| container.runtime_stats.is_none()));
     }
 
     #[tokio::test]

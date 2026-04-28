@@ -33,6 +33,8 @@ pub fn render_container_list(
                 Cell::from(c.name.clone()),
                 Cell::from(truncate_text(&c.image, 30)),
                 Cell::from(c.state_display()).style(state_style),
+                Cell::from(c.cpu_display()),
+                Cell::from(truncate_text(&c.memory_display(), 18)),
                 Cell::from(c.status.clone()),
                 Cell::from(truncate_text(&c.ports, 25)),
             ])
@@ -40,11 +42,13 @@ pub fn render_container_list(
         .collect();
 
     let widths = vec![
-        Constraint::Percentage(20),
-        Constraint::Percentage(25),
+        Constraint::Percentage(16),
+        Constraint::Percentage(18),
         Constraint::Percentage(10),
-        Constraint::Percentage(25),
-        Constraint::Percentage(20),
+        Constraint::Percentage(10),
+        Constraint::Percentage(16),
+        Constraint::Percentage(18),
+        Constraint::Percentage(12),
     ];
 
     let title = filter_prompt_title(resources::CONTAINER_TITLE, active_filter);
@@ -103,6 +107,11 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
                 .join("\n")
         )
     };
+    let network_io_section = format!(
+        "\n\n{}:\n  {}",
+        resources::CONTAINER_DETAILS_NETWORK_IO_LABEL,
+        container.network_io_display()
+    );
 
     let details = format!(
         "{:<10}{}\n\
@@ -112,7 +121,8 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
          {:<10}{}\n\
          {:<10}{}\n\
          {:<10}{}\n\
-         {:<10}{}{}",
+         {:<10}{}\n\
+         {}{}",
         resources::LABEL_ID,
         container.id,
         resources::LABEL_NAME,
@@ -129,6 +139,7 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
         container.ports,
         resources::LABEL_NETWORKS,
         container.networks,
+        network_io_section,
         env_section,
     );
 
@@ -180,6 +191,14 @@ mod tests {
             can_pause: true,
             can_unpause: false,
             env_vars: vec!["RUST_LOG=info".to_string()],
+            runtime_stats: Some(crate::application::container::ContainerRuntimeStatsDto {
+                cpu_percent: 12.5,
+                memory_usage: crate::shared::ByteSize::new(512 * 1024 * 1024),
+                memory_limit: crate::shared::ByteSize::new(1024 * 1024 * 1024),
+                memory_percent: 50.0,
+                network_rx: crate::shared::ByteSize::new(2_048),
+                network_tx: crate::shared::ByteSize::new(1_024),
+            }),
         }
     }
 
@@ -201,6 +220,8 @@ mod tests {
         assert!(text.contains("Containers"));
         assert!(text.contains("web"));
         assert!(text.contains("Running"));
+        assert!(text.contains("12.5%"));
+        assert!(text.contains("512.00 MB"));
         assert!(text.contains("Exec"));
         assert!(text.contains("Logs"));
     }
@@ -238,6 +259,8 @@ mod tests {
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("Container Details"));
         assert!(text.contains("Environment Variables"));
+        assert!(text.contains("Network I/O"));
+        assert!(text.contains("RX 2.00 KB / TX 1.00 KB"));
         assert!(text.contains("RUST_LOG=info"));
         assert!(text.contains("bridge"));
     }

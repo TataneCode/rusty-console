@@ -1,4 +1,6 @@
-use crate::application::container::ContainerRepository;
+use crate::application::container::{
+    ContainerRepository, ContainerStatsEvent, ContainerStatsSubscription,
+};
 use crate::application::error::AppError;
 use crate::domain::container::Container;
 use crate::infrastructure::docker::client::DockerClient;
@@ -8,10 +10,11 @@ use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::container::{
     ListContainersOptions, LogsOptions, PruneContainersOptions, RemoveContainerOptions,
-    RestartContainerOptions, StartContainerOptions, StopContainerOptions,
+    RestartContainerOptions, StartContainerOptions, StatsOptions, StopContainerOptions,
 };
 use futures_util::StreamExt;
 use std::collections::HashMap;
+use tokio::sync::mpsc;
 
 pub struct ContainerAdapter {
     docker: DockerClient,
@@ -178,5 +181,58 @@ impl ContainerRepository for ContainerAdapter {
                 .unwrap_or(0),
             space_freed: result.space_reclaimed.unwrap_or(0) as u64,
         })
+    }
+
+    async fn subscribe_stats(
+        &self,
+        container_ids: Vec<String>,
+    ) -> Result<ContainerStatsSubscription, AppError> {
+        let (sender, receiver) = mpsc::channel(128);
+        let tasks = container_ids
+            .into_iter()
+            .map(|container_id| {
+                let docker = self.docker.clone();
+                let sender = sender.clone();
+
+                tokio::spawn(async move {
+                    let mut stream = docker.inner().stats(
+                        &container_id,
+                        Some(StatsOptions {
+                            stream: true,
+                            one_shot: false,
+                        }),
+                    );
+
+                    while let Some(result) = stream.next().await {
+                        match result {
+                            Ok(stats) => {
+                                let update =
+                                    ContainerInfraMapper::stats_update(&container_id, &stats);
+                                if sender
+                                    .send(ContainerStatsEvent::Update(update))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Err(error) => {
+                                let message = AppError::from(InfraError::from(error)).to_string();
+                                let _ = sender
+                                    .send(ContainerStatsEvent::Error {
+                                        container_id: container_id.clone(),
+                                        message,
+                                    })
+                                    .await;
+                                break;
+                            }
+                        }
+                    }
+                })
+            })
+            .collect();
+        drop(sender);
+
+        Ok(ContainerStatsSubscription::new(receiver, tasks))
     }
 }

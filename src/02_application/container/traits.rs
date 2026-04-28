@@ -1,3 +1,4 @@
+use crate::application::container::dto::ContainerStatsSubscription;
 use crate::application::error::AppError;
 use crate::domain::container::Container;
 use crate::shared::PruneResultDto;
@@ -16,4 +17,8 @@ pub trait ContainerRepository: Send + Sync {
     async fn pause(&self, id: &str) -> Result<(), AppError>;
     async fn unpause(&self, id: &str) -> Result<(), AppError>;
     async fn prune(&self) -> Result<PruneResultDto, AppError>;
+    async fn subscribe_stats(
+        &self,
+        container_ids: Vec<String>,
+    ) -> Result<ContainerStatsSubscription, AppError>;
 }

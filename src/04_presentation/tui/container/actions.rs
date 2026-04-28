@@ -1,4 +1,6 @@
-use crate::application::container::{ContainerDto, ContainerLogsDto, ContainerService};
+use crate::application::container::{
+    ContainerDto, ContainerLogsDto, ContainerService, ContainerStatsSubscription,
+};
 use crate::application::error::AppError;
 use crate::shared::PruneResultDto;
 
@@ -56,13 +58,20 @@ impl ContainerActions {
     pub async fn prune_containers(&self) -> Result<PruneResultDto, AppError> {
         self.service.prune_containers().await
     }
+
+    pub async fn subscribe_stats(
+        &self,
+        container_ids: Vec<String>,
+    ) -> Result<ContainerStatsSubscription, AppError> {
+        self.service.subscribe_stats(container_ids).await
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::ContainerActions;
     use crate::application::container::traits::MockContainerRepository;
-    use crate::application::container::ContainerService;
+    use crate::application::container::{ContainerService, ContainerStatsSubscription};
     use crate::domain::container::{Container, ContainerId, ContainerState};
     use crate::shared::PruneResultDto;
     use chrono::Utc;
@@ -104,6 +113,8 @@ mod tests {
                 space_freed: 1024,
             })
         });
+        mock.expect_subscribe_stats()
+            .returning(|_| Ok(ContainerStatsSubscription::empty()));
 
         let actions = make_action(mock);
         let containers = actions.load_containers().await.unwrap();
@@ -126,5 +137,9 @@ mod tests {
         assert!(actions.pause_container(&container.id).await.is_ok());
         assert!(actions.unpause_container(&container.id).await.is_ok());
         assert_eq!(actions.prune_containers().await.unwrap().deleted_count, 2);
+        assert!(actions
+            .subscribe_stats(vec![container.id.clone()])
+            .await
+            .is_ok());
     }
 }

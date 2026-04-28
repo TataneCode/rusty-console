@@ -1,4 +1,6 @@
-use crate::application::container::dto::{ContainerDto, ContainerLogsDto};
+use crate::application::container::dto::{
+    ContainerDto, ContainerLogsDto, ContainerStatsSubscription,
+};
 use crate::application::container::mapper::ContainerMapper;
 use crate::application::container::traits::ContainerRepository;
 use crate::application::error::AppError;
@@ -64,6 +66,13 @@ impl ContainerService {
 
     pub async fn prune_containers(&self) -> Result<PruneResultDto, AppError> {
         self.repository.prune().await
+    }
+
+    pub async fn subscribe_stats(
+        &self,
+        container_ids: Vec<String>,
+    ) -> Result<ContainerStatsSubscription, AppError> {
+        self.repository.subscribe_stats(container_ids).await
     }
 }
 
@@ -225,5 +234,19 @@ mod tests {
         let result = service.prune_containers().await.unwrap();
         assert_eq!(result.deleted_count, 3);
         assert_eq!(result.space_freed, 1024);
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_stats_delegates() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_subscribe_stats()
+            .withf(|ids| ids == &vec!["abc123".to_string()])
+            .returning(|_| Ok(ContainerStatsSubscription::empty()));
+
+        let service = ContainerService::new(Arc::new(mock));
+        assert!(service
+            .subscribe_stats(vec!["abc123".to_string()])
+            .await
+            .is_ok());
     }
 }

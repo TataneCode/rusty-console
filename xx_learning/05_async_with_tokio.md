@@ -102,6 +102,23 @@ This combines:
 - `await` on each incoming item
 - explicit error propagation
 
+## Async streams plus `mpsc` for live container stats
+
+The realtime container stats feature adds a second async stream shape to the project.
+
+- Docker exposes per-container stats as a stream via `docker.stats(...)`
+- the infrastructure adapter spawns async tasks for the active containers
+- each task forwards parsed updates through a `tokio::sync::mpsc` channel
+- the TUI app drains that receiver and merges the latest values into the presenter
+
+That is a useful Tokio pattern because it separates:
+
+1. **I/O work** waiting on Docker
+2. **message passing** between async producers and the UI
+3. **state updates** applied in one place by the app/presenter
+
+It is also a good example of when async data does **not** belong in the domain layer: telemetry is short-lived UI/application state, not a core business invariant.
+
 ## Shared async dependencies with `Arc`
 
 `main.rs` wires adapters and services with `Arc`:
@@ -119,5 +136,6 @@ let container_service = ContainerService::new(container_adapter);
 - `src/02_application/*/traits.rs` for async trait contracts
 - `src/02_application/*/service.rs` for awaited use cases
 - `src/03_infrastructure/docker/*/adapter.rs` for real async Docker work
+- `src/03_infrastructure/docker/container/adapter.rs` for the stats stream tasks and `mpsc` forwarding
 
 Next: [terminal UI with Crossterm and Ratatui](./06_terminal_ui_with_crossterm_and_ratatui.md).

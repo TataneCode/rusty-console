@@ -1,5 +1,8 @@
-use crate::application::container::{ContainerDto, ContainerLogsDto};
+use crate::application::container::{
+    ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto, ContainerStatsUpdate,
+};
 use crate::presentation::tui::common::{FilterState, TableSelection};
+use std::collections::{HashMap, HashSet};
 
 pub struct ContainerPresenter {
     pub containers: Vec<ContainerDto>,
@@ -10,6 +13,7 @@ pub struct ContainerPresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
+    stats_by_container_id: HashMap<String, ContainerRuntimeStatsDto>,
 }
 
 pub fn filter_containers<'a>(
@@ -41,11 +45,13 @@ impl ContainerPresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
+            stats_by_container_id: HashMap::new(),
         }
     }
 
     pub fn set_containers(&mut self, containers: Vec<ContainerDto>) {
         self.containers = containers;
+        self.reapply_runtime_stats();
         self.update_filtered_selection();
         self.error = None;
     }
@@ -80,6 +86,8 @@ impl ContainerPresenter {
     }
 
     pub fn set_details(&mut self, container: ContainerDto) {
+        let mut container = container;
+        container.runtime_stats = self.stats_by_container_id.get(&container.id).cloned();
         self.selected_container = Some(container);
     }
 
@@ -130,9 +138,49 @@ impl ContainerPresenter {
         self.filter.active_value()
     }
 
+    pub fn apply_stats_update(&mut self, update: ContainerStatsUpdate) {
+        self.stats_by_container_id
+            .insert(update.container_id.clone(), update.stats.clone());
+
+        if let Some(container) = self
+            .containers
+            .iter_mut()
+            .find(|container| container.id == update.container_id)
+        {
+            container.runtime_stats = Some(update.stats.clone());
+        }
+
+        if let Some(container) = self.selected_container.as_mut() {
+            if container.id == update.container_id {
+                container.runtime_stats = Some(update.stats);
+            }
+        }
+    }
+
+    pub fn retain_runtime_stats(&mut self, monitored_container_ids: &HashSet<String>) {
+        self.stats_by_container_id
+            .retain(|id, _| monitored_container_ids.contains(id));
+        self.reapply_runtime_stats();
+    }
+
+    pub fn clear_runtime_stats(&mut self) {
+        self.stats_by_container_id.clear();
+        self.reapply_runtime_stats();
+    }
+
     fn update_filtered_selection(&mut self) {
         let count = self.filtered_containers().len();
         self.selection.set_items(count);
+    }
+
+    fn reapply_runtime_stats(&mut self) {
+        for container in &mut self.containers {
+            container.runtime_stats = self.stats_by_container_id.get(&container.id).cloned();
+        }
+
+        if let Some(container) = self.selected_container.as_mut() {
+            container.runtime_stats = self.stats_by_container_id.get(&container.id).cloned();
+        }
     }
 }
 
@@ -165,6 +213,7 @@ mod tests {
             can_pause: true,
             can_unpause: false,
             env_vars: vec![],
+            runtime_stats: None,
         }
     }
 
@@ -188,6 +237,7 @@ mod tests {
         assert!(p.filter.value().is_empty());
         assert!(!p.filter.is_active());
         assert!(p.selection.selected().is_none());
+        assert!(p.stats_by_container_id.is_empty());
     }
 
     #[test]
@@ -350,5 +400,81 @@ mod tests {
         // Saturating sub — can't go below 0
         p.scroll_logs_up(100);
         assert_eq!(p.logs_scroll, 0);
+    }
+
+    #[test]
+    fn test_apply_stats_update_updates_list_and_selected_details() {
+        let mut p = ContainerPresenter::new();
+        p.set_containers(three_containers());
+        let details = p.containers[0].clone();
+        p.set_details(details);
+
+        p.apply_stats_update(ContainerStatsUpdate {
+            container_id: "id_alpha".to_string(),
+            stats: ContainerRuntimeStatsDto {
+                cpu_percent: 12.5,
+                memory_usage: crate::shared::ByteSize::new(512),
+                memory_limit: crate::shared::ByteSize::new(1024),
+                memory_percent: 50.0,
+                network_rx: crate::shared::ByteSize::new(256),
+                network_tx: crate::shared::ByteSize::new(128),
+            },
+        });
+
+        assert_eq!(
+            p.containers[0]
+                .runtime_stats
+                .as_ref()
+                .unwrap()
+                .cpu_display(),
+            "12.5%"
+        );
+        assert_eq!(
+            p.selected_container
+                .as_ref()
+                .unwrap()
+                .runtime_stats
+                .as_ref()
+                .unwrap()
+                .memory_list_display(),
+            "512 B (50%)"
+        );
+    }
+
+    #[test]
+    fn test_retain_and_clear_runtime_stats_remove_cached_values() {
+        let mut p = ContainerPresenter::new();
+        p.set_containers(three_containers());
+        p.apply_stats_update(ContainerStatsUpdate {
+            container_id: "id_alpha".to_string(),
+            stats: ContainerRuntimeStatsDto {
+                cpu_percent: 1.0,
+                memory_usage: crate::shared::ByteSize::new(10),
+                memory_limit: crate::shared::ByteSize::new(20),
+                memory_percent: 50.0,
+                network_rx: crate::shared::ByteSize::new(1),
+                network_tx: crate::shared::ByteSize::new(2),
+            },
+        });
+
+        p.retain_runtime_stats(&HashSet::from(["id_beta".to_string()]));
+        assert!(p.containers[0].runtime_stats.is_none());
+
+        p.apply_stats_update(ContainerStatsUpdate {
+            container_id: "id_beta".to_string(),
+            stats: ContainerRuntimeStatsDto {
+                cpu_percent: 2.0,
+                memory_usage: crate::shared::ByteSize::new(20),
+                memory_limit: crate::shared::ByteSize::new(40),
+                memory_percent: 50.0,
+                network_rx: crate::shared::ByteSize::new(3),
+                network_tx: crate::shared::ByteSize::new(4),
+            },
+        });
+        p.clear_runtime_stats();
+        assert!(p
+            .containers
+            .iter()
+            .all(|container| container.runtime_stats.is_none()));
     }
 }

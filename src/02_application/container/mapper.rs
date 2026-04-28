@@ -27,6 +27,7 @@ impl ContainerMapper {
             can_pause: container.can_be_paused(),
             can_unpause: container.can_be_unpaused(),
             env_vars: container.env_vars().to_vec(),
+            runtime_stats: None,
         }
     }
 

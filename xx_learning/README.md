@@ -29,6 +29,7 @@ It contains:
 - `Option` and `Result` everywhere absence or failure must be explicit
 - repository traits, trait objects, and real implementations
 - async I/O with Tokio, Bollard, and `async_trait`
+- async streams and `tokio::sync::mpsc` for live container stats
 - a real terminal UI built with Crossterm and Ratatui
 - unit tests, async tests, mocks, and Ratatui rendering tests
 

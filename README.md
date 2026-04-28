@@ -4,7 +4,7 @@ A terminal user interface (TUI) for managing Docker containers, volumes, and ima
 
 ## Features
 
-- **Containers** — list all containers regardless of state, start/stop, pause/unpause, restart, open an interactive exec shell (`sh` or `bash`), view real-time logs, inspect details (incl. env vars), delete (with force option for running containers), prune stopped containers, filter by name
+- **Containers** — list all containers regardless of state, with live CPU and memory usage in the list; start/stop, pause/unpause, restart, open an interactive exec shell (`sh` or `bash`), view real-time logs, inspect details (incl. env vars and live network I/O), delete (with force option for running containers), prune stopped containers, filter by name
 - **Volumes** — list all volumes, detect which ones are in use, delete unused volumes, prune unused volumes, filter by name
 - **Images** — list all images with usage status, inspect details, delete (with force option for in-use images), prune dangling images, filter by name
 - **Stacks** — detect Docker Compose stacks from container labels, list stacks with running/total counts, drill down into a stack's containers, start/stop/remove all containers in a stack at once
@@ -56,11 +56,17 @@ Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then
 | `R` | Restart the selected container |
 | `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` |
 | `l` | View container logs |
-| `c` | View container details |
+| `c` | View container details (including live network I/O) |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune all stopped containers |
 | `Ctrl+U` | Scroll up (in log view) |
 | `Ctrl+D` | Scroll down (in log view) |
+
+## Realtime container stats
+
+- The **container list** shows live **CPU** and **Memory** values for active containers.
+- **Network I/O** is shown only in **container details**.
+- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh.
 
 ### Stacks
 

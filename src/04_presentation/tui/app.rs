@@ -1,4 +1,6 @@
-use crate::application::container::ContainerDto;
+use crate::application::container::{
+    ContainerDto, ContainerStatsEvent, ContainerStatsSubscription,
+};
 use crate::presentation::tui::common::{
     map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message,
     render_selection_dialog, resources, AppAction, PopupMessage,
@@ -23,7 +25,8 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, widgets::ListState, Frame, Terminal};
-use std::{io, process::Command};
+use std::{collections::HashSet, io, process::Command};
+use tokio::sync::mpsc::error::TryRecvError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Screen {
@@ -184,6 +187,7 @@ pub struct App {
     exec_command_config: ExecCommandConfig,
     exec_shell_dialog: Option<ExecShellDialog>,
     pending_exec: Option<PendingExec>,
+    container_stats_subscription: Option<ContainerStatsSubscription>,
 }
 
 fn record_cleanup_error(cleanup_error: &mut Option<io::Error>, result: io::Result<()>) {
@@ -235,6 +239,7 @@ impl App {
             exec_command_config,
             exec_shell_dialog: None,
             pending_exec: None,
+            container_stats_subscription: None,
         }
     }
 
@@ -269,6 +274,7 @@ impl App {
         let event_handler = EventHandler::default();
 
         loop {
+            self.drain_container_stats();
             terminal.draw(|frame| self.render(frame))?;
 
             match event_handler.next()? {
@@ -288,6 +294,8 @@ impl App {
             if let Some(request) = self.pending_exec.take() {
                 self.execute_pending_exec(terminal, request).await?;
             }
+
+            self.drain_container_stats();
 
             if self.should_quit {
                 break;
@@ -515,7 +523,11 @@ impl App {
     async fn handle_container_list_action(&mut self, action: AppAction) {
         match action {
             AppAction::Quit => self.should_quit = true,
-            AppAction::Back => self.screen = Screen::MainMenu,
+            AppAction::Back => {
+                self.stop_container_stats_subscription();
+                self.container_presenter.clear_runtime_stats();
+                self.screen = Screen::MainMenu;
+            }
             AppAction::NavigateUp => self.container_presenter.navigate_up(),
             AppAction::NavigateDown => self.container_presenter.navigate_down(),
             AppAction::ViewLogs => {
@@ -802,7 +814,10 @@ impl App {
 
     async fn load_containers(&mut self) {
         match self.container_actions.load_containers().await {
-            Ok(containers) => self.container_presenter.set_containers(containers),
+            Ok(containers) => {
+                self.container_presenter.set_containers(containers);
+                self.refresh_container_stats_subscription().await;
+            }
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
     }
@@ -1045,6 +1060,82 @@ impl App {
             || self.exec_shell_dialog.is_some()
     }
 
+    fn drain_container_stats(&mut self) {
+        let mut drained_events = Vec::new();
+        let mut disconnected = false;
+
+        if let Some(subscription) = self.container_stats_subscription.as_mut() {
+            loop {
+                match subscription.try_recv() {
+                    Ok(event) => drained_events.push(event),
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        disconnected = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if disconnected {
+            self.container_stats_subscription = None;
+            self.container_presenter.clear_runtime_stats();
+        }
+
+        for event in drained_events {
+            match event {
+                ContainerStatsEvent::Update(update) => {
+                    self.container_presenter.apply_stats_update(update);
+                }
+                ContainerStatsEvent::Error {
+                    container_id,
+                    message,
+                } => {
+                    self.popup_message = Some(PopupMessage::Error(format!(
+                        "Stats stream failed for {container_id}: {message}"
+                    )));
+                }
+            }
+        }
+    }
+
+    async fn refresh_container_stats_subscription(&mut self) {
+        self.stop_container_stats_subscription();
+
+        let active_container_ids: HashSet<String> = self
+            .container_presenter
+            .containers
+            .iter()
+            .filter(|container| container.state.is_active())
+            .map(|container| container.id.clone())
+            .collect();
+        self.container_presenter
+            .retain_runtime_stats(&active_container_ids);
+
+        if active_container_ids.is_empty() {
+            return;
+        }
+
+        match self
+            .container_actions
+            .subscribe_stats(active_container_ids.iter().cloned().collect())
+            .await
+        {
+            Ok(subscription) => {
+                self.container_stats_subscription = Some(subscription);
+            }
+            Err(error) => {
+                self.popup_message = Some(PopupMessage::Error(error.to_string()));
+            }
+        }
+    }
+
+    fn stop_container_stats_subscription(&mut self) {
+        if let Some(mut subscription) = self.container_stats_subscription.take() {
+            subscription.abort();
+        }
+    }
+
     fn selected_exec_target(&self) -> Option<(String, ExecRefreshTarget)> {
         match self.screen {
             Screen::ContainerList => self
@@ -1238,7 +1329,10 @@ mod tests {
         ExecShellDialog, PendingExec, Screen,
     };
     use crate::application::container::traits::MockContainerRepository;
-    use crate::application::container::{ContainerDto, ContainerService};
+    use crate::application::container::{
+        ContainerDto, ContainerRuntimeStatsDto, ContainerService, ContainerStatsEvent,
+        ContainerStatsSubscription, ContainerStatsUpdate,
+    };
     use crate::application::image::traits::MockImageRepository;
     use crate::application::image::{ImageDto, ImageService};
     use crate::application::stack::traits::MockStackRepository;
@@ -1286,6 +1380,14 @@ mod tests {
             can_pause: true,
             can_unpause: false,
             env_vars: vec!["RUST_LOG=info".to_string()],
+            runtime_stats: Some(ContainerRuntimeStatsDto {
+                cpu_percent: 12.5,
+                memory_usage: crate::shared::ByteSize::new(512 * 1024 * 1024),
+                memory_limit: crate::shared::ByteSize::new(1024 * 1024 * 1024),
+                memory_percent: 50.0,
+                network_rx: crate::shared::ByteSize::new(2_048),
+                network_tx: crate::shared::ByteSize::new(1_024),
+            }),
         }
     }
 
@@ -1407,6 +1509,12 @@ mod tests {
             stack_actions,
             ExecCommandConfig::new("unix:///var/run/docker.sock"),
         )
+    }
+
+    fn expect_empty_stats_subscription(mock: &mut MockContainerRepository, times: usize) {
+        mock.expect_subscribe_stats()
+            .times(times)
+            .returning(|_| Ok(ContainerStatsSubscription::empty()));
     }
 
     fn empty_app() -> App {
@@ -1595,6 +1703,7 @@ mod tests {
                 Utc::now(),
             )])
         });
+        expect_empty_stats_subscription(&mut container_repo, 1);
         let mut volume_repo = MockVolumeRepository::new();
         volume_repo.expect_get_all().returning(|| {
             Ok(vec![crate::domain::volume::Volume::new(
@@ -1668,6 +1777,7 @@ mod tests {
                 Utc::now(),
             )])
         });
+        expect_empty_stats_subscription(&mut container_repo, 4);
 
         let mut app = build_app(
             container_repo,
@@ -1721,6 +1831,12 @@ mod tests {
 
         app.handle_container_list_action(AppAction::Back).await;
         assert_eq!(app.screen, Screen::MainMenu);
+        assert!(app.container_stats_subscription.is_none());
+        assert!(app
+            .container_presenter
+            .containers
+            .iter()
+            .all(|container| container.runtime_stats.is_none()));
     }
 
     #[tokio::test]
@@ -1837,6 +1953,69 @@ mod tests {
             app.selected_exec_target(),
             Some(("stack-1".to_string(), ExecRefreshTarget::StackContainers))
         );
+    }
+
+    #[tokio::test]
+    async fn test_drain_container_stats_applies_updates_and_surfaces_errors() {
+        let mut app = empty_app();
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        let (sender, receiver) = tokio::sync::mpsc::channel(4);
+        sender
+            .send(ContainerStatsEvent::Update(ContainerStatsUpdate {
+                container_id: "abc123".to_string(),
+                stats: ContainerRuntimeStatsDto {
+                    cpu_percent: 80.0,
+                    memory_usage: crate::shared::ByteSize::new(256),
+                    memory_limit: crate::shared::ByteSize::new(512),
+                    memory_percent: 50.0,
+                    network_rx: crate::shared::ByteSize::new(64),
+                    network_tx: crate::shared::ByteSize::new(32),
+                },
+            }))
+            .await
+            .unwrap();
+        sender
+            .send(ContainerStatsEvent::Error {
+                container_id: "abc123".to_string(),
+                message: "boom".to_string(),
+            })
+            .await
+            .unwrap();
+        drop(sender);
+
+        app.container_stats_subscription =
+            Some(ContainerStatsSubscription::new(receiver, Vec::new()));
+        app.drain_container_stats();
+
+        assert_eq!(app.container_presenter.containers[0].cpu_display(), "80.0%");
+        assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Stats stream failed for abc123"));
+    }
+
+    #[tokio::test]
+    async fn test_drain_container_stats_clears_dead_subscription_on_disconnect() {
+        let mut app = empty_app();
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        drop(sender);
+
+        app.container_stats_subscription =
+            Some(ContainerStatsSubscription::new(receiver, Vec::new()));
+        app.drain_container_stats();
+
+        assert!(app.container_stats_subscription.is_none());
+        assert!(app
+            .container_presenter
+            .containers
+            .iter()
+            .all(|container| container.runtime_stats.is_none()));
     }
 
     #[tokio::test]

@@ -39,6 +39,8 @@ Ok(AppEvent::Tick)
 
 The event loop polls for input and turns raw terminal events into application events.
 
+For live container stats, the app loop also drains a Tokio `mpsc` receiver and applies any pending stats updates before/after drawing. That keeps the UI responsive while still refreshing CPU, memory, and network values on screen.
+
 ## Ratatui renders borrowed state
 
 View functions stay close to pure rendering:
@@ -88,6 +90,14 @@ Ratatui encourages composition:
 - blocks and paragraphs wrap content
 - theme helpers centralize styling
 
+The container list is also a good example of incremental UI growth:
+
+- the table started as static container metadata
+- live **CPU** and **Memory** columns were added without changing the rendering pattern
+- container details gained a **Network I/O** section fed by the same presenter state
+
+That is a practical Ratatui lesson: the view stays simple when the presenter already owns display-ready state.
+
 ## UI text is centralized
 
 Most visible strings live here:
@@ -101,6 +111,7 @@ That makes the rendering code easier to read and keeps labels/help text in one p
 - `src/04_presentation/tui/app.rs` for setup and the main render loop
 - `src/04_presentation/tui/event.rs` for terminal events
 - `src/04_presentation/tui/common/resources.rs` for UI text
+- `src/04_presentation/tui/container/presenter.rs` for list/detail state enriched with live stats
 - `src/04_presentation/tui/*/view.rs` for Ratatui widget composition
 
 Next: [testing in this project](./07_testing_in_this_project.md).

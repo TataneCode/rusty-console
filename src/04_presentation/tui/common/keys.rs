@@ -24,6 +24,7 @@ pub enum AppAction {
     StopAll,
     StartAll,
     RemoveAll,
+    PullImages,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -56,6 +57,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('e') => Some(AppAction::Exec),
         KeyCode::Char('S') => Some(AppAction::StopAll),
         KeyCode::Char('D') => Some(AppAction::RemoveAll),
+        KeyCode::Char('P') => Some(AppAction::PullImages),
         _ => None,
     }
 }
@@ -271,6 +273,14 @@ mod tests {
         assert_eq!(
             map_key_to_action(key_event(KeyCode::Char('D'))),
             Some(AppAction::RemoveAll)
+        );
+    }
+
+    #[test]
+    fn test_pull_images() {
+        assert_eq!(
+            map_key_to_action(key_event(KeyCode::Char('P'))),
+            Some(AppAction::PullImages)
         );
     }
 

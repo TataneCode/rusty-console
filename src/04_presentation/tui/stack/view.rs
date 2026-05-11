@@ -180,6 +180,6 @@ mod tests {
         assert!(text.contains("web"));
         assert!(text.contains("Running"));
         assert!(text.contains("Exec"));
-        assert!(text.contains("Refresh"));
+        assert!(text.contains("Pull Images"));
     }
 }

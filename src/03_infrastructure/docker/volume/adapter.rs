@@ -7,6 +7,7 @@ use crate::infrastructure::error::InfraError;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::container::ListContainersOptions;
+use bollard::models::ContainerSummary;
 use bollard::volume::{ListVolumesOptions, RemoveVolumeOptions};
 use std::collections::HashMap;
 
@@ -40,7 +41,40 @@ impl VolumeAdapter {
             .collect())
     }
 
-    async fn get_in_use_volumes(&self) -> Result<Vec<String>, AppError> {
+    fn volume_links_by_name(containers: Vec<ContainerSummary>) -> HashMap<String, Vec<String>> {
+        let mut links: HashMap<String, Vec<String>> = HashMap::new();
+
+        for container in containers {
+            let container_name = container
+                .names
+                .as_ref()
+                .and_then(|names| names.first())
+                .cloned()
+                .unwrap_or_else(|| "unknown".to_string());
+
+            for volume_name in container
+                .mounts
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|mount| mount.name)
+            {
+                let entry = links.entry(volume_name).or_default();
+                if !entry.contains(&container_name) {
+                    entry.push(container_name.clone());
+                }
+            }
+        }
+
+        for names in links.values_mut() {
+            names.sort();
+        }
+
+        links
+    }
+
+    async fn get_linked_containers_by_volume(
+        &self,
+    ) -> Result<HashMap<String, Vec<String>>, AppError> {
         let options = ListContainersOptions::<String> {
             all: true,
             ..Default::default()
@@ -54,15 +88,7 @@ impl VolumeAdapter {
             .map_err(InfraError::from)
             .map_err(AppError::from)?;
 
-        Ok(containers
-            .into_iter()
-            .flat_map(|c| {
-                c.mounts
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter_map(|m| m.name)
-            })
-            .collect())
+        Ok(Self::volume_links_by_name(containers))
     }
 }
 
@@ -78,13 +104,15 @@ impl VolumeRepository for VolumeAdapter {
             .map_err(AppError::from)?;
 
         let size_map = self.get_volume_sizes().await?;
-        let in_use_volumes = self.get_in_use_volumes().await?;
+        let linked_containers_by_volume = self.get_linked_containers_by_volume().await?;
 
         let volumes = volumes_response
             .volumes
             .unwrap_or_default()
             .iter()
-            .filter_map(|v| VolumeInfraMapper::from_docker(v, &size_map, &in_use_volumes))
+            .filter_map(|v| {
+                VolumeInfraMapper::from_docker(v, &size_map, &linked_containers_by_volume)
+            })
             .collect();
 
         Ok(volumes)
@@ -119,5 +147,42 @@ impl VolumeRepository for VolumeAdapter {
             deleted_count: result.volumes_deleted.map(|v| v.len() as u32).unwrap_or(0),
             space_freed: result.space_reclaimed.unwrap_or(0) as u64,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VolumeAdapter;
+    use bollard::models::{ContainerSummary, MountPoint};
+
+    fn make_container(name: &str, volumes: &[&str]) -> ContainerSummary {
+        ContainerSummary {
+            names: Some(vec![name.to_string()]),
+            mounts: Some(
+                volumes
+                    .iter()
+                    .map(|volume| MountPoint {
+                        name: Some((*volume).to_string()),
+                        ..Default::default()
+                    })
+                    .collect(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn volume_links_by_name_groups_and_deduplicates_container_names() {
+        let links = VolumeAdapter::volume_links_by_name(vec![
+            make_container("/worker", &["shared-data", "cache"]),
+            make_container("/web", &["shared-data"]),
+            make_container("/web", &["shared-data"]),
+        ]);
+
+        assert_eq!(
+            links.get("shared-data"),
+            Some(&vec!["/web".to_string(), "/worker".to_string()])
+        );
+        assert_eq!(links.get("cache"), Some(&vec!["/worker".to_string()]));
     }
 }

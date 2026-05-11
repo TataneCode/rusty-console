@@ -5,7 +5,7 @@ use crate::presentation::tui::common::{
 };
 use ratatui::{
     layout::{Constraint, Rect},
-    widgets::{Cell, Row, TableState},
+    widgets::{Block, Borders, Cell, Paragraph, Row, TableState, Wrap},
     Frame,
 };
 
@@ -66,9 +66,69 @@ pub fn render_volume_list(
     render_help(frame, help_area, resources::VOLUME_LIST_HELP);
 }
 
+pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) {
+    let [content_area, help_area] = split_content_area(area);
+
+    let linked_containers = if volume.linked_containers.is_empty() {
+        resources::VALUE_NO.to_string()
+    } else {
+        volume
+            .linked_containers
+            .iter()
+            .map(|name| format!("  {}", name))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    let details = format!(
+        "{:<18}{}\n\
+         {:<18}{}\n\
+         {:<18}{}\n\
+         {:<18}{}\n\
+         {:<18}{}\n\
+         {:<18}{}\n\
+         {:<18}{}\n\
+         {}:\n{}",
+        resources::LABEL_ID,
+        volume.id,
+        resources::LABEL_NAME,
+        volume.name,
+        resources::LABEL_DRIVER,
+        volume.driver,
+        resources::LABEL_MOUNTPOINT,
+        volume.mountpoint,
+        resources::LABEL_SIZE,
+        volume.size,
+        resources::LABEL_CREATED,
+        volume.created,
+        resources::LABEL_IN_USE,
+        if volume.in_use {
+            resources::VALUE_YES
+        } else {
+            resources::VALUE_NO
+        },
+        resources::LABEL_LINKED_CONTAINERS.trim_end_matches(':'),
+        linked_containers,
+    );
+
+    let details_widget = Paragraph::new(details)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(resources::VOLUME_DETAILS_TITLE)
+                .title_style(Theme::title_style())
+                .border_style(Theme::border_style()),
+        )
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(details_widget, content_area);
+
+    render_help(frame, help_area, resources::VOLUME_DETAILS_HELP);
+}
+
 #[cfg(test)]
 mod tests {
-    use super::render_volume_list;
+    use super::{render_volume_details, render_volume_list};
     use crate::application::volume::VolumeDto;
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
 
@@ -92,6 +152,7 @@ mod tests {
             size: "10 MB".to_string(),
             created: "2024-01-01".to_string(),
             in_use: true,
+            linked_containers: vec!["/web".to_string()],
             can_delete: false,
         };
         let items = vec![&volume];
@@ -106,5 +167,33 @@ mod tests {
         assert!(text.contains("db-data"));
         assert!(text.contains("local"));
         assert!(text.contains("Prune"));
+    }
+
+    #[test]
+    fn test_render_volume_details_shows_full_name_and_linked_containers() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let volume = VolumeDto {
+            id: "vol-1".to_string(),
+            name: "super-long-volume-name-for-details".to_string(),
+            driver: "local".to_string(),
+            mountpoint: "/var/lib/docker/volumes/db-data/_data".to_string(),
+            size: "10 MB".to_string(),
+            created: "2024-01-01".to_string(),
+            in_use: true,
+            linked_containers: vec!["/web".to_string(), "/worker".to_string()],
+            can_delete: false,
+        };
+
+        terminal
+            .draw(|frame| render_volume_details(frame, frame.area(), &volume))
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Volume Details"));
+        assert!(text.contains("super-long-volume-name-for-details"));
+        assert!(text.contains("Linked Containers"));
+        assert!(text.contains("/web"));
+        assert!(text.contains("/worker"));
     }
 }

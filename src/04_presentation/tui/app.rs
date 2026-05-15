@@ -1231,12 +1231,11 @@ impl App {
                         } else {
                             self.load_stacks().await;
                         }
-                        self.popup_message = Some(PopupMessage::Info(
-                            resources::stack_pull_result_message(
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::stack_pull_result_message(
                                 &outcome.stack_name,
                                 outcome.image_count,
-                            ),
-                        ));
+                            )));
                     }
                     Err(e) => {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));

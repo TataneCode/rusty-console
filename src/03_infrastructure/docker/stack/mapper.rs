@@ -1,5 +1,5 @@
 use crate::domain::stack::{Stack, StackContainer, StackContainerState, StackName, STANDALONE};
-use bollard::models::{ContainerSummary, Port};
+use bollard::models::{ContainerSummary, PortSummary};
 use std::collections::HashMap;
 
 pub struct StackInfraMapper;
@@ -59,7 +59,11 @@ impl StackInfraMapper {
         let state = summary
             .state
             .as_ref()
-            .and_then(|s| s.parse().ok())
+            .map(|s| {
+                s.to_string()
+                    .parse::<StackContainerState>()
+                    .unwrap_or(StackContainerState::Stopped)
+            })
             .unwrap_or(StackContainerState::Stopped);
         let status = summary.status.clone().unwrap_or_default();
         let ports = Self::map_ports(summary.ports.as_ref());
@@ -67,7 +71,7 @@ impl StackInfraMapper {
         Some(StackContainer::new(id, name, image, state, status, ports))
     }
 
-    fn map_ports(ports: Option<&Vec<Port>>) -> String {
+    fn map_ports(ports: Option<&Vec<PortSummary>>) -> String {
         let mapped = ports
             .map(|ports| {
                 ports
@@ -100,7 +104,7 @@ impl StackInfraMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bollard::models::{Port, PortTypeEnum};
+    use bollard::models::{ContainerSummaryStateEnum, PortSummary, PortSummaryTypeEnum};
 
     fn summary(id: &str, name: &str, stack: Option<&str>) -> ContainerSummary {
         let labels = stack.map(|stack_name| {
@@ -114,7 +118,7 @@ mod tests {
             id: Some(id.to_string()),
             names: Some(vec![format!("/{name}")]),
             image: Some("nginx:latest".to_string()),
-            state: Some("running".to_string()),
+            state: Some(ContainerSummaryStateEnum::RUNNING),
             status: Some("Up 5 minutes".to_string()),
             labels,
             ..Default::default()
@@ -189,22 +193,22 @@ mod tests {
     fn formats_container_ports_for_stack_container_display() {
         let mut web = summary("a1", "web", Some("app"));
         web.ports = Some(vec![
-            Port {
+            PortSummary {
                 private_port: 80,
                 public_port: Some(8080),
-                typ: Some(PortTypeEnum::TCP),
+                typ: Some(PortSummaryTypeEnum::TCP),
                 ..Default::default()
             },
-            Port {
+            PortSummary {
                 private_port: 53,
                 public_port: Some(5353),
-                typ: Some(PortTypeEnum::UDP),
+                typ: Some(PortSummaryTypeEnum::UDP),
                 ..Default::default()
             },
-            Port {
+            PortSummary {
                 private_port: 443,
                 public_port: None,
-                typ: Some(PortTypeEnum::TCP),
+                typ: Some(PortSummaryTypeEnum::TCP),
                 ..Default::default()
             },
         ]);

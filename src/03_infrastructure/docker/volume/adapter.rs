@@ -6,9 +6,9 @@ use crate::infrastructure::docker::volume::mapper::VolumeInfraMapper;
 use crate::infrastructure::error::InfraError;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
-use bollard::container::ListContainersOptions;
 use bollard::models::ContainerSummary;
-use bollard::volume::{ListVolumesOptions, RemoveVolumeOptions};
+use bollard::query_parameters::ListContainersOptions;
+use bollard::query_parameters::{ListVolumesOptions, RemoveVolumeOptions};
 use std::collections::HashMap;
 
 pub struct VolumeAdapter {
@@ -18,27 +18,6 @@ pub struct VolumeAdapter {
 impl VolumeAdapter {
     pub fn new(docker: DockerClient) -> Self {
         VolumeAdapter { docker }
-    }
-
-    async fn get_volume_sizes(&self) -> Result<HashMap<String, i64>, AppError> {
-        let response = self
-            .docker
-            .inner()
-            .df()
-            .await
-            .map_err(InfraError::from)
-            .map_err(AppError::from)?;
-
-        Ok(response
-            .volumes
-            .unwrap_or_default()
-            .into_iter()
-            .map(|v| {
-                let name = v.name;
-                let size = v.usage_data.as_ref().map(|u| u.size).unwrap_or(-1);
-                (name, size)
-            })
-            .collect())
     }
 
     fn volume_links_by_name(containers: Vec<ContainerSummary>) -> HashMap<String, Vec<String>> {
@@ -58,7 +37,10 @@ impl VolumeAdapter {
                 .into_iter()
                 .filter_map(|mount| mount.name)
             {
-                links.entry(volume_name).or_default().push(container_name.clone());
+                links
+                    .entry(volume_name)
+                    .or_default()
+                    .push(container_name.clone());
             }
         }
 
@@ -73,7 +55,7 @@ impl VolumeAdapter {
     async fn get_linked_containers_by_volume(
         &self,
     ) -> Result<HashMap<String, Vec<String>>, AppError> {
-        let options = ListContainersOptions::<String> {
+        let options = ListContainersOptions {
             all: true,
             ..Default::default()
         };
@@ -96,12 +78,22 @@ impl VolumeRepository for VolumeAdapter {
         let volumes_response = self
             .docker
             .inner()
-            .list_volumes(None::<ListVolumesOptions<String>>)
+            .list_volumes(None::<ListVolumesOptions>)
             .await
             .map_err(InfraError::from)
             .map_err(AppError::from)?;
 
-        let size_map = self.get_volume_sizes().await?;
+        let size_map: HashMap<String, i64> = volumes_response
+            .volumes
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|v| {
+                let size = v.usage_data.as_ref().map(|u| u.size).unwrap_or(-1);
+                (v.name.clone(), size)
+            })
+            .collect();
+
         let linked_containers_by_volume = self.get_linked_containers_by_volume().await?;
 
         let volumes = volumes_response
@@ -136,7 +128,7 @@ impl VolumeRepository for VolumeAdapter {
         let result = self
             .docker
             .inner()
-            .prune_volumes(None::<bollard::volume::PruneVolumesOptions<String>>)
+            .prune_volumes(None::<bollard::query_parameters::PruneVolumesOptions>)
             .await
             .map_err(InfraError::from)
             .map_err(AppError::from)?;

@@ -3,7 +3,7 @@ use crate::domain::container::{
     Container, ContainerId, ContainerState, MountInfo, NetworkInfo, PortMapping,
 };
 use crate::shared::ByteSize;
-use bollard::container::{MemoryStatsStats, Stats};
+use bollard::models::ContainerStatsResponse;
 use bollard::models::{ContainerInspectResponse, ContainerSummary};
 use chrono::{TimeZone, Utc};
 
@@ -29,7 +29,11 @@ impl ContainerInfraMapper {
         let state = summary
             .state
             .as_ref()
-            .and_then(|s| s.parse().ok())
+            .map(|s| {
+                s.to_string()
+                    .parse::<ContainerState>()
+                    .unwrap_or(ContainerState::Stopped)
+            })
             .unwrap_or(ContainerState::Stopped);
 
         let status = summary.status.clone().unwrap_or_default();
@@ -51,7 +55,7 @@ impl ContainerInfraMapper {
         )
     }
 
-    fn map_ports(ports: Option<&Vec<bollard::models::Port>>) -> Vec<PortMapping> {
+    fn map_ports(ports: Option<&Vec<bollard::models::PortSummary>>) -> Vec<PortMapping> {
         ports
             .map(|ports| {
                 ports
@@ -241,7 +245,10 @@ impl ContainerInfraMapper {
             .unwrap_or_default()
     }
 
-    pub fn stats_update(container_id: &str, stats: &Stats) -> ContainerStatsUpdate {
+    pub fn stats_update(
+        container_id: &str,
+        stats: &ContainerStatsResponse,
+    ) -> ContainerStatsUpdate {
         let memory_usage = Self::memory_working_set(stats);
         let (network_rx, network_tx) = Self::network_totals(stats);
         ContainerStatsUpdate {
@@ -249,7 +256,13 @@ impl ContainerInfraMapper {
             stats: ContainerRuntimeStatsDto {
                 cpu_percent: Self::cpu_percent(stats),
                 memory_usage: Self::to_byte_size(memory_usage),
-                memory_limit: Self::to_byte_size(stats.memory_stats.limit.unwrap_or(0)),
+                memory_limit: Self::to_byte_size(
+                    stats
+                        .memory_stats
+                        .as_ref()
+                        .and_then(|m| m.limit)
+                        .unwrap_or(0),
+                ),
                 memory_percent: Self::memory_percent(stats),
                 network_rx: Self::to_byte_size(network_rx),
                 network_tx: Self::to_byte_size(network_tx),
@@ -257,26 +270,48 @@ impl ContainerInfraMapper {
         }
     }
 
-    fn cpu_percent(stats: &Stats) -> f64 {
-        let cpu_delta = stats
+    fn cpu_percent(stats: &ContainerStatsResponse) -> f64 {
+        let cpu_total = stats
             .cpu_stats
-            .cpu_usage
-            .total_usage
-            .saturating_sub(stats.precpu_stats.cpu_usage.total_usage);
+            .as_ref()
+            .and_then(|c| c.cpu_usage.as_ref())
+            .and_then(|u| u.total_usage)
+            .unwrap_or(0);
+        let precpu_total = stats
+            .precpu_stats
+            .as_ref()
+            .and_then(|c| c.cpu_usage.as_ref())
+            .and_then(|u| u.total_usage)
+            .unwrap_or(0);
+        let cpu_delta = cpu_total.saturating_sub(precpu_total);
+
         let system_delta = stats
             .cpu_stats
-            .system_cpu_usage
+            .as_ref()
+            .and_then(|c| c.system_cpu_usage)
             .unwrap_or(0)
-            .saturating_sub(stats.precpu_stats.system_cpu_usage.unwrap_or(0));
-        let cpu_count = stats.cpu_stats.online_cpus.unwrap_or_else(|| {
-            stats
-                .cpu_stats
-                .cpu_usage
-                .percpu_usage
-                .as_ref()
-                .map(|usages| usages.len() as u64)
-                .unwrap_or(1)
-        });
+            .saturating_sub(
+                stats
+                    .precpu_stats
+                    .as_ref()
+                    .and_then(|c| c.system_cpu_usage)
+                    .unwrap_or(0),
+            );
+
+        let cpu_count = stats
+            .cpu_stats
+            .as_ref()
+            .and_then(|c| c.online_cpus)
+            .map(|n| n as u64)
+            .unwrap_or_else(|| {
+                stats
+                    .cpu_stats
+                    .as_ref()
+                    .and_then(|c| c.cpu_usage.as_ref())
+                    .and_then(|u| u.percpu_usage.as_ref())
+                    .map(|usages| usages.len() as u64)
+                    .unwrap_or(1)
+            });
 
         if cpu_delta == 0 || system_delta == 0 {
             0.0
@@ -285,19 +320,33 @@ impl ContainerInfraMapper {
         }
     }
 
-    fn memory_working_set(stats: &Stats) -> u64 {
-        let usage = stats.memory_stats.usage.unwrap_or(0);
-        let page_cache = match stats.memory_stats.stats {
-            Some(MemoryStatsStats::V1(v1)) => v1.total_inactive_file,
-            Some(MemoryStatsStats::V2(v2)) => v2.inactive_file,
-            None => 0,
-        };
+    fn memory_working_set(stats: &ContainerStatsResponse) -> u64 {
+        let usage = stats
+            .memory_stats
+            .as_ref()
+            .and_then(|m| m.usage)
+            .unwrap_or(0);
+        let page_cache = stats
+            .memory_stats
+            .as_ref()
+            .and_then(|m| m.stats.as_ref())
+            .and_then(|s| {
+                // cgroups v1 uses "total_inactive_file"; cgroups v2 uses "inactive_file"
+                s.get("total_inactive_file")
+                    .or_else(|| s.get("inactive_file"))
+                    .copied()
+            })
+            .unwrap_or(0);
         usage.saturating_sub(page_cache)
     }
 
-    fn memory_percent(stats: &Stats) -> f64 {
+    fn memory_percent(stats: &ContainerStatsResponse) -> f64 {
         let usage = Self::memory_working_set(stats);
-        let limit = stats.memory_stats.limit.unwrap_or(0);
+        let limit = stats
+            .memory_stats
+            .as_ref()
+            .and_then(|m| m.limit)
+            .unwrap_or(0);
 
         if usage == 0 || limit == 0 {
             0.0
@@ -306,19 +355,19 @@ impl ContainerInfraMapper {
         }
     }
 
-    fn network_totals(stats: &Stats) -> (u64, u64) {
-        if let Some(networks) = &stats.networks {
-            networks.values().fold((0, 0), |(rx, tx), network| {
-                (
-                    rx.saturating_add(network.rx_bytes),
-                    tx.saturating_add(network.tx_bytes),
-                )
+    fn network_totals(stats: &ContainerStatsResponse) -> (u64, u64) {
+        stats
+            .networks
+            .as_ref()
+            .map(|networks| {
+                networks.values().fold((0u64, 0u64), |(rx, tx), network| {
+                    (
+                        rx.saturating_add(network.rx_bytes.unwrap_or(0)),
+                        tx.saturating_add(network.tx_bytes.unwrap_or(0)),
+                    )
+                })
             })
-        } else if let Some(network) = stats.network {
-            (network.rx_bytes, network.tx_bytes)
-        } else {
-            (0, 0)
-        }
+            .unwrap_or((0, 0))
     }
 
     fn to_byte_size(bytes: u64) -> ByteSize {
@@ -329,47 +378,44 @@ impl ContainerInfraMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bollard::container::{
-        BlkioStats, CPUStats, CPUUsage, MemoryStats, MemoryStatsStats, MemoryStatsStatsV1,
-        MemoryStatsStatsV2, NetworkStats, PidsStats, Stats, StorageStats, ThrottlingData,
-    };
     use bollard::models::{
-        ContainerConfig, ContainerInspectResponse, ContainerState as BollardContainerState,
-        ContainerStateStatusEnum, ContainerSummary, ContainerSummaryNetworkSettings,
-        EndpointSettings, MountPoint, NetworkSettings, Port, PortBinding, PortTypeEnum,
+        ContainerBlkioStats, ContainerConfig, ContainerCpuStats, ContainerCpuUsage,
+        ContainerInspectResponse, ContainerMemoryStats, ContainerNetworkStats, ContainerPidsStats,
+        ContainerState as BollardContainerState, ContainerStateStatusEnum, ContainerStatsResponse,
+        ContainerStorageStats, ContainerSummary, ContainerSummaryNetworkSettings,
+        ContainerSummaryStateEnum, ContainerThrottlingData, EndpointSettings, MountPoint,
+        NetworkSettings, PortBinding, PortSummary, PortSummaryTypeEnum,
     };
     use std::collections::HashMap;
 
-    fn make_summary(id: &str, name: &str, image: &str, state: &str) -> ContainerSummary {
+    fn make_summary(
+        id: &str,
+        name: &str,
+        image: &str,
+        state: ContainerSummaryStateEnum,
+    ) -> ContainerSummary {
         ContainerSummary {
             id: Some(id.to_string()),
             names: Some(vec![format!("/{name}")]),
             image: Some(image.to_string()),
-            state: Some(state.to_string()),
+            state: Some(state),
             status: Some("Up 5 minutes".to_string()),
             created: Some(1_700_000_000),
             ..Default::default()
         }
     }
 
-    fn make_empty_blkio_stats() -> BlkioStats {
-        BlkioStats {
-            io_service_bytes_recursive: None,
-            io_serviced_recursive: None,
-            io_queue_recursive: None,
-            io_service_time_recursive: None,
-            io_wait_time_recursive: None,
-            io_merged_recursive: None,
-            io_time_recursive: None,
-            sectors_recursive: None,
+    fn make_empty_blkio_stats() -> ContainerBlkioStats {
+        ContainerBlkioStats {
+            ..Default::default()
         }
     }
 
-    fn make_empty_throttling_data() -> ThrottlingData {
-        ThrottlingData {
-            periods: 0,
-            throttled_periods: 0,
-            throttled_time: 0,
+    fn make_empty_throttling_data() -> ContainerThrottlingData {
+        ContainerThrottlingData {
+            periods: Some(0),
+            throttled_periods: Some(0),
+            throttled_time: Some(0),
         }
     }
 
@@ -381,13 +427,13 @@ mod tests {
             id: Some("abc123def456".to_string()),
             names: Some(vec!["/my-container".to_string()]),
             image: Some("nginx:latest".to_string()),
-            state: Some("running".to_string()),
+            state: Some(ContainerSummaryStateEnum::RUNNING),
             status: Some("Up 5 minutes".to_string()),
             created: Some(1_700_000_000),
-            ports: Some(vec![Port {
+            ports: Some(vec![PortSummary {
                 private_port: 80,
                 public_port: Some(8080),
-                typ: Some(PortTypeEnum::TCP),
+                typ: Some(PortSummaryTypeEnum::TCP),
                 ..Default::default()
             }]),
             ..Default::default()
@@ -441,22 +487,22 @@ mod tests {
             id: Some("abc123".to_string()),
             names: Some(vec!["/web".to_string()]),
             ports: Some(vec![
-                Port {
+                PortSummary {
                     private_port: 80,
                     public_port: Some(8080),
-                    typ: Some(PortTypeEnum::TCP),
+                    typ: Some(PortSummaryTypeEnum::TCP),
                     ..Default::default()
                 },
-                Port {
+                PortSummary {
                     private_port: 443,
                     public_port: None,
-                    typ: Some(PortTypeEnum::TCP),
+                    typ: Some(PortSummaryTypeEnum::TCP),
                     ..Default::default()
                 },
-                Port {
+                PortSummary {
                     private_port: 53,
                     public_port: Some(5353),
-                    typ: Some(PortTypeEnum::UDP),
+                    typ: Some(PortSummaryTypeEnum::UDP),
                     ..Default::default()
                 },
             ]),
@@ -488,7 +534,8 @@ mod tests {
             },
         );
 
-        let mut summary = make_summary("abc123", "web", "nginx", "running");
+        let mut summary =
+            make_summary("abc123", "web", "nginx", ContainerSummaryStateEnum::RUNNING);
         summary.network_settings = Some(ContainerSummaryNetworkSettings {
             networks: Some(networks),
         });
@@ -506,7 +553,12 @@ mod tests {
 
     #[test]
     fn from_docker_mount_extraction() {
-        let mut summary = make_summary("abc123", "db", "postgres", "running");
+        let mut summary = make_summary(
+            "abc123",
+            "db",
+            "postgres",
+            ContainerSummaryStateEnum::RUNNING,
+        );
         summary.mounts = Some(vec![
             MountPoint {
                 name: Some("pgdata".to_string()),
@@ -634,86 +686,62 @@ mod tests {
 
     #[test]
     fn stats_update_calculates_cpu_memory_and_networks() {
-        let stats = Stats {
-            id: "abc123".to_string(),
-            name: "web".to_string(),
-            read: "2024-01-01T00:00:00Z".to_string(),
-            preread: "2024-01-01T00:00:00Z".to_string(),
-            num_procs: 1,
-            pids_stats: PidsStats {
+        let stats = ContainerStatsResponse {
+            id: Some("abc123".to_string()),
+            name: Some("web".to_string()),
+            pids_stats: Some(ContainerPidsStats {
                 current: Some(1),
                 limit: Some(10),
-            },
-            network: None,
+            }),
             networks: Some(HashMap::from([
                 (
                     "eth0".to_string(),
-                    NetworkStats {
-                        rx_dropped: 0,
-                        rx_bytes: 2_048,
-                        rx_errors: 0,
-                        tx_packets: 0,
-                        tx_dropped: 0,
-                        rx_packets: 0,
-                        tx_errors: 0,
-                        tx_bytes: 1_024,
+                    ContainerNetworkStats {
+                        rx_bytes: Some(2_048),
+                        tx_bytes: Some(1_024),
+                        ..Default::default()
                     },
                 ),
                 (
                     "eth1".to_string(),
-                    NetworkStats {
-                        rx_dropped: 0,
-                        rx_bytes: 1_024,
-                        rx_errors: 0,
-                        tx_packets: 0,
-                        tx_dropped: 0,
-                        rx_packets: 0,
-                        tx_errors: 0,
-                        tx_bytes: 512,
+                    ContainerNetworkStats {
+                        rx_bytes: Some(1_024),
+                        tx_bytes: Some(512),
+                        ..Default::default()
                     },
                 ),
             ])),
-            memory_stats: MemoryStats {
+            memory_stats: Some(ContainerMemoryStats {
                 stats: None,
-                max_usage: None,
                 usage: Some(512 * 1024 * 1024),
-                failcnt: None,
                 limit: Some(1024 * 1024 * 1024),
-                commit: None,
-                commit_peak: None,
-                commitbytes: None,
-                commitpeakbytes: None,
-                privateworkingset: None,
-            },
-            blkio_stats: make_empty_blkio_stats(),
-            cpu_stats: CPUStats {
-                cpu_usage: CPUUsage {
+                ..Default::default()
+            }),
+            blkio_stats: Some(make_empty_blkio_stats()),
+            cpu_stats: Some(ContainerCpuStats {
+                cpu_usage: Some(ContainerCpuUsage {
                     percpu_usage: Some(vec![0, 0]),
-                    usage_in_usermode: 0,
-                    total_usage: 300,
-                    usage_in_kernelmode: 0,
-                },
+                    total_usage: Some(300),
+                    ..Default::default()
+                }),
                 system_cpu_usage: Some(1_000),
                 online_cpus: Some(2),
-                throttling_data: make_empty_throttling_data(),
-            },
-            precpu_stats: CPUStats {
-                cpu_usage: CPUUsage {
+                throttling_data: Some(make_empty_throttling_data()),
+            }),
+            precpu_stats: Some(ContainerCpuStats {
+                cpu_usage: Some(ContainerCpuUsage {
                     percpu_usage: Some(vec![0, 0]),
-                    usage_in_usermode: 0,
-                    total_usage: 100,
-                    usage_in_kernelmode: 0,
-                },
+                    total_usage: Some(100),
+                    ..Default::default()
+                }),
                 system_cpu_usage: Some(500),
                 online_cpus: Some(2),
-                throttling_data: make_empty_throttling_data(),
-            },
-            storage_stats: StorageStats {
-                read_count_normalized: None,
-                read_size_bytes: None,
-                write_count_normalized: None,
-                write_size_bytes: None,
-            },
+                throttling_data: Some(make_empty_throttling_data()),
+            }),
+            storage_stats: Some(ContainerStorageStats {
+                ..Default::default()
+            }),
+            ..Default::default()
         };
 
         let update = ContainerInfraMapper::stats_update("abc123", &stats);
@@ -725,177 +753,103 @@ mod tests {
     }
 
     #[test]
-    fn stats_update_falls_back_to_single_network_and_zero_cpu() {
-        let stats = Stats {
-            id: "abc123".to_string(),
-            name: "web".to_string(),
-            read: "2024-01-01T00:00:00Z".to_string(),
-            preread: "2024-01-01T00:00:00Z".to_string(),
-            num_procs: 1,
-            pids_stats: PidsStats {
-                current: Some(1),
-                limit: Some(10),
-            },
-            network: Some(NetworkStats {
-                rx_dropped: 0,
-                rx_bytes: 4_096,
-                rx_errors: 0,
-                tx_packets: 0,
-                tx_dropped: 0,
-                rx_packets: 0,
-                tx_errors: 0,
-                tx_bytes: 2_048,
-            }),
+    fn stats_update_returns_zero_network_when_no_networks() {
+        let stats = ContainerStatsResponse {
+            id: Some("abc123".to_string()),
+            name: Some("web".to_string()),
             networks: None,
-            memory_stats: MemoryStats {
-                stats: None,
-                max_usage: None,
+            memory_stats: Some(ContainerMemoryStats {
                 usage: Some(256),
-                failcnt: None,
                 limit: None,
-                commit: None,
-                commit_peak: None,
-                commitbytes: None,
-                commitpeakbytes: None,
-                privateworkingset: None,
-            },
-            blkio_stats: make_empty_blkio_stats(),
-            cpu_stats: CPUStats {
-                cpu_usage: CPUUsage {
+                ..Default::default()
+            }),
+            blkio_stats: Some(make_empty_blkio_stats()),
+            cpu_stats: Some(ContainerCpuStats {
+                cpu_usage: Some(ContainerCpuUsage {
                     percpu_usage: None,
-                    usage_in_usermode: 0,
-                    total_usage: 100,
-                    usage_in_kernelmode: 0,
-                },
+                    total_usage: Some(100),
+                    ..Default::default()
+                }),
                 system_cpu_usage: Some(100),
                 online_cpus: None,
-                throttling_data: make_empty_throttling_data(),
-            },
-            precpu_stats: CPUStats {
-                cpu_usage: CPUUsage {
+                throttling_data: Some(make_empty_throttling_data()),
+            }),
+            precpu_stats: Some(ContainerCpuStats {
+                cpu_usage: Some(ContainerCpuUsage {
                     percpu_usage: None,
-                    usage_in_usermode: 0,
-                    total_usage: 100,
-                    usage_in_kernelmode: 0,
-                },
+                    total_usage: Some(100),
+                    ..Default::default()
+                }),
                 system_cpu_usage: Some(100),
                 online_cpus: None,
-                throttling_data: make_empty_throttling_data(),
-            },
-            storage_stats: StorageStats {
-                read_count_normalized: None,
-                read_size_bytes: None,
-                write_count_normalized: None,
-                write_size_bytes: None,
-            },
+                throttling_data: Some(make_empty_throttling_data()),
+            }),
+            ..Default::default()
         };
 
         let update = ContainerInfraMapper::stats_update("abc123", &stats);
 
         assert_eq!(update.stats.cpu_display(), "0.0%");
         assert_eq!(update.stats.memory_details_display(), "256 B");
-        assert_eq!(update.stats.network_io_display(), "RX 4.00 KB / TX 2.00 KB");
+        assert_eq!(update.stats.network_io_display(), "RX 0 B / TX 0 B");
     }
 
-    fn make_base_stats(usage: u64, limit: u64, mem_stats: Option<MemoryStatsStats>) -> Stats {
-        Stats {
-            id: "abc123".to_string(),
-            name: "web".to_string(),
-            read: "2024-01-01T00:00:00Z".to_string(),
-            preread: "2024-01-01T00:00:00Z".to_string(),
-            num_procs: 1,
-            pids_stats: PidsStats {
+    fn make_base_stats(
+        usage: u64,
+        limit: u64,
+        mem_stats: Option<HashMap<String, u64>>,
+    ) -> ContainerStatsResponse {
+        ContainerStatsResponse {
+            id: Some("abc123".to_string()),
+            name: Some("web".to_string()),
+            pids_stats: Some(ContainerPidsStats {
                 current: Some(1),
                 limit: Some(100),
-            },
-            network: None,
+            }),
             networks: None,
-            memory_stats: MemoryStats {
+            memory_stats: Some(ContainerMemoryStats {
                 stats: mem_stats,
-                max_usage: None,
                 usage: Some(usage),
-                failcnt: None,
                 limit: Some(limit),
-                commit: None,
-                commit_peak: None,
-                commitbytes: None,
-                commitpeakbytes: None,
-                privateworkingset: None,
-            },
-            blkio_stats: make_empty_blkio_stats(),
-            cpu_stats: CPUStats {
-                cpu_usage: CPUUsage {
+                ..Default::default()
+            }),
+            blkio_stats: Some(make_empty_blkio_stats()),
+            cpu_stats: Some(ContainerCpuStats {
+                cpu_usage: Some(ContainerCpuUsage {
                     percpu_usage: None,
-                    usage_in_usermode: 0,
-                    total_usage: 100,
-                    usage_in_kernelmode: 0,
-                },
+                    total_usage: Some(100),
+                    ..Default::default()
+                }),
                 system_cpu_usage: Some(1_000),
                 online_cpus: Some(1),
-                throttling_data: make_empty_throttling_data(),
-            },
-            precpu_stats: CPUStats {
-                cpu_usage: CPUUsage {
+                throttling_data: Some(make_empty_throttling_data()),
+            }),
+            precpu_stats: Some(ContainerCpuStats {
+                cpu_usage: Some(ContainerCpuUsage {
                     percpu_usage: None,
-                    usage_in_usermode: 0,
-                    total_usage: 0,
-                    usage_in_kernelmode: 0,
-                },
+                    total_usage: Some(0),
+                    ..Default::default()
+                }),
                 system_cpu_usage: Some(0),
                 online_cpus: Some(1),
-                throttling_data: make_empty_throttling_data(),
-            },
-            storage_stats: StorageStats {
-                read_count_normalized: None,
-                read_size_bytes: None,
-                write_count_normalized: None,
-                write_size_bytes: None,
-            },
+                throttling_data: Some(make_empty_throttling_data()),
+            }),
+            storage_stats: Some(ContainerStorageStats {
+                ..Default::default()
+            }),
+            ..Default::default()
         }
     }
 
     #[test]
     fn stats_update_subtracts_total_inactive_file_for_cgroups_v1() {
-        let v1 = MemoryStatsStatsV1 {
-            cache: 0,
-            dirty: 0,
-            mapped_file: 0,
-            total_inactive_file: 128 * 1024 * 1024, // 128 MB page cache
-            pgpgout: 0,
-            rss: 0,
-            total_mapped_file: 0,
-            writeback: 0,
-            unevictable: 0,
-            pgpgin: 0,
-            total_unevictable: 0,
-            pgmajfault: 0,
-            total_rss: 0,
-            total_rss_huge: 0,
-            total_writeback: 0,
-            total_inactive_anon: 0,
-            rss_huge: 0,
-            hierarchical_memory_limit: 0,
-            total_pgfault: 0,
-            total_active_file: 0,
-            active_anon: 0,
-            total_active_anon: 0,
-            total_pgpgout: 0,
-            total_cache: 0,
-            total_dirty: 0,
-            inactive_anon: 0,
-            active_file: 0,
-            pgfault: 0,
-            inactive_file: 0,
-            total_pgmajfault: 0,
-            total_pgpgin: 0,
-            hierarchical_memsw_limit: None,
-            shmem: None,
-            total_shmem: None,
-        };
+        let mem_stats = HashMap::from([
+            ("total_inactive_file".to_string(), 128 * 1024 * 1024u64), // 128 MB page cache
+        ]);
         let stats = make_base_stats(
             512 * 1024 * 1024,  // 512 MB raw usage
             1024 * 1024 * 1024, // 1 GB limit
-            Some(MemoryStatsStats::V1(v1)),
+            Some(mem_stats),
         );
 
         let update = ContainerInfraMapper::stats_update("abc123", &stats);
@@ -908,43 +862,13 @@ mod tests {
 
     #[test]
     fn stats_update_subtracts_inactive_file_for_cgroups_v2() {
-        let v2 = MemoryStatsStatsV2 {
-            anon: 0,
-            file: 0,
-            kernel_stack: 0,
-            slab: 0,
-            sock: 0,
-            shmem: 0,
-            file_mapped: 0,
-            file_dirty: 0,
-            file_writeback: 0,
-            anon_thp: 0,
-            inactive_anon: 0,
-            active_anon: 0,
-            inactive_file: 64 * 1024 * 1024, // 64 MB page cache
-            active_file: 0,
-            unevictable: 0,
-            slab_reclaimable: 0,
-            slab_unreclaimable: 0,
-            pgfault: 0,
-            pgmajfault: 0,
-            workingset_refault: 0,
-            workingset_activate: 0,
-            workingset_nodereclaim: 0,
-            pgrefill: 0,
-            pgscan: 0,
-            pgsteal: 0,
-            pgactivate: 0,
-            pgdeactivate: 0,
-            pglazyfree: 0,
-            pglazyfreed: 0,
-            thp_fault_alloc: 0,
-            thp_collapse_alloc: 0,
-        };
+        let mem_stats = HashMap::from([
+            ("inactive_file".to_string(), 64 * 1024 * 1024u64), // 64 MB page cache
+        ]);
         let stats = make_base_stats(
             256 * 1024 * 1024,  // 256 MB raw usage
             1024 * 1024 * 1024, // 1 GB limit
-            Some(MemoryStatsStats::V2(v2)),
+            Some(mem_stats),
         );
 
         let update = ContainerInfraMapper::stats_update("abc123", &stats);

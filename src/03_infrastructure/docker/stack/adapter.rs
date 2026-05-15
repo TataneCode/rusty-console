@@ -5,7 +5,7 @@ use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::stack::mapper::StackInfraMapper;
 use crate::infrastructure::error::InfraError;
 use async_trait::async_trait;
-use bollard::container::{
+use bollard::query_parameters::{
     ListContainersOptions, RemoveContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use std::collections::{BTreeSet, HashMap};
@@ -76,21 +76,21 @@ impl StackRepository for StackAdapter {
     async fn get_all(&self) -> Result<Vec<Stack>, AppError> {
         let mut filters = HashMap::new();
         filters.insert(
-            "status",
+            "status".to_string(),
             vec![
-                "created",
-                "restarting",
-                "running",
-                "removing",
-                "paused",
-                "exited",
-                "dead",
+                "created".to_string(),
+                "restarting".to_string(),
+                "running".to_string(),
+                "removing".to_string(),
+                "paused".to_string(),
+                "exited".to_string(),
+                "dead".to_string(),
             ],
         );
 
         let options = ListContainersOptions {
             all: true,
-            filters,
+            filters: Some(filters),
             ..Default::default()
         };
 
@@ -109,7 +109,7 @@ impl StackRepository for StackAdapter {
         for id in container_ids {
             self.docker
                 .inner()
-                .start_container(id, None::<StartContainerOptions<String>>)
+                .start_container(id, None::<StartContainerOptions>)
                 .await
                 .map_err(InfraError::from)
                 .map_err(|err| container_operation_error("start", id, err))?;
@@ -121,7 +121,13 @@ impl StackRepository for StackAdapter {
         for id in container_ids {
             self.docker
                 .inner()
-                .stop_container(id, Some(StopContainerOptions { t: 10 }))
+                .stop_container(
+                    id,
+                    Some(StopContainerOptions {
+                        t: Some(10),
+                        ..Default::default()
+                    }),
+                )
                 .await
                 .map_err(InfraError::from)
                 .map_err(|err| container_operation_error("stop", id, err))?;

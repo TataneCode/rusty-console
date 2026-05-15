@@ -90,17 +90,17 @@ pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) 
          {:<18}{}\n\
          {}:\n{}",
         resources::LABEL_ID,
-        volume.id,
+        volume.id.as_str(),
         resources::LABEL_NAME,
-        volume.name,
+        volume.name.as_str(),
         resources::LABEL_DRIVER,
-        volume.driver,
+        volume.driver.as_str(),
         resources::LABEL_MOUNTPOINT,
-        volume.mountpoint,
+        volume.mountpoint.as_str(),
         resources::LABEL_SIZE,
-        volume.size,
+        volume.size.as_str(),
         resources::LABEL_CREATED,
-        volume.created,
+        volume.created.as_str(),
         resources::LABEL_IN_USE,
         if volume.in_use {
             resources::VALUE_YES

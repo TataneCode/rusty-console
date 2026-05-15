@@ -4,6 +4,7 @@ use crate::application::stack::mapper::StackMapper;
 use crate::application::stack::traits::StackRepository;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct StackService {
     repository: Arc<dyn StackRepository>,
 }

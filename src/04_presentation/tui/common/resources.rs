@@ -110,6 +110,10 @@ pub fn prune_result_message(resource_name: &str, deleted_count: u32, freed: &str
     format!("Pruned {deleted_count} {resource_name}(s), freed {freed}")
 }
 
+pub fn stack_pull_pending_message(stack_name: &str) -> String {
+    format!("Pulling images for stack {stack_name}…")
+}
+
 pub fn stack_pull_result_message(stack_name: &str, image_count: usize) -> String {
     format!("Pulled {image_count} image(s) for stack {stack_name}")
 }

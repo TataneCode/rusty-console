@@ -173,6 +173,7 @@ mod tests {
     use crate::application::error::AppError;
     use crate::infrastructure::error::InfraError;
     use std::io;
+    #[cfg(unix)]
     use std::os::unix::process::ExitStatusExt;
 
     #[test]
@@ -226,6 +227,7 @@ mod tests {
         assert!(err.to_string().contains("Docker CLI not found"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn image_pull_status_error_uses_stderr_output() {
         let err = image_pull_status_error(

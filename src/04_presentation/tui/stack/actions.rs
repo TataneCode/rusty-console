@@ -1,6 +1,7 @@
 use crate::application::error::AppError;
 use crate::application::stack::{StackDto, StackService};
 
+#[derive(Clone)]
 pub struct StackActions {
     service: StackService,
 }

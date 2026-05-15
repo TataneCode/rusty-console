@@ -23,7 +23,7 @@ jobs:
             asset_name: rusty_console-linux-x86_64
 
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2025-vs2026
             artifact_name: rusty_console.exe
             asset_name: rusty_console-windows-x86_64.exe
 

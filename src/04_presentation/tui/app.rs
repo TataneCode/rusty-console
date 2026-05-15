@@ -27,6 +27,7 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, widgets::ListState, Frame, Terminal};
 use std::{collections::BTreeSet, collections::HashSet, io, process::Command};
 use tokio::sync::mpsc::error::TryRecvError;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Screen {
@@ -189,6 +190,14 @@ pub struct App {
     exec_shell_dialog: Option<ExecShellDialog>,
     pending_exec: Option<PendingExec>,
     container_stats_subscription: Option<ContainerStatsSubscription>,
+    pending_image_pull: Option<oneshot::Receiver<PullOutcome>>,
+}
+
+struct PullOutcome {
+    stack_name: String,
+    image_count: usize,
+    refresh_containers: bool,
+    result: Result<(), crate::application::error::AppError>,
 }
 
 fn record_cleanup_error(cleanup_error: &mut Option<io::Error>, result: io::Result<()>) {
@@ -241,6 +250,7 @@ impl App {
             exec_shell_dialog: None,
             pending_exec: None,
             container_stats_subscription: None,
+            pending_image_pull: None,
         }
     }
 
@@ -297,6 +307,7 @@ impl App {
             }
 
             self.drain_container_stats();
+            self.drain_image_pull().await;
 
             if self.should_quit {
                 break;
@@ -1088,6 +1099,10 @@ impl App {
     }
 
     async fn pull_selected_stack_images(&mut self, refresh_stack_containers: bool) {
+        if self.pending_image_pull.is_some() {
+            return;
+        }
+
         let Some((stack_name, images)) = self.selected_stack_pull_data() else {
             return;
         };
@@ -1099,19 +1114,24 @@ impl App {
             return;
         }
 
-        match self.stack_actions.pull_images(&images).await {
-            Ok(_) => {
-                if refresh_stack_containers {
-                    self.refresh_stack_containers().await;
-                } else {
-                    self.load_stacks().await;
-                }
-                self.popup_message = Some(PopupMessage::Info(
-                    resources::stack_pull_result_message(&stack_name, images.len()),
-                ));
-            }
-            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
-        }
+        self.popup_message = Some(PopupMessage::Info(resources::stack_pull_pending_message(
+            &stack_name,
+        )));
+
+        let (tx, rx) = oneshot::channel();
+        let actions = self.stack_actions.clone();
+
+        tokio::spawn(async move {
+            let result = actions.pull_images(&images).await;
+            let _ = tx.send(PullOutcome {
+                stack_name,
+                image_count: images.len(),
+                refresh_containers: refresh_stack_containers,
+                result,
+            });
+        });
+
+        self.pending_image_pull = Some(rx);
     }
 
     fn has_modal_overlay(&self) -> bool {
@@ -1193,6 +1213,40 @@ impl App {
     fn stop_container_stats_subscription(&mut self) {
         if let Some(mut subscription) = self.container_stats_subscription.take() {
             subscription.abort();
+        }
+    }
+
+    async fn drain_image_pull(&mut self) {
+        let Some(rx) = self.pending_image_pull.as_mut() else {
+            return;
+        };
+
+        match rx.try_recv() {
+            Ok(outcome) => {
+                self.pending_image_pull = None;
+                match outcome.result {
+                    Ok(()) => {
+                        if outcome.refresh_containers {
+                            self.refresh_stack_containers().await;
+                        } else {
+                            self.load_stacks().await;
+                        }
+                        self.popup_message = Some(PopupMessage::Info(
+                            resources::stack_pull_result_message(
+                                &outcome.stack_name,
+                                outcome.image_count,
+                            ),
+                        ));
+                    }
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                    }
+                }
+            }
+            Err(oneshot::error::TryRecvError::Empty) => {}
+            Err(oneshot::error::TryRecvError::Closed) => {
+                self.pending_image_pull = None;
+            }
         }
     }
 
@@ -2447,6 +2501,15 @@ mod tests {
             .as_ref()
             .unwrap()
             .as_str()
+            .contains("Pulling images for stack compose-app"));
+        tokio::task::yield_now().await;
+        app.drain_image_pull().await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
             .contains("Pulled 2 image(s) for stack compose-app"));
         app.popup_message = None;
         app.handle_stack_list_action(AppAction::StartStop).await;
@@ -2462,6 +2525,15 @@ mod tests {
         app.screen = Screen::StackContainers;
         app.handle_stack_containers_action(AppAction::PullImages)
             .await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pulling images for stack compose-app"));
+        tokio::task::yield_now().await;
+        app.drain_image_pull().await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
         app.popup_message = None;
         app.handle_stack_containers_action(AppAction::StartStop)

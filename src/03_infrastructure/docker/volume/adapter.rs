@@ -58,15 +58,13 @@ impl VolumeAdapter {
                 .into_iter()
                 .filter_map(|mount| mount.name)
             {
-                let entry = links.entry(volume_name).or_default();
-                if !entry.contains(&container_name) {
-                    entry.push(container_name.clone());
-                }
+                links.entry(volume_name).or_default().push(container_name.clone());
             }
         }
 
         for names in links.values_mut() {
-            names.sort();
+            names.sort_unstable();
+            names.dedup();
         }
 
         links

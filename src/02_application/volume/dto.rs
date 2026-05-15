@@ -7,5 +7,6 @@ pub struct VolumeDto {
     pub size: String,
     pub created: String,
     pub in_use: bool,
+    pub linked_containers: Vec<String>,
     pub can_delete: bool,
 }

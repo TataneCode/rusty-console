@@ -6,8 +6,8 @@ use crate::infrastructure::docker::image::mapper::ImageInfraMapper;
 use crate::infrastructure::error::InfraError;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
-use bollard::container::ListContainersOptions;
-use bollard::image::{ListImagesOptions, PruneImagesOptions, RemoveImageOptions};
+use bollard::query_parameters::ListContainersOptions;
+use bollard::query_parameters::{ListImagesOptions, PruneImagesOptions, RemoveImageOptions};
 use std::collections::HashSet;
 
 pub struct ImageAdapter {
@@ -20,7 +20,7 @@ impl ImageAdapter {
     }
 
     async fn get_in_use_image_ids(&self) -> Result<HashSet<String>, AppError> {
-        let options = ListContainersOptions::<String> {
+        let options = ListContainersOptions {
             all: true,
             ..Default::default()
         };
@@ -40,7 +40,7 @@ impl ImageAdapter {
 #[async_trait]
 impl ImageRepository for ImageAdapter {
     async fn get_all(&self) -> Result<Vec<Image>, AppError> {
-        let options = ListImagesOptions::<String> {
+        let options = ListImagesOptions {
             all: true,
             ..Default::default()
         };
@@ -72,6 +72,7 @@ impl ImageRepository for ImageAdapter {
         let options = RemoveImageOptions {
             force,
             noprune: false,
+            platforms: None,
         };
 
         self.docker
@@ -86,8 +87,10 @@ impl ImageRepository for ImageAdapter {
 
     async fn prune(&self) -> Result<PruneResultDto, AppError> {
         let mut filters = std::collections::HashMap::new();
-        filters.insert("dangling", vec!["true"]);
-        let options = PruneImagesOptions { filters };
+        filters.insert("dangling".to_string(), vec!["true".to_string()]);
+        let options = PruneImagesOptions {
+            filters: Some(filters),
+        };
 
         let result = self
             .docker

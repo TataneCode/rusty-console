@@ -16,6 +16,7 @@ impl VolumeMapper {
                 .map(|c| c.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| "N/A".to_string()),
             in_use: volume.in_use(),
+            linked_containers: volume.linked_containers().to_vec(),
             can_delete: volume.can_be_deleted(),
         }
     }
@@ -61,15 +62,17 @@ mod tests {
         let dto = VolumeMapper::to_dto(&volume);
 
         assert!(!dto.in_use);
+        assert!(dto.linked_containers.is_empty());
         assert!(dto.can_delete);
     }
 
     #[test]
     fn to_dto_in_use_cannot_delete() {
-        let volume = create_test_volume().with_in_use(true);
+        let volume = create_test_volume().with_linked_containers(vec!["web".to_string()]);
         let dto = VolumeMapper::to_dto(&volume);
 
         assert!(dto.in_use);
+        assert_eq!(dto.linked_containers, vec!["web".to_string()]);
         assert!(!dto.can_delete);
     }
 

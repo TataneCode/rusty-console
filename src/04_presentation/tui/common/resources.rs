@@ -38,7 +38,9 @@ pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc/q
 pub const VOLUME_TITLE: &str = "Volumes";
 pub const VOLUME_HEADERS: [&str; 5] = ["Name", "Driver", "Size", "In Use", "Created"];
 pub const VOLUME_LIST_HELP: &str =
-    " q: Quit | /: Filter | j/k: Navigate | d: Delete | r: Refresh | X: Prune | Esc: Back ";
+    " q: Quit | /: Filter | j/k: Navigate | c: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
+pub const VOLUME_DETAILS_TITLE: &str = " Volume Details ";
+pub const VOLUME_DETAILS_HELP: &str = " Esc/q: Back ";
 
 pub const IMAGE_TITLE: &str = "Images";
 pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use", "Created"];
@@ -50,14 +52,16 @@ pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back ";
 pub const STACK_TITLE: &str = "Stacks";
 pub const STACK_HEADERS: [&str; 3] = ["Stack", "Containers", "Running"];
 pub const STACK_LIST_HELP: &str =
-    " q: Quit | /: Filter | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | r: Refresh | Esc: Back ";
+    " q: Quit | /: Filter | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | P: Pull Images | r: Refresh | Esc: Back ";
 pub const STACK_CONTAINER_HEADERS: [&str; 5] = ["Name", "Image", "State", "Status", "Ports"];
 pub const STACK_CONTAINERS_HELP: &str =
-    " Esc/q: Back | j/k: Navigate | e: Exec | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | d: Delete | r: Refresh ";
+    " Esc/q: Back | j/k: Navigate | e: Exec | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | P: Pull Images | d: Delete | r: Refresh ";
 
 pub const LABEL_ID: &str = "ID:";
 pub const LABEL_NAME: &str = "Name:";
+pub const LABEL_DRIVER: &str = "Driver:";
 pub const LABEL_IMAGE: &str = "Image:";
+pub const LABEL_MOUNTPOINT: &str = "Mountpoint:";
 pub const LABEL_STATE: &str = "State:";
 pub const LABEL_STATUS: &str = "Status:";
 pub const LABEL_CREATED: &str = "Created:";
@@ -68,6 +72,7 @@ pub const LABEL_TAG: &str = "Tag:";
 pub const LABEL_FULL_NAME: &str = "Full Name:";
 pub const LABEL_SIZE: &str = "Size:";
 pub const LABEL_IN_USE: &str = "In Use:";
+pub const LABEL_LINKED_CONTAINERS: &str = "Linked Containers:";
 pub const LABEL_DANGLING: &str = "Dangling:";
 pub const VALUE_YES: &str = "Yes";
 pub const VALUE_NO: &str = "No";
@@ -105,6 +110,18 @@ pub fn prune_result_message(resource_name: &str, deleted_count: u32, freed: &str
     format!("Pruned {deleted_count} {resource_name}(s), freed {freed}")
 }
 
+pub fn stack_pull_pending_message(stack_name: &str) -> String {
+    format!("Pulling images for stack {stack_name}…")
+}
+
+pub fn stack_pull_result_message(stack_name: &str, image_count: usize) -> String {
+    format!("Pulled {image_count} image(s) for stack {stack_name}")
+}
+
+pub fn stack_pull_empty_message(stack_name: &str) -> String {
+    format!("No pullable images found for stack {stack_name}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,6 +157,18 @@ mod tests {
         assert_eq!(
             prune_result_message("image", 3, "5.0 MB"),
             "Pruned 3 image(s), freed 5.0 MB"
+        );
+    }
+
+    #[test]
+    fn test_stack_pull_messages_format_result() {
+        assert_eq!(
+            stack_pull_result_message("compose-app", 2),
+            "Pulled 2 image(s) for stack compose-app"
+        );
+        assert_eq!(
+            stack_pull_empty_message("compose-app"),
+            "No pullable images found for stack compose-app"
         );
     }
 }

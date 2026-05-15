@@ -9,7 +9,7 @@ impl VolumeInfraMapper {
     pub fn from_docker(
         volume: &BollardVolume,
         size_map: &HashMap<String, i64>,
-        in_use_volumes: &[String],
+        linked_containers_by_volume: &HashMap<String, Vec<String>>,
     ) -> Option<Volume> {
         let name = &volume.name;
         let id = VolumeId::new(name.clone()).ok()?;
@@ -29,11 +29,14 @@ impl VolumeInfraMapper {
             .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&Utc));
 
-        let in_use = in_use_volumes.contains(name);
+        let linked_containers = linked_containers_by_volume
+            .get(name)
+            .cloned()
+            .unwrap_or_default();
 
         let mut vol = Volume::new(id, name.clone(), driver, mountpoint)
             .with_size(size)
-            .with_in_use(in_use);
+            .with_linked_containers(linked_containers);
 
         if let Some(created) = created {
             vol = vol.with_created(created);
@@ -63,13 +66,15 @@ mod tests {
         let vol = make_bollard_volume("pgdata");
         let mut size_map = HashMap::new();
         size_map.insert("pgdata".to_string(), 1_048_576);
-        let in_use = vec!["pgdata".to_string()];
+        let mut linked = HashMap::new();
+        linked.insert("pgdata".to_string(), vec!["web".to_string()]);
 
-        let volume = VolumeInfraMapper::from_docker(&vol, &size_map, &in_use).unwrap();
+        let volume = VolumeInfraMapper::from_docker(&vol, &size_map, &linked).unwrap();
         assert_eq!(volume.name(), "pgdata");
         assert_eq!(volume.driver(), "local");
         assert_eq!(volume.size().bytes(), 1_048_576);
         assert!(volume.in_use());
+        assert_eq!(volume.linked_containers(), &["web".to_string()]);
         assert!(volume.created().is_some());
         assert!(!volume.can_be_deleted());
     }
@@ -78,9 +83,9 @@ mod tests {
     fn from_docker_volume_not_in_size_map_not_in_use() {
         let vol = make_bollard_volume("temp_vol");
         let size_map = HashMap::new();
-        let in_use: Vec<String> = vec![];
+        let linked = HashMap::new();
 
-        let volume = VolumeInfraMapper::from_docker(&vol, &size_map, &in_use).unwrap();
+        let volume = VolumeInfraMapper::from_docker(&vol, &size_map, &linked).unwrap();
         assert_eq!(volume.name(), "temp_vol");
         assert_eq!(volume.size().bytes(), -1); // VolumeSize default is -1 (unknown)
         assert!(!volume.in_use());

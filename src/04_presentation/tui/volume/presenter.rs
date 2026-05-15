@@ -4,6 +4,7 @@ use crate::presentation::tui::common::{FilterState, TableSelection};
 pub struct VolumePresenter {
     pub volumes: Vec<VolumeDto>,
     pub selection: TableSelection,
+    pub selected_volume: Option<VolumeDto>,
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
@@ -26,6 +27,7 @@ impl VolumePresenter {
         VolumePresenter {
             volumes: Vec::new(),
             selection: TableSelection::new(),
+            selected_volume: None,
             loading: false,
             error: None,
             filter: FilterState::new(),
@@ -55,6 +57,14 @@ impl VolumePresenter {
         self.selection
             .selected()
             .and_then(|i| filtered.get(i).copied())
+    }
+
+    pub fn set_details(&mut self, volume: VolumeDto) {
+        self.selected_volume = Some(volume);
+    }
+
+    pub fn clear_details(&mut self) {
+        self.selected_volume = None;
     }
 
     pub fn navigate_up(&mut self) {
@@ -117,6 +127,7 @@ mod tests {
             size: "10 MB".to_string(),
             created: "2024-01-01".to_string(),
             in_use: false,
+            linked_containers: Vec::new(),
             can_delete: true,
         }
     }
@@ -161,6 +172,21 @@ mod tests {
         let selected = p.selected_volume();
         assert!(selected.is_some());
         assert_eq!(selected.unwrap().name, "app-logs");
+    }
+
+    #[test]
+    fn test_set_details_and_clear() {
+        let mut p = VolumePresenter::new();
+        let volume = make_volume("db-data");
+
+        p.set_details(volume.clone());
+        assert_eq!(
+            p.selected_volume.as_ref().map(|v| v.name.as_str()),
+            Some("db-data")
+        );
+
+        p.clear_details();
+        assert!(p.selected_volume.is_none());
     }
 
     #[test]

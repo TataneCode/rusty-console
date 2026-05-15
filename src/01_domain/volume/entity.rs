@@ -10,6 +10,7 @@ pub struct Volume {
     size: VolumeSize,
     created: Option<DateTime<Utc>>,
     in_use: bool,
+    linked_containers: Vec<String>,
 }
 
 impl Volume {
@@ -27,6 +28,7 @@ impl Volume {
             size: VolumeSize::default(),
             created: None,
             in_use: false,
+            linked_containers: Vec::new(),
         }
     }
 
@@ -42,6 +44,12 @@ impl Volume {
 
     pub fn with_in_use(mut self, in_use: bool) -> Self {
         self.in_use = in_use;
+        self
+    }
+
+    pub fn with_linked_containers(mut self, linked_containers: Vec<String>) -> Self {
+        self.in_use = !linked_containers.is_empty();
+        self.linked_containers = linked_containers;
         self
     }
 
@@ -72,6 +80,10 @@ impl Volume {
 
     pub fn in_use(&self) -> bool {
         self.in_use
+    }
+
+    pub fn linked_containers(&self) -> &[String] {
+        &self.linked_containers
     }
 
     // Business logic
@@ -111,6 +123,24 @@ mod tests {
         )
         .with_in_use(true);
 
+        assert!(!volume.can_be_deleted());
+    }
+
+    #[test]
+    fn test_linked_containers_mark_volume_as_in_use() {
+        let volume = Volume::new(
+            VolumeId::new("vol1").unwrap(),
+            "my-volume",
+            "local",
+            "/var/lib/docker/volumes/my-volume/_data",
+        )
+        .with_linked_containers(vec!["web".to_string(), "worker".to_string()]);
+
+        assert!(volume.in_use());
+        assert_eq!(
+            volume.linked_containers(),
+            &["web".to_string(), "worker".to_string()]
+        );
         assert!(!volume.can_be_deleted());
     }
 

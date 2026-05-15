@@ -17,7 +17,7 @@ use crate::presentation::tui::stack::{
     filter_stacks, render_stack_containers, render_stack_list, StackActions, StackPresenter,
 };
 use crate::presentation::tui::volume::{
-    filter_volumes, render_volume_list, VolumeActions, VolumePresenter,
+    filter_volumes, render_volume_details, render_volume_list, VolumeActions, VolumePresenter,
 };
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, KeyCode},
@@ -25,8 +25,9 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, widgets::ListState, Frame, Terminal};
-use std::{collections::HashSet, io, process::Command};
+use std::{collections::BTreeSet, collections::HashSet, io, process::Command};
 use tokio::sync::mpsc::error::TryRecvError;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Screen {
@@ -35,6 +36,7 @@ pub enum Screen {
     ContainerLogs,
     ContainerDetails,
     VolumeList,
+    VolumeDetails,
     ImageList,
     ImageDetails,
     StackList,
@@ -188,6 +190,14 @@ pub struct App {
     exec_shell_dialog: Option<ExecShellDialog>,
     pending_exec: Option<PendingExec>,
     container_stats_subscription: Option<ContainerStatsSubscription>,
+    pending_image_pull: Option<oneshot::Receiver<PullOutcome>>,
+}
+
+struct PullOutcome {
+    stack_name: String,
+    image_count: usize,
+    refresh_containers: bool,
+    result: Result<(), crate::application::error::AppError>,
 }
 
 fn record_cleanup_error(cleanup_error: &mut Option<io::Error>, result: io::Result<()>) {
@@ -240,6 +250,7 @@ impl App {
             exec_shell_dialog: None,
             pending_exec: None,
             container_stats_subscription: None,
+            pending_image_pull: None,
         }
     }
 
@@ -296,6 +307,7 @@ impl App {
             }
 
             self.drain_container_stats();
+            self.drain_image_pull().await;
 
             if self.should_quit {
                 break;
@@ -349,6 +361,11 @@ impl App {
                     selection_state,
                     active_filter.as_deref(),
                 );
+            }
+            Screen::VolumeDetails => {
+                if let Some(volume) = &self.volume_presenter.selected_volume {
+                    render_volume_details(frame, area, volume);
+                }
             }
             Screen::ImageList => {
                 let presenter = &mut self.image_presenter;
@@ -460,6 +477,7 @@ impl App {
             Screen::ContainerLogs => self.handle_container_logs_action(action),
             Screen::ContainerDetails => self.handle_details_action(action),
             Screen::VolumeList => self.handle_volume_list_action(action).await,
+            Screen::VolumeDetails => self.handle_details_action(action),
             Screen::ImageList => self.handle_image_list_action(action).await,
             Screen::ImageDetails => self.handle_details_action(action),
             Screen::StackList => self.handle_stack_list_action(action).await,
@@ -598,6 +616,10 @@ impl App {
                     self.container_presenter.clear_details();
                     self.screen = Screen::ContainerList;
                 }
+                Screen::VolumeDetails => {
+                    self.volume_presenter.clear_details();
+                    self.screen = Screen::VolumeList;
+                }
                 Screen::ImageDetails => {
                     self.image_presenter.clear_details();
                     self.screen = Screen::ImageList;
@@ -614,6 +636,12 @@ impl App {
             AppAction::Back => self.screen = Screen::MainMenu,
             AppAction::NavigateUp => self.volume_presenter.navigate_up(),
             AppAction::NavigateDown => self.volume_presenter.navigate_down(),
+            AppAction::ViewDetails => {
+                if let Some(volume) = self.volume_presenter.selected_volume().cloned() {
+                    self.volume_presenter.set_details(volume);
+                    self.screen = Screen::VolumeDetails;
+                }
+            }
             AppAction::Delete => {
                 if let Some(volume) = self.volume_presenter.selected_volume() {
                     if volume.can_delete {
@@ -974,6 +1002,7 @@ impl App {
                     }
                 }
             }
+            AppAction::PullImages => self.pull_selected_stack_images(false).await,
             AppAction::Refresh => self.load_stacks().await,
             AppAction::ActivateFilter => {
                 self.stack_presenter.activate_filter();
@@ -1048,10 +1077,61 @@ impl App {
             AppAction::RemoveAll if !self.stack_presenter.stack_containers.is_empty() => {
                 self.confirm_dialog = Some((ConfirmAction::RemoveAllStackContainers, true));
             }
+            AppAction::PullImages => self.pull_selected_stack_images(true).await,
             AppAction::Refresh => self.refresh_stack_containers().await,
             AppAction::Exec => self.open_exec_shell_dialog(),
             _ => {}
         }
+    }
+
+    fn selected_stack_pull_data(&self) -> Option<(String, Vec<String>)> {
+        let stack = self.stack_presenter.selected_stack()?;
+        let images = stack
+            .containers
+            .iter()
+            .map(|container| container.image.clone())
+            .filter(|image| !image.trim().is_empty() && image.as_str() != "unknown")
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        Some((stack.name.clone(), images))
+    }
+
+    async fn pull_selected_stack_images(&mut self, refresh_stack_containers: bool) {
+        if self.pending_image_pull.is_some() {
+            return;
+        }
+
+        let Some((stack_name, images)) = self.selected_stack_pull_data() else {
+            return;
+        };
+
+        if images.is_empty() {
+            self.popup_message = Some(PopupMessage::Info(resources::stack_pull_empty_message(
+                &stack_name,
+            )));
+            return;
+        }
+
+        self.popup_message = Some(PopupMessage::Info(resources::stack_pull_pending_message(
+            &stack_name,
+        )));
+
+        let (tx, rx) = oneshot::channel();
+        let actions = self.stack_actions.clone();
+
+        tokio::spawn(async move {
+            let result = actions.pull_images(&images).await;
+            let _ = tx.send(PullOutcome {
+                stack_name,
+                image_count: images.len(),
+                refresh_containers: refresh_stack_containers,
+                result,
+            });
+        });
+
+        self.pending_image_pull = Some(rx);
     }
 
     fn has_modal_overlay(&self) -> bool {
@@ -1133,6 +1213,39 @@ impl App {
     fn stop_container_stats_subscription(&mut self) {
         if let Some(mut subscription) = self.container_stats_subscription.take() {
             subscription.abort();
+        }
+    }
+
+    async fn drain_image_pull(&mut self) {
+        let Some(rx) = self.pending_image_pull.as_mut() else {
+            return;
+        };
+
+        match rx.try_recv() {
+            Ok(outcome) => {
+                self.pending_image_pull = None;
+                match outcome.result {
+                    Ok(()) => {
+                        if outcome.refresh_containers {
+                            self.refresh_stack_containers().await;
+                        } else {
+                            self.load_stacks().await;
+                        }
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::stack_pull_result_message(
+                                &outcome.stack_name,
+                                outcome.image_count,
+                            )));
+                    }
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                    }
+                }
+            }
+            Err(oneshot::error::TryRecvError::Empty) => {}
+            Err(oneshot::error::TryRecvError::Closed) => {
+                self.pending_image_pull = None;
+            }
         }
     }
 
@@ -1413,6 +1526,11 @@ mod tests {
             size: "10 MB".to_string(),
             created: "2024-01-01".to_string(),
             in_use,
+            linked_containers: if in_use {
+                vec!["/web".to_string(), "/worker".to_string()]
+            } else {
+                Vec::new()
+            },
             can_delete,
         }
     }
@@ -1450,6 +1568,17 @@ mod tests {
             ports: "80/tcp".to_string(),
             can_start,
             can_stop,
+        }
+    }
+
+    fn make_stack_container_with_image(
+        image: &str,
+        can_start: bool,
+        can_stop: bool,
+    ) -> StackContainerDto {
+        StackContainerDto {
+            image: image.to_string(),
+            ..make_stack_container(can_start, can_stop)
         }
     }
 
@@ -1616,6 +1745,10 @@ mod tests {
         assert!(render_app(&mut app).contains("Container Details"));
         app.screen = Screen::VolumeList;
         assert!(render_app(&mut app).contains("Volumes"));
+        app.volume_presenter
+            .set_details(make_volume_dto(true, false));
+        app.screen = Screen::VolumeDetails;
+        assert!(render_app(&mut app).contains("Volume Details"));
         app.screen = Screen::ImageList;
         assert!(render_app(&mut app).contains("Images"));
         app.screen = Screen::ImageDetails;
@@ -1864,6 +1997,12 @@ mod tests {
         app.image_presenter.set_details(make_image_dto(true));
         app.handle_details_action(AppAction::Back);
         assert_eq!(app.screen, Screen::ImageList);
+
+        app.screen = Screen::VolumeDetails;
+        app.volume_presenter
+            .set_details(make_volume_dto(true, false));
+        app.handle_details_action(AppAction::Back);
+        assert_eq!(app.screen, Screen::VolumeList);
     }
 
     #[tokio::test]
@@ -1885,6 +2024,18 @@ mod tests {
         app.screen = Screen::VolumeList;
         app.volume_presenter
             .set_volumes(vec![make_volume_dto(true, false)]);
+        app.handle_volume_list_action(AppAction::ViewDetails).await;
+        assert_eq!(app.screen, Screen::VolumeDetails);
+        assert_eq!(
+            app.volume_presenter
+                .selected_volume
+                .as_ref()
+                .map(|volume| volume.name.as_str()),
+            Some("db-data")
+        );
+
+        app.screen = Screen::VolumeList;
+        app.volume_presenter.clear_details();
         app.handle_volume_list_action(AppAction::Delete).await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
         assert!(app
@@ -2298,6 +2449,7 @@ mod tests {
     async fn test_toggle_pause_restart_and_stack_actions() {
         let mut container_repo = MockContainerRepository::new();
         container_repo.expect_start().returning(|_| Ok(()));
+        container_repo.expect_stop().returning(|_| Ok(()));
         container_repo.expect_pause().returning(|_| Ok(()));
         container_repo.expect_unpause().returning(|_| Ok(()));
         container_repo.expect_restart().returning(|_| Ok(()));
@@ -2305,10 +2457,15 @@ mod tests {
         let mut stack_repo = MockStackRepository::new();
         stack_repo
             .expect_get_all()
-            .times(4)
+            .times(5)
             .returning(|| Ok(vec![make_stack(1)]));
-        stack_repo.expect_start_all().times(1).returning(|_| Ok(()));
         stack_repo.expect_stop_all().times(2).returning(|_| Ok(()));
+        let expected_images = vec!["nginx:latest".to_string(), "postgres:16".to_string()];
+        stack_repo
+            .expect_pull_images()
+            .times(2)
+            .withf(move |images| images == expected_images.as_slice())
+            .returning(|_| Ok(()));
 
         let mut app = build_app(
             container_repo,
@@ -2326,8 +2483,9 @@ mod tests {
         app.restart_container(&make_stopped_container_dto()).await;
 
         let stack = make_stack_dto(vec![
-            make_stack_container(true, false),
-            make_stack_container(false, true),
+            make_stack_container_with_image("nginx:latest", true, false),
+            make_stack_container_with_image("postgres:16", false, true),
+            make_stack_container_with_image("nginx:latest", false, true),
         ]);
         app.stack_presenter.set_stacks(vec![stack.clone()]);
         app.screen = Screen::StackList;
@@ -2335,14 +2493,48 @@ mod tests {
         assert_eq!(app.screen, Screen::StackContainers);
 
         app.screen = Screen::StackList;
+        app.handle_stack_list_action(AppAction::PullImages).await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pulling images for stack compose-app"));
+        tokio::task::yield_now().await;
+        app.drain_image_pull().await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pulled 2 image(s) for stack compose-app"));
+        app.popup_message = None;
         app.handle_stack_list_action(AppAction::StartStop).await;
         app.handle_stack_list_action(AppAction::StopAll).await;
         app.handle_stack_list_action(AppAction::ActivateFilter)
             .await;
         assert!(app.stack_presenter.is_filter_active());
 
-        app.stack_presenter.set_stack_containers(stack.containers);
+        app.popup_message = None;
+        app.stack_presenter.set_stacks(vec![stack.clone()]);
+        app.stack_presenter
+            .set_stack_containers(stack.containers.clone());
         app.screen = Screen::StackContainers;
+        app.handle_stack_containers_action(AppAction::PullImages)
+            .await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pulling images for stack compose-app"));
+        tokio::task::yield_now().await;
+        app.drain_image_pull().await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        app.popup_message = None;
         app.handle_stack_containers_action(AppAction::StartStop)
             .await;
         app.handle_stack_containers_action(AppAction::Delete).await;

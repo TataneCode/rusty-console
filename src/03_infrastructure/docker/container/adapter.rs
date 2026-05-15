@@ -8,7 +8,7 @@ use crate::infrastructure::docker::container::mapper::ContainerInfraMapper;
 use crate::infrastructure::error::InfraError;
 use crate::shared::PruneResultDto;
 use async_trait::async_trait;
-use bollard::container::{
+use bollard::query_parameters::{
     ListContainersOptions, LogsOptions, PruneContainersOptions, RemoveContainerOptions,
     RestartContainerOptions, StartContainerOptions, StatsOptions, StopContainerOptions,
 };
@@ -33,21 +33,21 @@ impl ContainerRepository for ContainerAdapter {
     async fn get_all(&self) -> Result<Vec<Container>, AppError> {
         let mut filters = HashMap::new();
         filters.insert(
-            "status",
+            "status".to_string(),
             vec![
-                "created",
-                "restarting",
-                "running",
-                "removing",
-                "paused",
-                "exited",
-                "dead",
+                "created".to_string(),
+                "restarting".to_string(),
+                "running".to_string(),
+                "removing".to_string(),
+                "paused".to_string(),
+                "exited".to_string(),
+                "dead".to_string(),
             ],
         );
 
         let options = ListContainersOptions {
             all: true,
-            filters,
+            filters: Some(filters),
             ..Default::default()
         };
 
@@ -78,7 +78,7 @@ impl ContainerRepository for ContainerAdapter {
     }
 
     async fn get_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {
-        let options = LogsOptions::<String> {
+        let options = LogsOptions {
             stdout: true,
             stderr: true,
             tail: tail
@@ -107,14 +107,17 @@ impl ContainerRepository for ContainerAdapter {
     async fn start(&self, id: &str) -> Result<(), AppError> {
         self.docker
             .inner()
-            .start_container(id, None::<StartContainerOptions<String>>)
+            .start_container(id, None::<StartContainerOptions>)
             .await
             .map_err(InfraError::from)
             .map_err(AppError::from)
     }
 
     async fn stop(&self, id: &str) -> Result<(), AppError> {
-        let options = StopContainerOptions { t: 10 };
+        let options = StopContainerOptions {
+            t: Some(10),
+            ..Default::default()
+        };
 
         self.docker
             .inner()
@@ -139,7 +142,10 @@ impl ContainerRepository for ContainerAdapter {
     }
 
     async fn restart(&self, id: &str) -> Result<(), AppError> {
-        let options = RestartContainerOptions { t: 10 };
+        let options = RestartContainerOptions {
+            t: Some(10),
+            ..Default::default()
+        };
 
         self.docker
             .inner()
@@ -171,7 +177,7 @@ impl ContainerRepository for ContainerAdapter {
         let result = self
             .docker
             .inner()
-            .prune_containers(None::<PruneContainersOptions<String>>)
+            .prune_containers(None::<PruneContainersOptions>)
             .await
             .map_err(InfraError::from)
             .map_err(AppError::from)?;

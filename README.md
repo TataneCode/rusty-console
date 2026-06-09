@@ -10,6 +10,7 @@ A terminal user interface (TUI) for managing Docker containers, volumes, and ima
 - **Stacks** — detect Docker Compose stacks from container labels, list stacks with running/total counts, drill down into a stack's containers, start/stop/remove all containers in a stack at once
 - Confirmation dialogs for all destructive actions
 - Error popups with dismiss-on-keypress behaviour
+- Loading spinner with ASCII animation (`|/-\`) for async operations (start/stop/delete containers, pull images, etc.) - provides visual feedback during long operations
 
 ## Prerequisites
 
@@ -51,14 +52,14 @@ Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then
 
 | Key | Action |
 |-----|--------|
-| `s` | Start or stop the selected container |
+| `s` | Start or stop the selected container (shows loading spinner during operation) |
 | `p` | Pause or unpause the selected container |
-| `R` | Restart the selected container |
-| `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` |
+| `R` | Restart the selected container (shows loading spinner during operation) |
+| `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` (clears loading before spawn) |
 | `l` | View container logs |
 | `c` | View container details (including live network I/O) |
-| `d` | Delete (opens confirmation dialog) |
-| `X` | Prune all stopped containers |
+| `d` | Delete (opens confirmation dialog, shows loading spinner during operation) |
+| `X` | Prune all stopped containers (shows loading spinner during operation) |
 | `Ctrl+U` | Scroll up (in log view) |
 | `Ctrl+D` | Scroll down (in log view) |
 
@@ -73,27 +74,28 @@ Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then
 | Key | Action |
 |-----|--------|
 | `Enter` | Drill down into stack's containers |
-| `s` | Start All containers in the selected stack |
-| `S` | Stop All containers in the selected stack |
+| `s` | Start All containers in the selected stack (shows loading spinner during operation) |
+| `S` | Stop All containers in the selected stack (shows loading spinner during operation) |
 
 ### Stack Containers (drill-down)
 
 | Key | Action |
 |-----|--------|
-| `s` | Start or stop the selected container |
-| `e` | Open the exec shell picker for the selected container |
-| `d` | Delete the selected container |
-| `Ctrl+S` | Start All containers in the stack |
-| `S` | Stop All containers in the stack |
-| `D` | Remove All containers in the stack (force, with confirmation) |
+| `s` | Start or stop the selected container (shows loading spinner during operation) |
+| `e` | Open the exec shell picker for the selected container (clears loading before spawn) |
+| `d` | Delete the selected container (shows loading spinner during operation) |
+| `Ctrl+S` | Start All containers in the stack (shows loading spinner during operation) |
+| `S` | Stop All containers in the stack (shows loading spinner during operation) |
+| `D` | Remove All containers in the stack (force, with confirmation, shows loading spinner during operation) |
 
 ### Volumes & Images
 
 | Key | Action |
 |-----|--------|
-| `d` | Delete (opens confirmation dialog) |
+| `d` | Delete (opens confirmation dialog, shows loading spinner during operation) |
 | `c` | View image details |
-| `X` | Prune unused volumes / dangling images |
+| `X` | Prune unused volumes / dangling images (shows loading spinner during operation) |
+| `P` | Pull images for selected stack (shows loading spinner during operation) |
 
 ---
 
@@ -218,6 +220,19 @@ Infrastructure Mapper  →  Domain Entity
                                ▼  Presenter
                           Display state  →  View (ratatui widgets)
 ```
+
+### Loading Spinner for Async Operations
+
+The application provides visual feedback during long-running async operations (container start/stop/delete, image pull, volume prune, etc.) through a loading spinner:
+
+- **Spinner Widget**: ASCII animation (`|/-\`) with 200ms frame duration
+- **Display**: Replaces help text in the bottom bar with "Loading... <spinner>" during operations
+- **Behavior**: 
+  - Automatically shown when async operations start
+  - Cleared when operations complete or fail
+  - Special handling for exec shell: loading cleared before spawning external process
+  - Image pull uses spinner instead of popup for consistent behavior
+- **Implementation**: `ui/common/spinner.rs` with integration in all presenters and views
 
 ### Dependency Injection
 

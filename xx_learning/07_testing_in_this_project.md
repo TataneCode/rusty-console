@@ -80,7 +80,7 @@ let mut terminal = Terminal::new(backend).unwrap();
 
 terminal
     .draw(|frame| {
-        render_container_list(frame, frame.area(), &items, &mut state, Some("ng"))
+        render_container_list(frame, frame.area(), &items, &mut state, Some("ng"), false, "|")
     })
     .unwrap();
 ```
@@ -94,6 +94,41 @@ assert!(text.contains("web"));
 ```
 
 That is a practical way to test UI output without opening a real terminal.
+
+## Testing the Spinner Widget
+
+The spinner widget has its own tests to verify animation behavior:
+
+**File:** `src/04_presentation/tui/common/spinner.rs`
+
+```rust
+#[test]
+fn test_spinner_update_does_not_advance_before_duration() {
+    let mut spinner = Spinner::new();
+    let initial_char = spinner.current();
+    
+    // Advance immediately - should not change
+    let next_char = spinner.next();
+    assert_eq!(initial_char, next_char);
+}
+
+#[test]
+fn test_spinner_update_advances_frame_after_duration() {
+    let mut spinner = Spinner::new();
+    let initial_char = spinner.current();
+    
+    // Simulate time passing
+    spinner.last_update = Instant::now() - Duration::from_millis(201);
+    let next_char = spinner.next();
+    
+    assert_ne!(initial_char, next_char);
+}
+```
+
+These tests verify:
+- Spinner doesn't advance too quickly (respects frame duration)
+- Spinner does advance after the duration has passed
+- The animation cycle works correctly
 
 ## What these tests tell you about the architecture
 

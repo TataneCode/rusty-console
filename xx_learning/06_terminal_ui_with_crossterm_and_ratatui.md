@@ -54,6 +54,8 @@ pub fn render_container_list(
     containers: &[&ContainerDto],
     state: &mut TableState,
     active_filter: Option<&str>,
+    is_loading: bool,
+    spinner_char: &str,
 ) {
 ```
 
@@ -106,11 +108,63 @@ Most visible strings live here:
 
 That makes the rendering code easier to read and keeps labels/help text in one place.
 
+## Loading Spinner Widget
+
+The project includes a custom spinner widget for async operations:
+
+**File:** `src/04_presentation/tui/common/spinner.rs`
+
+```rust
+pub struct Spinner {
+    frames: Vec<char>,
+    current_index: usize,
+    last_update: Instant,
+    frame_duration: Duration,
+}
+
+impl Spinner {
+    pub fn new() -> Self {
+        Self {
+            frames: vec!['|', '/', '-', '\\'],
+            current_index: 0,
+            last_update: Instant::now(),
+            frame_duration: Duration::from_millis(200),
+        }
+    }
+    
+    pub fn next(&mut self) -> char {
+        if self.last_update.elapsed() >= self.frame_duration {
+            self.current_index = (self.current_index + 1) % self.frames.len();
+            self.last_update = Instant::now();
+        }
+        self.current()
+    }
+    
+    pub fn current(&self) -> char {
+        self.frames[self.current_index]
+    }
+    
+    pub fn reset(&mut self) {
+        self.current_index = 0;
+        self.last_update = Instant::now();
+    }
+}
+```
+
+Key lessons from the spinner implementation:
+
+- Uses ASCII characters for a simple, terminal-compatible animation
+- 200ms frame duration provides smooth but not overwhelming animation
+- State management: tracks current frame index and last update time
+- Integration: all list views accept `is_loading` and `spinner_char` parameters
+- Help text is replaced with "Loading... <spinner>" when loading
+
 ## Where to look next in this repo
 
 - `src/04_presentation/tui/app.rs` for setup and the main render loop
 - `src/04_presentation/tui/event.rs` for terminal events
 - `src/04_presentation/tui/common/resources.rs` for UI text
+- `src/04_presentation/tui/common/spinner.rs` for the loading spinner widget
 - `src/04_presentation/tui/container/presenter.rs` for list/detail state enriched with live stats
 - `src/04_presentation/tui/*/view.rs` for Ratatui widget composition
 

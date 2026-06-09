@@ -32,5 +32,14 @@ It contains:
 - async streams and `tokio::sync::mpsc` for live container stats
 - a real terminal UI built with Crossterm and Ratatui
 - unit tests, async tests, mocks, and Ratatui rendering tests
+- custom widgets like the loading spinner for async operations
 
 The lessons start with core language ideas, then move outward into async and architecture.
+
+## Recent Additions
+
+The project now includes a **loading spinner** feature (June 2026) that demonstrates:
+- Custom widget creation in Ratatui
+- State management for animations
+- Integration across multiple screens
+- Testing of timing-based behavior

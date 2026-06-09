@@ -51,6 +51,14 @@ impl ImagePresenter {
         self.error = None;
     }
 
+    pub fn set_loading(&mut self, loading: bool) {
+        self.loading = loading;
+    }
+
+    pub fn is_loading(&self) -> bool {
+        self.loading
+    }
+
     pub fn filtered_images(&self) -> Vec<&ImageDto> {
         filter_images(&self.images, self.filter.value())
     }
@@ -223,5 +231,24 @@ mod tests {
         assert_eq!(p.selection.selected(), Some(2));
         p.navigate_down();
         assert_eq!(p.selection.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_set_loading_changes_state() {
+        let mut p = ImagePresenter::new();
+        assert!(!p.is_loading());
+
+        p.set_loading(true);
+        assert!(p.is_loading());
+
+        p.set_loading(false);
+        assert!(!p.is_loading());
+    }
+
+    #[test]
+    fn test_loading_state_defaults_to_false() {
+        let p = ImagePresenter::new();
+        assert!(!p.is_loading());
+        assert!(!p.loading);
     }
 }

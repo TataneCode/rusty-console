@@ -16,6 +16,8 @@ pub fn render_container_list(
     containers: &[&ContainerDto],
     state: &mut TableState,
     active_filter: Option<&str>,
+    is_loading: bool,
+    spinner_char: &str,
 ) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -62,7 +64,12 @@ pub fn render_container_list(
         state,
     );
 
-    render_help(frame, help_area, resources::CONTAINER_LIST_HELP);
+    let help_text = if is_loading {
+        format!(" {} Loading...", spinner_char)
+    } else {
+        resources::CONTAINER_LIST_HELP.to_string()
+    };
+    render_help(frame, help_area, &help_text);
 }
 
 pub fn render_container_logs(
@@ -212,7 +219,15 @@ mod tests {
 
         terminal
             .draw(|frame| {
-                render_container_list(frame, frame.area(), &items, &mut state, Some("ng"))
+                render_container_list(
+                    frame,
+                    frame.area(),
+                    &items,
+                    &mut state,
+                    Some("ng"),
+                    false,
+                    "|",
+                )
             })
             .unwrap();
 

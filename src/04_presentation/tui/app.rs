@@ -3,7 +3,7 @@ use crate::application::container::{
 };
 use crate::presentation::tui::common::{
     map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message,
-    render_selection_dialog, resources, AppAction, PopupMessage,
+    render_selection_dialog, resources, AppAction, PopupMessage, Spinner,
 };
 use crate::presentation::tui::container::{
     filter_containers, render_container_details, render_container_list, render_container_logs,
@@ -186,6 +186,7 @@ pub struct App {
     pub stack_actions: StackActions,
     pub confirm_dialog: Option<(ConfirmAction, bool)>,
     pub popup_message: Option<PopupMessage>,
+    pub spinner: Spinner,
     exec_command_config: ExecCommandConfig,
     exec_shell_dialog: Option<ExecShellDialog>,
     pending_exec: Option<PendingExec>,
@@ -246,6 +247,7 @@ impl App {
             stack_actions,
             confirm_dialog: None,
             popup_message: None,
+            spinner: Spinner::new(),
             exec_command_config,
             exec_shell_dialog: None,
             pending_exec: None,
@@ -320,10 +322,15 @@ impl App {
     fn render(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
+        // Update spinner animation
+        self.spinner.update();
+        let spinner_char = self.spinner.current_char();
+
         match &self.screen {
             Screen::MainMenu => render_main_menu(frame, area, &mut self.menu_state),
             Screen::ContainerList => {
                 let presenter = &mut self.container_presenter;
+                let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
                 let filter = presenter.filter.value().to_string();
                 let containers = &presenter.containers;
@@ -335,6 +342,8 @@ impl App {
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
+                    is_loading,
+                    spinner_char,
                 );
             }
             Screen::ContainerLogs => {
@@ -349,6 +358,7 @@ impl App {
             }
             Screen::VolumeList => {
                 let presenter = &mut self.volume_presenter;
+                let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
                 let filter = presenter.filter.value().to_string();
                 let volumes = &presenter.volumes;
@@ -360,6 +370,8 @@ impl App {
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
+                    is_loading,
+                    spinner_char,
                 );
             }
             Screen::VolumeDetails => {
@@ -369,6 +381,7 @@ impl App {
             }
             Screen::ImageList => {
                 let presenter = &mut self.image_presenter;
+                let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
                 let filter = presenter.filter.value().to_string();
                 let images = &presenter.images;
@@ -380,6 +393,8 @@ impl App {
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
+                    is_loading,
+                    spinner_char,
                 );
             }
             Screen::ImageDetails => {
@@ -389,6 +404,7 @@ impl App {
             }
             Screen::StackList => {
                 let presenter = &mut self.stack_presenter;
+                let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
                 let filter = presenter.filter.value().to_string();
                 let stacks = &presenter.stacks;
@@ -400,6 +416,8 @@ impl App {
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
+                    is_loading,
+                    spinner_char,
                 );
             }
             Screen::StackContainers => {
@@ -409,12 +427,15 @@ impl App {
                     .map(|s| s.name.as_str())
                     .unwrap_or("Stack")
                     .to_string();
+                let is_loading = self.stack_presenter.is_loading();
                 render_stack_containers(
                     frame,
                     area,
                     &stack_name,
                     &self.stack_presenter.stack_containers,
                     &mut self.stack_presenter.container_selection.state,
+                    is_loading,
+                    spinner_char,
                 );
             }
         }
@@ -694,6 +715,23 @@ impl App {
     }
 
     async fn execute_confirm_action(&mut self, action: ConfirmAction) {
+        // Set loading state based on current screen
+        match self.screen {
+            Screen::ContainerList | Screen::StackContainers => {
+                self.container_presenter.set_loading(true);
+            }
+            Screen::VolumeList => {
+                self.volume_presenter.set_loading(true);
+            }
+            Screen::ImageList => {
+                self.image_presenter.set_loading(true);
+            }
+            Screen::StackList => {
+                self.stack_presenter.set_loading(true);
+            }
+            _ => {}
+        }
+
         match action {
             ConfirmAction::DeleteContainer(force) => {
                 let container_id = match self.screen {
@@ -714,32 +752,42 @@ impl App {
                         .await
                     {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.container_presenter.set_loading(false);
                     } else if matches!(self.screen, Screen::StackContainers) {
                         self.refresh_stack_containers().await;
                     } else {
                         self.load_containers().await;
                     }
+                } else {
+                    self.container_presenter.set_loading(false);
                 }
             }
             ConfirmAction::DeleteVolume => {
                 if let Some(volume) = self.volume_presenter.selected_volume().cloned() {
                     if let Err(e) = self.volume_actions.delete_volume(&volume.name).await {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.volume_presenter.set_loading(false);
                     } else {
                         self.load_volumes().await;
                     }
+                } else {
+                    self.volume_presenter.set_loading(false);
                 }
             }
             ConfirmAction::DeleteImage(force) => {
                 if let Some(image) = self.image_presenter.selected_image().cloned() {
                     if let Err(e) = self.image_actions.delete_image(&image.id, force).await {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.image_presenter.set_loading(false);
                     } else {
                         self.load_images().await;
                     }
+                } else {
+                    self.image_presenter.set_loading(false);
                 }
             }
             ConfirmAction::PruneContainers => {
+                self.container_presenter.set_loading(true);
                 match self.container_actions.prune_containers().await {
                     Ok(result) => {
                         self.popup_message =
@@ -750,32 +798,50 @@ impl App {
                             )));
                         self.load_containers().await;
                     }
-                    Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.container_presenter.set_loading(false);
+                    }
                 }
             }
-            ConfirmAction::PruneVolumes => match self.volume_actions.prune_volumes().await {
-                Ok(result) => {
-                    self.popup_message = Some(PopupMessage::Info(resources::prune_result_message(
-                        "volume",
-                        result.deleted_count,
-                        &format_bytes(result.space_freed),
-                    )));
-                    self.load_volumes().await;
+            ConfirmAction::PruneVolumes => {
+                self.volume_presenter.set_loading(true);
+                match self.volume_actions.prune_volumes().await {
+                    Ok(result) => {
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::prune_result_message(
+                                "volume",
+                                result.deleted_count,
+                                &format_bytes(result.space_freed),
+                            )));
+                        self.load_volumes().await;
+                    }
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.volume_presenter.set_loading(false);
+                    }
                 }
-                Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
-            },
-            ConfirmAction::PruneImages => match self.image_actions.prune_images().await {
-                Ok(result) => {
-                    self.popup_message = Some(PopupMessage::Info(resources::prune_result_message(
-                        "image",
-                        result.deleted_count,
-                        &format_bytes(result.space_freed),
-                    )));
-                    self.load_images().await;
+            }
+            ConfirmAction::PruneImages => {
+                self.image_presenter.set_loading(true);
+                match self.image_actions.prune_images().await {
+                    Ok(result) => {
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::prune_result_message(
+                                "image",
+                                result.deleted_count,
+                                &format_bytes(result.space_freed),
+                            )));
+                        self.load_images().await;
+                    }
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.image_presenter.set_loading(false);
+                    }
                 }
-                Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
-            },
+            }
             ConfirmAction::RemoveAllStackContainers => {
+                self.stack_presenter.set_loading(true);
                 let ids: Vec<String> = self
                     .stack_presenter
                     .stack_containers
@@ -787,7 +853,10 @@ impl App {
                         self.screen = Screen::StackList;
                         self.load_stacks().await;
                     }
-                    Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.stack_presenter.set_loading(false);
+                    }
                 }
             }
         }
@@ -841,6 +910,7 @@ impl App {
     }
 
     async fn load_containers(&mut self) {
+        self.container_presenter.set_loading(true);
         match self.container_actions.load_containers().await {
             Ok(containers) => {
                 self.container_presenter.set_containers(containers);
@@ -848,9 +918,11 @@ impl App {
             }
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
+        self.container_presenter.set_loading(false);
     }
 
     async fn load_container_details(&mut self, id: &str) {
+        self.container_presenter.set_loading(true);
         match self.container_actions.load_container_details(id).await {
             Ok(Some(container)) => self.container_presenter.set_details(container),
             Ok(None) => {
@@ -860,31 +932,40 @@ impl App {
             }
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
+        self.container_presenter.set_loading(false);
     }
 
     async fn load_container_logs(&mut self, container: &ContainerDto) {
+        self.container_presenter.set_loading(true);
         match self.container_actions.load_logs(container, Some(500)).await {
             Ok(logs) => self.container_presenter.set_logs(logs),
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
+        self.container_presenter.set_loading(false);
     }
 
     async fn toggle_container(&mut self, container: &ContainerDto) {
+        self.container_presenter.set_loading(true);
         let result = if container.can_stop {
             self.container_actions.stop_container(&container.id).await
         } else if container.can_start {
             self.container_actions.start_container(&container.id).await
         } else {
+            self.container_presenter.set_loading(false);
             return;
         };
 
         match result {
             Ok(_) => self.load_containers().await,
-            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                self.container_presenter.set_loading(false);
+            }
         }
     }
 
     async fn pause_unpause_container(&mut self, container: &ContainerDto) {
+        self.container_presenter.set_loading(true);
         let result = if container.can_pause {
             self.container_actions.pause_container(&container.id).await
         } else if container.can_unpause {
@@ -892,12 +973,16 @@ impl App {
                 .unpause_container(&container.id)
                 .await
         } else {
+            self.container_presenter.set_loading(false);
             return;
         };
 
         match result {
             Ok(_) => self.load_containers().await,
-            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                self.container_presenter.set_loading(false);
+            }
         }
     }
 
@@ -906,38 +991,49 @@ impl App {
             return;
         }
 
+        self.container_presenter.set_loading(true);
         match self
             .container_actions
             .restart_container(&container.id)
             .await
         {
             Ok(_) => self.load_containers().await,
-            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                self.container_presenter.set_loading(false);
+            }
         }
     }
 
     async fn load_volumes(&mut self) {
+        self.volume_presenter.set_loading(true);
         match self.volume_actions.load_volumes().await {
             Ok(volumes) => self.volume_presenter.set_volumes(volumes),
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
+        self.volume_presenter.set_loading(false);
     }
 
     async fn load_images(&mut self) {
+        self.image_presenter.set_loading(true);
         match self.image_actions.load_images().await {
             Ok(images) => self.image_presenter.set_images(images),
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
+        self.image_presenter.set_loading(false);
     }
 
     async fn load_stacks(&mut self) {
+        self.stack_presenter.set_loading(true);
         match self.stack_actions.load_stacks().await {
             Ok(stacks) => self.stack_presenter.set_stacks(stacks),
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
+        self.stack_presenter.set_loading(false);
     }
 
     async fn refresh_stack_containers(&mut self) {
+        self.stack_presenter.set_loading(true);
         let selected_stack_name = self
             .stack_presenter
             .selected_stack()
@@ -953,6 +1049,7 @@ impl App {
             .map(|stack| stack.containers.clone())
             .unwrap_or_default();
         self.stack_presenter.set_stack_containers(containers);
+        self.stack_presenter.set_loading(false);
     }
 
     async fn handle_stack_list_action(&mut self, action: AppAction) {
@@ -969,6 +1066,7 @@ impl App {
                 }
             }
             AppAction::StartStop => {
+                self.stack_presenter.set_loading(true);
                 if let Some(stack) = self.stack_presenter.selected_stack() {
                     let ids = stack
                         .containers
@@ -979,13 +1077,19 @@ impl App {
                     if !ids.is_empty() {
                         if let Err(e) = self.stack_actions.start_all(&ids).await {
                             self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                            self.stack_presenter.set_loading(false);
                         } else {
                             self.load_stacks().await;
                         }
+                    } else {
+                        self.stack_presenter.set_loading(false);
                     }
+                } else {
+                    self.stack_presenter.set_loading(false);
                 }
             }
             AppAction::StopAll => {
+                self.stack_presenter.set_loading(true);
                 if let Some(stack) = self.stack_presenter.selected_stack() {
                     let ids = stack
                         .containers
@@ -996,10 +1100,15 @@ impl App {
                     if !ids.is_empty() {
                         if let Err(e) = self.stack_actions.stop_all(&ids).await {
                             self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                            self.stack_presenter.set_loading(false);
                         } else {
                             self.load_stacks().await;
                         }
+                    } else {
+                        self.stack_presenter.set_loading(false);
                     }
+                } else {
+                    self.stack_presenter.set_loading(false);
                 }
             }
             AppAction::PullImages => self.pull_selected_stack_images(false).await,
@@ -1023,16 +1132,21 @@ impl App {
             AppAction::NavigateDown => self.stack_presenter.navigate_container_down(),
             AppAction::StartStop => {
                 if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
+                    self.stack_presenter.set_loading(true);
                     let result = if container.can_stop {
                         self.container_actions.stop_container(&container.id).await
                     } else if container.can_start {
                         self.container_actions.start_container(&container.id).await
                     } else {
+                        self.stack_presenter.set_loading(false);
                         return;
                     };
                     match result {
                         Ok(_) => self.refresh_stack_containers().await,
-                        Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+                        Err(e) => {
+                            self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                            self.stack_presenter.set_loading(false);
+                        }
                     }
                 }
             }
@@ -1043,6 +1157,7 @@ impl App {
                 }
             }
             AppAction::StopAll => {
+                self.stack_presenter.set_loading(true);
                 if let Some(stack) = self.stack_presenter.selected_stack() {
                     let ids: Vec<String> = stack
                         .containers
@@ -1053,12 +1168,20 @@ impl App {
                     if !ids.is_empty() {
                         match self.stack_actions.stop_all(&ids).await {
                             Ok(_) => self.refresh_stack_containers().await,
-                            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+                            Err(e) => {
+                                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                                self.stack_presenter.set_loading(false);
+                            }
                         }
+                    } else {
+                        self.stack_presenter.set_loading(false);
                     }
+                } else {
+                    self.stack_presenter.set_loading(false);
                 }
             }
             AppAction::StartAll => {
+                self.stack_presenter.set_loading(true);
                 if let Some(stack) = self.stack_presenter.selected_stack() {
                     let ids: Vec<String> = stack
                         .containers
@@ -1069,9 +1192,16 @@ impl App {
                     if !ids.is_empty() {
                         match self.stack_actions.start_all(&ids).await {
                             Ok(_) => self.refresh_stack_containers().await,
-                            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+                            Err(e) => {
+                                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                                self.stack_presenter.set_loading(false);
+                            }
                         }
+                    } else {
+                        self.stack_presenter.set_loading(false);
                     }
+                } else {
+                    self.stack_presenter.set_loading(false);
                 }
             }
             AppAction::RemoveAll if !self.stack_presenter.stack_containers.is_empty() => {
@@ -1114,9 +1244,8 @@ impl App {
             return;
         }
 
-        self.popup_message = Some(PopupMessage::Info(resources::stack_pull_pending_message(
-            &stack_name,
-        )));
+        // Set loading state - spinner will be shown
+        self.stack_presenter.set_loading(true);
 
         let (tx, rx) = oneshot::channel();
         let actions = self.stack_actions.clone();
@@ -1224,6 +1353,7 @@ impl App {
         match rx.try_recv() {
             Ok(outcome) => {
                 self.pending_image_pull = None;
+                self.stack_presenter.set_loading(false);
                 match outcome.result {
                     Ok(()) => {
                         if outcome.refresh_containers {
@@ -1245,6 +1375,7 @@ impl App {
             Err(oneshot::error::TryRecvError::Empty) => {}
             Err(oneshot::error::TryRecvError::Closed) => {
                 self.pending_image_pull = None;
+                self.stack_presenter.set_loading(false);
             }
         }
     }
@@ -1294,6 +1425,11 @@ impl App {
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
         request: PendingExec,
     ) -> io::Result<()> {
+        // Clear loading state before exec as per user requirement
+        // Exec spawns external process, spinner would be misleading
+        self.container_presenter.set_loading(false);
+        self.stack_presenter.set_loading(false);
+
         let result = self.run_exec_command(terminal, &request)?;
 
         match request.refresh_target {
@@ -2446,6 +2582,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_loading_state_set_during_async_operations() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_get_all().returning(|| Ok(vec![]));
+        let mut volume_repo = MockVolumeRepository::new();
+        volume_repo.expect_get_all().returning(|| {
+            Ok(vec![crate::domain::volume::Volume::new(
+                crate::domain::volume::VolumeId::new("vol1").unwrap(),
+                "db-data",
+                "local",
+                "/tmp".to_string(),
+            )])
+        });
+        let mut image_repo = MockImageRepository::new();
+        image_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_image()]));
+        let mut stack_repo = MockStackRepository::new();
+        stack_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_stack(0)]));
+
+        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+
+        // Initially not loading
+        assert!(!app.container_presenter.is_loading());
+        assert!(!app.volume_presenter.is_loading());
+        assert!(!app.image_presenter.is_loading());
+        assert!(!app.stack_presenter.is_loading());
+
+        // Load operations should set and clear loading state
+        app.load_containers().await;
+        assert!(!app.container_presenter.is_loading());
+
+        app.load_volumes().await;
+        assert!(!app.volume_presenter.is_loading());
+
+        app.load_images().await;
+        assert!(!app.image_presenter.is_loading());
+
+        app.load_stacks().await;
+        assert!(!app.stack_presenter.is_loading());
+    }
+
+    #[tokio::test]
     async fn test_toggle_pause_restart_and_stack_actions() {
         let mut container_repo = MockContainerRepository::new();
         container_repo.expect_start().returning(|_| Ok(()));
@@ -2494,13 +2674,8 @@ mod tests {
 
         app.screen = Screen::StackList;
         app.handle_stack_list_action(AppAction::PullImages).await;
-        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
-        assert!(app
-            .popup_message
-            .as_ref()
-            .unwrap()
-            .as_str()
-            .contains("Pulling images for stack compose-app"));
+        // Loading spinner is shown instead of popup
+        assert!(app.stack_presenter.is_loading());
         tokio::task::yield_now().await;
         app.drain_image_pull().await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
@@ -2524,13 +2699,8 @@ mod tests {
         app.screen = Screen::StackContainers;
         app.handle_stack_containers_action(AppAction::PullImages)
             .await;
-        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
-        assert!(app
-            .popup_message
-            .as_ref()
-            .unwrap()
-            .as_str()
-            .contains("Pulling images for stack compose-app"));
+        // Loading spinner is shown instead of popup
+        assert!(app.stack_presenter.is_loading());
         tokio::task::yield_now().await;
         app.drain_image_pull().await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));

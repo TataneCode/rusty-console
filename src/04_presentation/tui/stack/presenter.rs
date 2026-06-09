@@ -50,6 +50,14 @@ impl StackPresenter {
         self.error = None;
     }
 
+    pub fn set_loading(&mut self, loading: bool) {
+        self.loading = loading;
+    }
+
+    pub fn is_loading(&self) -> bool {
+        self.loading
+    }
+
     pub fn filtered_stacks(&self) -> Vec<&StackDto> {
         filter_stacks(&self.stacks, self.filter.value())
     }
@@ -350,5 +358,24 @@ mod tests {
         assert_eq!(p.selected_stack_container().unwrap().name, "web");
         p.navigate_container_down();
         assert_eq!(p.selected_stack_container().unwrap().name, "db");
+    }
+
+    #[test]
+    fn test_set_loading_changes_state() {
+        let mut p = StackPresenter::new();
+        assert!(!p.is_loading());
+
+        p.set_loading(true);
+        assert!(p.is_loading());
+
+        p.set_loading(false);
+        assert!(!p.is_loading());
+    }
+
+    #[test]
+    fn test_loading_state_defaults_to_false() {
+        let p = StackPresenter::new();
+        assert!(!p.is_loading());
+        assert!(!p.loading);
     }
 }

@@ -64,6 +64,14 @@ impl ContainerPresenter {
         self.error = None;
     }
 
+    pub fn set_loading(&mut self, loading: bool) {
+        self.loading = loading;
+    }
+
+    pub fn is_loading(&self) -> bool {
+        self.loading
+    }
+
     pub fn filtered_containers(&self) -> Vec<&ContainerDto> {
         filter_containers(&self.containers, self.filter.value())
     }
@@ -476,5 +484,24 @@ mod tests {
             .containers
             .iter()
             .all(|container| container.runtime_stats.is_none()));
+    }
+
+    #[test]
+    fn test_set_loading_changes_state() {
+        let mut p = ContainerPresenter::new();
+        assert!(!p.is_loading());
+
+        p.set_loading(true);
+        assert!(p.is_loading());
+
+        p.set_loading(false);
+        assert!(!p.is_loading());
+    }
+
+    #[test]
+    fn test_loading_state_defaults_to_false() {
+        let p = ContainerPresenter::new();
+        assert!(!p.is_loading());
+        assert!(!p.loading);
     }
 }

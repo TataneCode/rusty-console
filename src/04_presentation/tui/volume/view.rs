@@ -15,6 +15,8 @@ pub fn render_volume_list(
     volumes: &[&VolumeDto],
     state: &mut TableState,
     active_filter: Option<&str>,
+    is_loading: bool,
+    spinner_char: &str,
 ) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -63,7 +65,12 @@ pub fn render_volume_list(
         state,
     );
 
-    render_help(frame, help_area, resources::VOLUME_LIST_HELP);
+    let help_text = if is_loading {
+        format!(" {} Loading...", spinner_char)
+    } else {
+        resources::VOLUME_LIST_HELP.to_string()
+    };
+    render_help(frame, help_area, &help_text);
 }
 
 pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) {
@@ -159,7 +166,17 @@ mod tests {
         let mut state = TableState::default();
 
         terminal
-            .draw(|frame| render_volume_list(frame, frame.area(), &items, &mut state, Some("db")))
+            .draw(|frame| {
+                render_volume_list(
+                    frame,
+                    frame.area(),
+                    &items,
+                    &mut state,
+                    Some("db"),
+                    false,
+                    "|",
+                )
+            })
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());

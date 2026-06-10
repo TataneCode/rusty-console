@@ -16,6 +16,8 @@ pub fn render_stack_list(
     stacks: &[&StackDto],
     state: &mut TableState,
     active_filter: Option<&str>,
+    is_loading: bool,
+    spinner_char: &str,
 ) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -55,7 +57,12 @@ pub fn render_stack_list(
         state,
     );
 
-    render_help(frame, help_area, resources::STACK_LIST_HELP);
+    let help_text = if is_loading {
+        format!(" {} Loading...", spinner_char)
+    } else {
+        resources::STACK_LIST_HELP.to_string()
+    };
+    render_help(frame, help_area, &help_text);
 }
 
 pub fn render_stack_containers(
@@ -64,6 +71,8 @@ pub fn render_stack_containers(
     stack_name: &str,
     containers: &[StackContainerDto],
     state: &mut TableState,
+    is_loading: bool,
+    spinner_char: &str,
 ) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -107,7 +116,12 @@ pub fn render_stack_containers(
         state,
     );
 
-    render_help(frame, help_area, resources::STACK_CONTAINERS_HELP);
+    let help_text = if is_loading {
+        format!(" {} Loading...", spinner_char)
+    } else {
+        resources::STACK_CONTAINERS_HELP.to_string()
+    };
+    render_help(frame, help_area, &help_text);
 }
 
 #[cfg(test)]
@@ -152,7 +166,17 @@ mod tests {
         let mut state = TableState::default();
 
         terminal
-            .draw(|frame| render_stack_list(frame, frame.area(), &items, &mut state, Some("app")))
+            .draw(|frame| {
+                render_stack_list(
+                    frame,
+                    frame.area(),
+                    &items,
+                    &mut state,
+                    Some("app"),
+                    false,
+                    "|",
+                )
+            })
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());
@@ -171,7 +195,15 @@ mod tests {
 
         terminal
             .draw(|frame| {
-                render_stack_containers(frame, frame.area(), "compose-app", &containers, &mut state)
+                render_stack_containers(
+                    frame,
+                    frame.area(),
+                    "compose-app",
+                    &containers,
+                    &mut state,
+                    false,
+                    "|",
+                )
             })
             .unwrap();
 

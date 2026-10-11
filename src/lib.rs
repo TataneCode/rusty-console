@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 #[path = "02_application/mod.rs"]
 pub mod application;
 #[path = "01_domain/mod.rs"]

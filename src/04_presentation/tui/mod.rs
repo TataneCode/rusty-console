@@ -1,7 +1,10 @@
 pub mod app;
 pub mod common;
+pub mod confirm;
 pub mod container;
 pub mod event;
+pub mod exec;
 pub mod image;
+pub mod router;
 pub mod stack;
 pub mod volume;

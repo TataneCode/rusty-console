@@ -11,7 +11,7 @@ This repository is a good place to learn Rust testing because it mixes several s
 
 Most files keep tests beside the production code:
 
-**File:** `src/shared.rs`
+**File:** `src/01_domain/shared/byte_size.rs`
 
 ```rust
 #[cfg(test)]
@@ -142,7 +142,7 @@ That separation is one sign the layering is working well.
 
 ## Where to look next in this repo
 
-- `src/shared.rs` for simple unit tests
+- `src/01_domain/shared/byte_size.rs` for simple unit tests
 - `src/01_domain/*` for domain-focused tests
 - `src/02_application/*/service.rs` for async + mock-based tests
 - `src/04_presentation/tui/*/view.rs` for Ratatui rendering tests

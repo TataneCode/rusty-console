@@ -7,7 +7,7 @@ impl ContainerId {
     pub fn new(id: impl Into<String>) -> Result<Self, DomainError> {
         let id = id.into();
         if id.is_empty() {
-            return Err(DomainError::InvalidContainerId(
+            return Err(DomainError::InvalidContainer(
                 "Container ID cannot be empty".to_string(),
             ));
         }

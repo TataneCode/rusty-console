@@ -43,16 +43,15 @@ pub enum Screen {
     StackContainers,
 }
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
-    DeleteContainer(bool),
-    DeleteVolume,
-    DeleteImage(bool),
-    PruneContainers,
-    PruneVolumes,
-    PruneImages,
-    RemoveAllStackContainers,
+    ContainerDelete(bool),
+    VolumeDelete,
+    ImageDelete(bool),
+    ContainersPrune,
+    VolumesPrune,
+    ImagesPrune,
+    StackContainersRemoveAll,
 }
 
 const EXEC_SHELL_OPTIONS: [&str; 2] = ["sh", "bash"];
@@ -593,7 +592,7 @@ impl App {
             AppAction::Delete => {
                 if let Some(container) = self.container_presenter.selected_container() {
                     let force = container.can_stop;
-                    self.confirm_dialog = Some((ConfirmAction::DeleteContainer(force), true));
+                    self.confirm_dialog = Some((ConfirmAction::ContainerDelete(force), true));
                 }
             }
             AppAction::PauseUnpause => {
@@ -608,7 +607,7 @@ impl App {
             }
             AppAction::Refresh => self.load_containers().await,
             AppAction::Prune => {
-                self.confirm_dialog = Some((ConfirmAction::PruneContainers, true));
+                self.confirm_dialog = Some((ConfirmAction::ContainersPrune, true));
             }
             AppAction::ActivateFilter => {
                 self.container_presenter.activate_filter();
@@ -666,7 +665,7 @@ impl App {
             AppAction::Delete => {
                 if let Some(volume) = self.volume_presenter.selected_volume() {
                     if volume.can_delete {
-                        self.confirm_dialog = Some((ConfirmAction::DeleteVolume, true));
+                        self.confirm_dialog = Some((ConfirmAction::VolumeDelete, true));
                     } else {
                         self.popup_message = Some(PopupMessage::Error(
                             resources::VOLUME_IN_USE_DELETE_MESSAGE.to_string(),
@@ -676,7 +675,7 @@ impl App {
             }
             AppAction::Refresh => self.load_volumes().await,
             AppAction::Prune => {
-                self.confirm_dialog = Some((ConfirmAction::PruneVolumes, true));
+                self.confirm_dialog = Some((ConfirmAction::VolumesPrune, true));
             }
             AppAction::ActivateFilter => {
                 self.volume_presenter.activate_filter();
@@ -700,12 +699,12 @@ impl App {
             AppAction::Delete => {
                 if let Some(image) = self.image_presenter.selected_image() {
                     let force = image.in_use;
-                    self.confirm_dialog = Some((ConfirmAction::DeleteImage(force), true));
+                    self.confirm_dialog = Some((ConfirmAction::ImageDelete(force), true));
                 }
             }
             AppAction::Refresh => self.load_images().await,
             AppAction::Prune => {
-                self.confirm_dialog = Some((ConfirmAction::PruneImages, true));
+                self.confirm_dialog = Some((ConfirmAction::ImagesPrune, true));
             }
             AppAction::ActivateFilter => {
                 self.image_presenter.activate_filter();
@@ -733,7 +732,7 @@ impl App {
         }
 
         match action {
-            ConfirmAction::DeleteContainer(force) => {
+            ConfirmAction::ContainerDelete(force) => {
                 let container_id = match self.screen {
                     Screen::StackContainers => self
                         .stack_presenter
@@ -762,7 +761,7 @@ impl App {
                     self.container_presenter.set_loading(false);
                 }
             }
-            ConfirmAction::DeleteVolume => {
+            ConfirmAction::VolumeDelete => {
                 if let Some(volume) = self.volume_presenter.selected_volume().cloned() {
                     if let Err(e) = self.volume_actions.delete_volume(&volume.name).await {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));
@@ -774,7 +773,7 @@ impl App {
                     self.volume_presenter.set_loading(false);
                 }
             }
-            ConfirmAction::DeleteImage(force) => {
+            ConfirmAction::ImageDelete(force) => {
                 if let Some(image) = self.image_presenter.selected_image().cloned() {
                     if let Err(e) = self.image_actions.delete_image(&image.id, force).await {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));
@@ -786,7 +785,7 @@ impl App {
                     self.image_presenter.set_loading(false);
                 }
             }
-            ConfirmAction::PruneContainers => {
+            ConfirmAction::ContainersPrune => {
                 self.container_presenter.set_loading(true);
                 match self.container_actions.prune_containers().await {
                     Ok(result) => {
@@ -804,7 +803,7 @@ impl App {
                     }
                 }
             }
-            ConfirmAction::PruneVolumes => {
+            ConfirmAction::VolumesPrune => {
                 self.volume_presenter.set_loading(true);
                 match self.volume_actions.prune_volumes().await {
                     Ok(result) => {
@@ -822,7 +821,7 @@ impl App {
                     }
                 }
             }
-            ConfirmAction::PruneImages => {
+            ConfirmAction::ImagesPrune => {
                 self.image_presenter.set_loading(true);
                 match self.image_actions.prune_images().await {
                     Ok(result) => {
@@ -840,7 +839,7 @@ impl App {
                     }
                 }
             }
-            ConfirmAction::RemoveAllStackContainers => {
+            ConfirmAction::StackContainersRemoveAll => {
                 self.stack_presenter.set_loading(true);
                 let ids: Vec<String> = self
                     .stack_presenter
@@ -1153,7 +1152,7 @@ impl App {
             AppAction::Delete => {
                 if let Some(container) = self.stack_presenter.selected_stack_container() {
                     let force = container.can_stop;
-                    self.confirm_dialog = Some((ConfirmAction::DeleteContainer(force), true));
+                    self.confirm_dialog = Some((ConfirmAction::ContainerDelete(force), true));
                 }
             }
             AppAction::StopAll => {
@@ -1205,7 +1204,7 @@ impl App {
                 }
             }
             AppAction::RemoveAll if !self.stack_presenter.stack_containers.is_empty() => {
-                self.confirm_dialog = Some((ConfirmAction::RemoveAllStackContainers, true));
+                self.confirm_dialog = Some((ConfirmAction::StackContainersRemoveAll, true));
             }
             AppAction::PullImages => self.pull_selected_stack_images(true).await,
             AppAction::Refresh => self.refresh_stack_containers().await,
@@ -1517,25 +1516,25 @@ impl App {
 
 fn confirm_message(action: ConfirmAction) -> &'static str {
     match action {
-        ConfirmAction::DeleteContainer(force) => {
+        ConfirmAction::ContainerDelete(force) => {
             if force {
                 resources::FORCE_DELETE_CONTAINER_MESSAGE
             } else {
                 resources::DELETE_CONTAINER_MESSAGE
             }
         }
-        ConfirmAction::DeleteVolume => resources::DELETE_VOLUME_MESSAGE,
-        ConfirmAction::DeleteImage(force) => {
+        ConfirmAction::VolumeDelete => resources::DELETE_VOLUME_MESSAGE,
+        ConfirmAction::ImageDelete(force) => {
             if force {
                 resources::FORCE_DELETE_IMAGE_MESSAGE
             } else {
                 resources::DELETE_IMAGE_MESSAGE
             }
         }
-        ConfirmAction::PruneContainers => resources::PRUNE_CONTAINERS_MESSAGE,
-        ConfirmAction::PruneVolumes => resources::PRUNE_VOLUMES_MESSAGE,
-        ConfirmAction::PruneImages => resources::PRUNE_IMAGES_MESSAGE,
-        ConfirmAction::RemoveAllStackContainers => resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE,
+        ConfirmAction::ContainersPrune => resources::PRUNE_CONTAINERS_MESSAGE,
+        ConfirmAction::VolumesPrune => resources::PRUNE_VOLUMES_MESSAGE,
+        ConfirmAction::ImagesPrune => resources::PRUNE_IMAGES_MESSAGE,
+        ConfirmAction::StackContainersRemoveAll => resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE,
     }
 }
 
@@ -1807,15 +1806,15 @@ mod tests {
         assert!(rendered.contains(resources::MAIN_MENU_TITLE));
 
         assert_eq!(
-            confirm_message(ConfirmAction::DeleteContainer(false)),
+            confirm_message(ConfirmAction::ContainerDelete(false)),
             resources::DELETE_CONTAINER_MESSAGE
         );
         assert_eq!(
-            confirm_message(ConfirmAction::DeleteContainer(true)),
+            confirm_message(ConfirmAction::ContainerDelete(true)),
             resources::FORCE_DELETE_CONTAINER_MESSAGE
         );
         assert_eq!(
-            confirm_message(ConfirmAction::RemoveAllStackContainers),
+            confirm_message(ConfirmAction::StackContainersRemoveAll),
             resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE
         );
 
@@ -1894,7 +1893,7 @@ mod tests {
         app.screen = Screen::StackContainers;
         assert!(render_app(&mut app).contains("compose-app"));
 
-        app.confirm_dialog = Some((ConfirmAction::DeleteVolume, true));
+        app.confirm_dialog = Some((ConfirmAction::VolumeDelete, true));
         let rendered = render_app(&mut app);
         assert!(rendered.contains(resources::DELETE_VOLUME_MESSAGE));
 
@@ -1927,17 +1926,17 @@ mod tests {
         assert!(app.popup_message.is_none());
         assert!(!app.should_quit);
 
-        app.confirm_dialog = Some((ConfirmAction::DeleteVolume, true));
+        app.confirm_dialog = Some((ConfirmAction::VolumeDelete, true));
         app.handle_action(AppAction::NavigateDown).await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::DeleteVolume, false))
+            Some((ConfirmAction::VolumeDelete, false))
         );
 
         app.handle_action(AppAction::Back).await;
         assert!(app.confirm_dialog.is_none());
 
-        app.confirm_dialog = Some((ConfirmAction::DeleteVolume, false));
+        app.confirm_dialog = Some((ConfirmAction::VolumeDelete, false));
         app.handle_action(AppAction::Select).await;
         assert!(app.confirm_dialog.is_none());
     }
@@ -2084,14 +2083,14 @@ mod tests {
         app.handle_container_list_action(AppAction::Delete).await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::DeleteContainer(true), true))
+            Some((ConfirmAction::ContainerDelete(true), true))
         );
 
         app.confirm_dialog = None;
         app.handle_container_list_action(AppAction::Prune).await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::PruneContainers, true))
+            Some((ConfirmAction::ContainersPrune, true))
         );
 
         app.confirm_dialog = None;
@@ -2186,13 +2185,13 @@ mod tests {
         app.handle_volume_list_action(AppAction::Delete).await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::DeleteVolume, true))
+            Some((ConfirmAction::VolumeDelete, true))
         );
         app.confirm_dialog = None;
         app.handle_volume_list_action(AppAction::Prune).await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::PruneVolumes, true))
+            Some((ConfirmAction::VolumesPrune, true))
         );
         app.confirm_dialog = None;
         app.handle_volume_list_action(AppAction::ActivateFilter)
@@ -2208,11 +2207,11 @@ mod tests {
         app.handle_image_list_action(AppAction::Delete).await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::DeleteImage(true), true))
+            Some((ConfirmAction::ImageDelete(true), true))
         );
         app.confirm_dialog = None;
         app.handle_image_list_action(AppAction::Prune).await;
-        assert_eq!(app.confirm_dialog, Some((ConfirmAction::PruneImages, true)));
+        assert_eq!(app.confirm_dialog, Some((ConfirmAction::ImagesPrune, true)));
         app.confirm_dialog = None;
         app.handle_image_list_action(AppAction::ActivateFilter)
             .await;
@@ -2496,9 +2495,9 @@ mod tests {
         app.stack_presenter
             .set_stack_containers(vec![make_stack_container(false, true)]);
 
-        app.execute_confirm_action(ConfirmAction::DeleteContainer(true))
+        app.execute_confirm_action(ConfirmAction::ContainerDelete(true))
             .await;
-        app.execute_confirm_action(ConfirmAction::PruneContainers)
+        app.execute_confirm_action(ConfirmAction::ContainersPrune)
             .await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
         assert!(app
@@ -2508,9 +2507,9 @@ mod tests {
             .as_str()
             .contains("Pruned 2 container(s)"));
 
-        app.execute_confirm_action(ConfirmAction::DeleteVolume)
+        app.execute_confirm_action(ConfirmAction::VolumeDelete)
             .await;
-        app.execute_confirm_action(ConfirmAction::PruneVolumes)
+        app.execute_confirm_action(ConfirmAction::VolumesPrune)
             .await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
         assert!(app
@@ -2520,9 +2519,9 @@ mod tests {
             .as_str()
             .contains("Pruned 1 volume(s)"));
 
-        app.execute_confirm_action(ConfirmAction::DeleteImage(true))
+        app.execute_confirm_action(ConfirmAction::ImageDelete(true))
             .await;
-        app.execute_confirm_action(ConfirmAction::PruneImages).await;
+        app.execute_confirm_action(ConfirmAction::ImagesPrune).await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
         assert!(app
             .popup_message
@@ -2532,9 +2531,9 @@ mod tests {
             .contains("Pruned 3 image(s)"));
 
         app.screen = Screen::StackContainers;
-        app.execute_confirm_action(ConfirmAction::DeleteContainer(true))
+        app.execute_confirm_action(ConfirmAction::ContainerDelete(true))
             .await;
-        app.execute_confirm_action(ConfirmAction::RemoveAllStackContainers)
+        app.execute_confirm_action(ConfirmAction::StackContainersRemoveAll)
             .await;
         assert_eq!(app.screen, Screen::StackList);
     }
@@ -2710,7 +2709,7 @@ mod tests {
         app.handle_stack_containers_action(AppAction::Delete).await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::DeleteContainer(true), true))
+            Some((ConfirmAction::ContainerDelete(true), true))
         );
         app.confirm_dialog = None;
         app.handle_stack_containers_action(AppAction::StopAll).await;
@@ -2720,7 +2719,7 @@ mod tests {
             .await;
         assert_eq!(
             app.confirm_dialog,
-            Some((ConfirmAction::RemoveAllStackContainers, true))
+            Some((ConfirmAction::StackContainersRemoveAll, true))
         );
     }
 }

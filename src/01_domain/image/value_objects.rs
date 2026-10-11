@@ -9,7 +9,7 @@ impl ImageId {
     pub fn new(id: impl Into<String>) -> Result<Self, DomainError> {
         let id = id.into();
         if id.is_empty() {
-            return Err(DomainError::InvalidImageId(
+            return Err(DomainError::InvalidImage(
                 "Image ID cannot be empty".to_string(),
             ));
         }

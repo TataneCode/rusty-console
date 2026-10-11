@@ -9,7 +9,7 @@ impl VolumeId {
     pub fn new(id: impl Into<String>) -> Result<Self, DomainError> {
         let id = id.into();
         if id.is_empty() {
-            return Err(DomainError::InvalidVolumeId(
+            return Err(DomainError::InvalidVolume(
                 "Volume ID cannot be empty".to_string(),
             ));
         }

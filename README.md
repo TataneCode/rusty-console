@@ -258,7 +258,7 @@ DockerClient
 | [ratatui](https://crates.io/crates/ratatui) | 0.29 | Terminal UI framework (widgets, layout, rendering) |
 | [crossterm](https://crates.io/crates/crossterm) | 0.28 | Cross-platform terminal backend for ratatui |
 | [bollard](https://crates.io/crates/bollard) | 0.18 | Async Docker Engine API client |
-| [tokio](https://crates.io/crates/tokio) | 1.43 | Async runtime (`full` features) |
+| [tokio](https://crates.io/crates/tokio) | 1.43 | Async runtime (rt-multi-thread, macros, sync, time, process) |
 | [async-trait](https://crates.io/crates/async-trait) | 0.1 | Enables `async fn` in trait definitions |
 | [futures-util](https://crates.io/crates/futures-util) | 0.3 | `StreamExt` for consuming bollard log streams |
 | [anyhow](https://crates.io/crates/anyhow) | 1.0 | Ergonomic error propagation in `main` |

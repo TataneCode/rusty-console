@@ -17,7 +17,7 @@ bollard = "0.21"
 futures-util = "0.3"
 
 # Async Runtime
-tokio = { version = "1.43", features = ["full"] }
+tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "sync", "time", "process"] }
 
 # Async traits
 async-trait = "0.1"

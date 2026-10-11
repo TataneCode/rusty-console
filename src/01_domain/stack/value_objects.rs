@@ -9,7 +9,7 @@ impl StackName {
     pub fn new(name: impl Into<String>) -> Result<Self, DomainError> {
         let name = name.into();
         if name.is_empty() {
-            return Err(DomainError::InvalidStackName(
+            return Err(DomainError::InvalidStack(
                 "Stack name cannot be empty".to_string(),
             ));
         }

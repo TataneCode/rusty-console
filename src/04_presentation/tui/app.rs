@@ -5,6 +5,7 @@ use crate::presentation::tui::common::{
     map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message,
     render_selection_dialog, resources, AppAction, PopupMessage, Spinner,
 };
+use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
     filter_containers, render_container_details, render_container_list, render_container_logs,
     ContainerActions, ContainerPresenter,
@@ -45,17 +46,6 @@ pub enum Screen {
     ImageDetails,
     StackList,
     StackContainers,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConfirmAction {
-    ContainerDelete(bool),
-    VolumeDelete,
-    ImageDelete(bool),
-    ContainersPrune,
-    VolumesPrune,
-    ImagesPrune,
-    StackContainersRemoveAll,
 }
 
 pub struct App {
@@ -1377,30 +1367,6 @@ impl App {
     }
 }
 
-fn confirm_message(action: ConfirmAction) -> &'static str {
-    match action {
-        ConfirmAction::ContainerDelete(force) => {
-            if force {
-                resources::FORCE_DELETE_CONTAINER_MESSAGE
-            } else {
-                resources::DELETE_CONTAINER_MESSAGE
-            }
-        }
-        ConfirmAction::VolumeDelete => resources::DELETE_VOLUME_MESSAGE,
-        ConfirmAction::ImageDelete(force) => {
-            if force {
-                resources::FORCE_DELETE_IMAGE_MESSAGE
-            } else {
-                resources::DELETE_IMAGE_MESSAGE
-            }
-        }
-        ConfirmAction::ContainersPrune => resources::PRUNE_CONTAINERS_MESSAGE,
-        ConfirmAction::VolumesPrune => resources::PRUNE_VOLUMES_MESSAGE,
-        ConfirmAction::ImagesPrune => resources::PRUNE_IMAGES_MESSAGE,
-        ConfirmAction::StackContainersRemoveAll => resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE,
-    }
-}
-
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -1420,8 +1386,8 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        confirm_message, finalize_exec_command_result, finalize_run_result, format_bytes, App,
-        ConfirmAction, ExecCommandConfig, ExecCommandResult, ExecRefreshTarget, Screen,
+        finalize_exec_command_result, finalize_run_result, format_bytes, App, ExecCommandConfig,
+        ExecCommandResult, ExecRefreshTarget, Screen,
     };
     use crate::application::container::traits::MockContainerRepository;
     use crate::application::container::{
@@ -1440,6 +1406,7 @@ mod tests {
     use crate::domain::stack::{Stack, StackContainerState, StackName};
     use crate::presentation::tui::common::PopupMessage;
     use crate::presentation::tui::common::{resources, AppAction};
+    use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
     use crate::presentation::tui::container::ContainerActions;
     use crate::presentation::tui::exec::{
         build_exec_command, ExecShell, ExecShellDialog, PendingExec,

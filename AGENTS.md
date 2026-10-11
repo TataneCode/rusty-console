@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents (Mistral Vibe, Claude Code, Copilot, etc.) when working with the rusty-console codebase.
+This file provides guidance to AI coding agents when working with the rusty-console codebase. Agent roles and reusable procedures live in [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) (`agents/`, `skills/`).
 
 ## Project Overview
 
@@ -280,8 +280,9 @@ src/
 
 ## Additional Resources
 
-- [CLAUDE.md](CLAUDE.md) - Original Claude Code instructions
 - [PLAN.md](PLAN.md) - Project roadmap
 - [EVOLUTION.md](EVOLUTION.md) - Feature evolution history
 - [README.md](README.md) - User documentation
-- [.github/copilot-instructions.md](.github/copilot-instructions.md) - Copilot specific instructions
+- [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
+- [skills/](skills/) - Reusable procedure skills (one folder per skill, `SKILL.md` format)
+- [agents/](agents/) - Independent agent definitions invoking the skills

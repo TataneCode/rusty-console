@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 use crate::application::container::dto::ContainerStatsSubscription;
 use crate::application::error::AppError;
 use crate::domain::container::Container;

@@ -278,3 +278,7 @@ Unit tests live alongside production code in `#[cfg(test)]` modules. Repository 
 cargo test              # run all tests
 cargo test <name>       # run a specific test by name
 ```
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).

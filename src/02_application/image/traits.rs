@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 use crate::application::error::AppError;
 use crate::domain::image::Image;
 use crate::shared::PruneResultDto;

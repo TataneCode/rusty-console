@@ -81,7 +81,7 @@ That is a recurring Rust pattern:
 
 If you want to continue learning from the code itself, follow this order:
 
-1. `src/shared.rs`
+1. `src/01_domain/shared/byte_size.rs`
 2. `src/01_domain/container/entity.rs`
 3. `src/02_application/container/traits.rs`
 4. `src/02_application/container/service.rs`

@@ -186,7 +186,7 @@ mod tests {
 ### Coverage Check
 
 Before declaring a feature complete:
-1. Run `cargo test` - all tests must pass (currently 288+ tests)
+1. Run `cargo test` - all tests must pass (currently 297+ tests)
 2. Run `cargo llvm-cov` - check coverage is ≥70%
 3. Run `cargo clippy -- -D warnings` - no warnings
 4. Run `cargo fmt` - code formatted

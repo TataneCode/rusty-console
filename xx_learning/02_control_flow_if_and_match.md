@@ -8,7 +8,7 @@ If you come from C#, Java, or JavaScript, think of `match` as Rust's more powerf
 
 `ByteSize::human_readable` is a clean example:
 
-**File:** `src/shared.rs`
+**File:** `src/01_domain/shared/byte_size.rs`
 
 ```rust
 if self.0 < 0 {
@@ -95,7 +95,7 @@ That is more than "choose a case." It destructures values and names the inner da
 
 ## Where to look next in this repo
 
-- `src/shared.rs` for `if` / `else if`
+- `src/01_domain/shared/byte_size.rs` for `if` / `else if`
 - `src/04_presentation/tui/app.rs` for `match` on app state
 - `src/04_presentation/tui/common/keys.rs` for `match` on key input
 - `src/03_infrastructure/error.rs` for `match` with data extraction

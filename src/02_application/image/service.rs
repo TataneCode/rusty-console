@@ -2,7 +2,7 @@ use crate::application::error::AppError;
 use crate::application::image::dto::ImageDto;
 use crate::application::image::mapper::ImageMapper;
 use crate::application::image::traits::ImageRepository;
-use crate::shared::PruneResultDto;
+use crate::application::shared::PruneResultDto;
 use std::sync::Arc;
 
 pub struct ImageService {

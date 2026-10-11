@@ -21,6 +21,4 @@ pub mod stack;
 
 pub mod error;
 
-pub mod shared {
-    pub type ByteSize = crate::shared::ByteSize;
-}
+pub mod shared;

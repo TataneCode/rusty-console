@@ -2,7 +2,7 @@ use crate::application::container::{ContainerRuntimeStatsDto, ContainerStatsUpda
 use crate::domain::container::{
     Container, ContainerId, ContainerState, MountInfo, NetworkInfo, PortMapping,
 };
-use crate::shared::ByteSize;
+use crate::domain::shared::ByteSize;
 use bollard::models::ContainerStatsResponse;
 use bollard::models::{ContainerInspectResponse, ContainerSummary};
 use chrono::{TimeZone, Utc};

@@ -2,11 +2,11 @@ use crate::application::container::{
     ContainerRepository, ContainerStatsEvent, ContainerStatsSubscription,
 };
 use crate::application::error::AppError;
+use crate::application::shared::PruneResultDto;
 use crate::domain::container::Container;
 use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::container::mapper::ContainerInfraMapper;
 use crate::infrastructure::error::InfraError;
-use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::query_parameters::{
     ListContainersOptions, LogsOptions, PruneContainersOptions, RemoveContainerOptions,

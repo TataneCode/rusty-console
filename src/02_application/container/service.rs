@@ -4,7 +4,7 @@ use crate::application::container::dto::{
 use crate::application::container::mapper::ContainerMapper;
 use crate::application::container::traits::ContainerRepository;
 use crate::application::error::AppError;
-use crate::shared::PruneResultDto;
+use crate::application::shared::PruneResultDto;
 use std::sync::Arc;
 
 pub struct ContainerService {

@@ -1,9 +1,3 @@
-#[derive(Debug, Clone)]
-pub struct PruneResultDto {
-    pub deleted_count: u32,
-    pub space_freed: u64,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ByteSize(i64);
 
@@ -24,7 +18,6 @@ impl ByteSize {
         if self.0 < 0 {
             return "N/A".to_string();
         }
-
         if self.0 >= GB {
             format!("{:.2} GB", self.0 as f64 / GB as f64)
         } else if self.0 >= MB {

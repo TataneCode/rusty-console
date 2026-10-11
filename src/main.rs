@@ -1,31 +1,17 @@
-#![allow(dead_code)]
-
-#[path = "02_application/mod.rs"]
-mod application;
-#[path = "01_domain/mod.rs"]
-mod domain;
-#[path = "03_infrastructure/mod.rs"]
-mod infrastructure;
-#[path = "04_presentation/mod.rs"]
-mod presentation;
-
-mod shared;
-
-use application::container::ContainerService;
-use application::image::ImageService;
-use application::stack::StackService;
-use application::volume::VolumeService;
-use infrastructure::docker::client::DockerClient;
-use infrastructure::docker::container::ContainerAdapter;
-use infrastructure::docker::image::ImageAdapter;
-use infrastructure::docker::stack::StackAdapter;
-use infrastructure::docker::volume::VolumeAdapter;
-use presentation::tui::app::{App, ExecCommandConfig};
-use presentation::tui::container::ContainerActions;
-use presentation::tui::image::ImageActions;
-use presentation::tui::stack::StackActions;
-use presentation::tui::volume::VolumeActions;
-
+use rusty_console::application::container::ContainerService;
+use rusty_console::application::image::ImageService;
+use rusty_console::application::stack::StackService;
+use rusty_console::application::volume::VolumeService;
+use rusty_console::infrastructure::docker::client::DockerClient;
+use rusty_console::infrastructure::docker::container::ContainerAdapter;
+use rusty_console::infrastructure::docker::image::ImageAdapter;
+use rusty_console::infrastructure::docker::stack::StackAdapter;
+use rusty_console::infrastructure::docker::volume::VolumeAdapter;
+use rusty_console::presentation::tui::app::{App, ExecCommandConfig};
+use rusty_console::presentation::tui::container::ContainerActions;
+use rusty_console::presentation::tui::image::ImageActions;
+use rusty_console::presentation::tui::stack::StackActions;
+use rusty_console::presentation::tui::volume::VolumeActions;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -56,6 +42,5 @@ async fn main() -> anyhow::Result<()> {
         ExecCommandConfig::new(docker.cli_host()),
     );
     app.run().await?;
-
     Ok(())
 }

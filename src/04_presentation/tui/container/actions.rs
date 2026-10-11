@@ -2,7 +2,7 @@ use crate::application::container::{
     ContainerDto, ContainerLogsDto, ContainerService, ContainerStatsSubscription,
 };
 use crate::application::error::AppError;
-use crate::shared::PruneResultDto;
+use crate::application::shared::PruneResultDto;
 
 pub struct ContainerActions {
     service: ContainerService,
@@ -72,8 +72,8 @@ mod tests {
     use super::ContainerActions;
     use crate::application::container::traits::MockContainerRepository;
     use crate::application::container::{ContainerService, ContainerStatsSubscription};
+    use crate::application::shared::PruneResultDto;
     use crate::domain::container::{Container, ContainerId, ContainerState};
-    use crate::shared::PruneResultDto;
     use chrono::Utc;
     use std::sync::Arc;
 

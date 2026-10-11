@@ -7,8 +7,6 @@ pub mod infrastructure;
 #[path = "04_presentation/mod.rs"]
 pub mod presentation;
 
-mod shared;
-
 pub use application::container::{
     ContainerDto, ContainerLogsDto, ContainerRepository, ContainerService,
 };

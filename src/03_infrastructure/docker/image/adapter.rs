@@ -1,10 +1,10 @@
 use crate::application::error::AppError;
 use crate::application::image::ImageRepository;
+use crate::application::shared::PruneResultDto;
 use crate::domain::image::Image;
 use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::image::mapper::ImageInfraMapper;
 use crate::infrastructure::error::InfraError;
-use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::query_parameters::ListContainersOptions;
 use bollard::query_parameters::{ListImagesOptions, PruneImagesOptions, RemoveImageOptions};

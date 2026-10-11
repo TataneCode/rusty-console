@@ -1,6 +1,6 @@
 use crate::application::error::AppError;
+use crate::application::shared::PruneResultDto;
 use crate::application::volume::{VolumeDto, VolumeService};
-use crate::shared::PruneResultDto;
 
 pub struct VolumeActions {
     service: VolumeService,
@@ -27,10 +27,10 @@ impl VolumeActions {
 #[cfg(test)]
 mod tests {
     use super::VolumeActions;
+    use crate::application::shared::PruneResultDto;
     use crate::application::volume::traits::MockVolumeRepository;
     use crate::application::volume::VolumeService;
     use crate::domain::volume::{Volume, VolumeId};
-    use crate::shared::PruneResultDto;
     use std::sync::Arc;
 
     fn make_volume() -> Volume {

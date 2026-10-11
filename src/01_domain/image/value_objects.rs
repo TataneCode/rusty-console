@@ -1,6 +1,6 @@
 use crate::domain::error::DomainError;
 
-pub type ImageSize = crate::shared::ByteSize;
+pub type ImageSize = crate::domain::shared::ByteSize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImageId(String);

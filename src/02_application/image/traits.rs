@@ -1,7 +1,7 @@
 #![allow(clippy::double_must_use)]
 use crate::application::error::AppError;
+use crate::application::shared::PruneResultDto;
 use crate::domain::image::Image;
-use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 
 #[cfg_attr(test, mockall::automock)]

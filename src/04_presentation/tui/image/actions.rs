@@ -1,6 +1,6 @@
 use crate::application::error::AppError;
 use crate::application::image::{ImageDto, ImageService};
-use crate::shared::PruneResultDto;
+use crate::application::shared::PruneResultDto;
 
 pub struct ImageActions {
     service: ImageService,
@@ -29,8 +29,8 @@ mod tests {
     use super::ImageActions;
     use crate::application::image::traits::MockImageRepository;
     use crate::application::image::ImageService;
+    use crate::application::shared::PruneResultDto;
     use crate::domain::image::{Image, ImageId, ImageSize};
-    use crate::shared::PruneResultDto;
     use chrono::Utc;
     use std::sync::Arc;
 

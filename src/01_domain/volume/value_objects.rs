@@ -1,6 +1,6 @@
 use crate::domain::error::DomainError;
 
-pub type VolumeSize = crate::shared::ByteSize;
+pub type VolumeSize = crate::domain::shared::ByteSize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VolumeId(String);

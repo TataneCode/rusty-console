@@ -1,8 +1,8 @@
 #![allow(clippy::double_must_use)]
 use crate::application::container::dto::ContainerStatsSubscription;
 use crate::application::error::AppError;
+use crate::application::shared::PruneResultDto;
 use crate::domain::container::Container;
-use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 
 #[cfg_attr(test, mockall::automock)]

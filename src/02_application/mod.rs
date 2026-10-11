@@ -17,6 +17,4 @@ pub mod stack;
 
 pub mod error;
 
-pub mod shared {
-    pub type PruneResultDto = crate::shared::PruneResultDto;
-}
+pub mod shared;

@@ -1584,6 +1584,7 @@ mod tests {
     };
     use crate::application::image::traits::MockImageRepository;
     use crate::application::image::{ImageDto, ImageService};
+    use crate::application::shared::PruneResultDto;
     use crate::application::stack::traits::MockStackRepository;
     use crate::application::stack::{StackContainerDto, StackDto, StackService};
     use crate::application::volume::traits::MockVolumeRepository;
@@ -1597,7 +1598,6 @@ mod tests {
     use crate::presentation::tui::image::ImageActions;
     use crate::presentation::tui::stack::StackActions;
     use crate::presentation::tui::volume::VolumeActions;
-    use crate::shared::PruneResultDto;
     use chrono::Utc;
     use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
     use std::os::unix::process::ExitStatusExt;
@@ -1631,11 +1631,11 @@ mod tests {
             env_vars: vec!["RUST_LOG=info".to_string()],
             runtime_stats: Some(ContainerRuntimeStatsDto {
                 cpu_percent: 12.5,
-                memory_usage: crate::shared::ByteSize::new(512 * 1024 * 1024),
-                memory_limit: crate::shared::ByteSize::new(1024 * 1024 * 1024),
+                memory_usage: crate::domain::shared::ByteSize::new(512 * 1024 * 1024),
+                memory_limit: crate::domain::shared::ByteSize::new(1024 * 1024 * 1024),
                 memory_percent: 50.0,
-                network_rx: crate::shared::ByteSize::new(2_048),
-                network_tx: crate::shared::ByteSize::new(1_024),
+                network_rx: crate::domain::shared::ByteSize::new(2_048),
+                network_tx: crate::domain::shared::ByteSize::new(1_024),
             }),
         }
     }
@@ -2253,11 +2253,11 @@ mod tests {
                 container_id: "abc123".to_string(),
                 stats: ContainerRuntimeStatsDto {
                     cpu_percent: 80.0,
-                    memory_usage: crate::shared::ByteSize::new(256),
-                    memory_limit: crate::shared::ByteSize::new(512),
+                    memory_usage: crate::domain::shared::ByteSize::new(256),
+                    memory_limit: crate::domain::shared::ByteSize::new(512),
                     memory_percent: 50.0,
-                    network_rx: crate::shared::ByteSize::new(64),
-                    network_tx: crate::shared::ByteSize::new(32),
+                    network_rx: crate::domain::shared::ByteSize::new(64),
+                    network_tx: crate::domain::shared::ByteSize::new(32),
                 },
             }))
             .await

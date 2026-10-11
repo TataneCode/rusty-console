@@ -1,8 +1,8 @@
 use crate::application::error::AppError;
+use crate::application::shared::PruneResultDto;
 use crate::application::volume::dto::VolumeDto;
 use crate::application::volume::mapper::VolumeMapper;
 use crate::application::volume::traits::VolumeRepository;
-use crate::shared::PruneResultDto;
 use std::sync::Arc;
 
 pub struct VolumeService {

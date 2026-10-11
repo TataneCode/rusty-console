@@ -1,10 +1,10 @@
 use crate::application::error::AppError;
+use crate::application::shared::PruneResultDto;
 use crate::application::volume::VolumeRepository;
 use crate::domain::volume::Volume;
 use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::volume::mapper::VolumeInfraMapper;
 use crate::infrastructure::error::InfraError;
-use crate::shared::PruneResultDto;
 use async_trait::async_trait;
 use bollard::models::ContainerSummary;
 use bollard::query_parameters::ListContainersOptions;

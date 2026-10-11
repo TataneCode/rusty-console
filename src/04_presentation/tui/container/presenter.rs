@@ -421,11 +421,11 @@ mod tests {
             container_id: "id_alpha".to_string(),
             stats: ContainerRuntimeStatsDto {
                 cpu_percent: 12.5,
-                memory_usage: crate::shared::ByteSize::new(512),
-                memory_limit: crate::shared::ByteSize::new(1024),
+                memory_usage: crate::domain::shared::ByteSize::new(512),
+                memory_limit: crate::domain::shared::ByteSize::new(1024),
                 memory_percent: 50.0,
-                network_rx: crate::shared::ByteSize::new(256),
-                network_tx: crate::shared::ByteSize::new(128),
+                network_rx: crate::domain::shared::ByteSize::new(256),
+                network_tx: crate::domain::shared::ByteSize::new(128),
             },
         });
 
@@ -457,11 +457,11 @@ mod tests {
             container_id: "id_alpha".to_string(),
             stats: ContainerRuntimeStatsDto {
                 cpu_percent: 1.0,
-                memory_usage: crate::shared::ByteSize::new(10),
-                memory_limit: crate::shared::ByteSize::new(20),
+                memory_usage: crate::domain::shared::ByteSize::new(10),
+                memory_limit: crate::domain::shared::ByteSize::new(20),
                 memory_percent: 50.0,
-                network_rx: crate::shared::ByteSize::new(1),
-                network_tx: crate::shared::ByteSize::new(2),
+                network_rx: crate::domain::shared::ByteSize::new(1),
+                network_tx: crate::domain::shared::ByteSize::new(2),
             },
         });
 
@@ -472,11 +472,11 @@ mod tests {
             container_id: "id_beta".to_string(),
             stats: ContainerRuntimeStatsDto {
                 cpu_percent: 2.0,
-                memory_usage: crate::shared::ByteSize::new(20),
-                memory_limit: crate::shared::ByteSize::new(40),
+                memory_usage: crate::domain::shared::ByteSize::new(20),
+                memory_limit: crate::domain::shared::ByteSize::new(40),
                 memory_percent: 50.0,
-                network_rx: crate::shared::ByteSize::new(3),
-                network_tx: crate::shared::ByteSize::new(4),
+                network_rx: crate::domain::shared::ByteSize::new(3),
+                network_tx: crate::domain::shared::ByteSize::new(4),
             },
         });
         p.clear_runtime_stats();

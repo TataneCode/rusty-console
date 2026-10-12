@@ -5,9 +5,12 @@ pub enum ConfirmAction {
     ContainerDelete(bool),
     VolumeDelete,
     ImageDelete(bool),
+    NetworkDelete,
+    NetworkDisconnect,
     ContainersPrune,
     VolumesPrune,
     ImagesPrune,
+    NetworksPrune,
     StackContainersRemoveAll,
 }
 
@@ -21,6 +24,8 @@ pub fn confirm_message(action: ConfirmAction) -> &'static str {
             }
         }
         ConfirmAction::VolumeDelete => resources::DELETE_VOLUME_MESSAGE,
+        ConfirmAction::NetworkDelete => resources::DELETE_NETWORK_MESSAGE,
+        ConfirmAction::NetworkDisconnect => resources::DISCONNECT_CONTAINER_MESSAGE,
         ConfirmAction::ImageDelete(force) => {
             if force {
                 resources::FORCE_DELETE_IMAGE_MESSAGE
@@ -30,6 +35,7 @@ pub fn confirm_message(action: ConfirmAction) -> &'static str {
         }
         ConfirmAction::ContainersPrune => resources::PRUNE_CONTAINERS_MESSAGE,
         ConfirmAction::VolumesPrune => resources::PRUNE_VOLUMES_MESSAGE,
+        ConfirmAction::NetworksPrune => resources::PRUNE_NETWORKS_MESSAGE,
         ConfirmAction::ImagesPrune => resources::PRUNE_IMAGES_MESSAGE,
         ConfirmAction::StackContainersRemoveAll => resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE,
     }
@@ -76,6 +82,22 @@ mod tests {
         assert_eq!(
             confirm_message(ConfirmAction::StackContainersRemoveAll),
             resources::REMOVE_ALL_STACK_CONTAINERS_MESSAGE
+        );
+    }
+
+    #[test]
+    fn test_confirm_message_network_actions() {
+        assert_eq!(
+            confirm_message(ConfirmAction::NetworkDelete),
+            resources::DELETE_NETWORK_MESSAGE
+        );
+        assert_eq!(
+            confirm_message(ConfirmAction::NetworkDisconnect),
+            resources::DISCONNECT_CONTAINER_MESSAGE
+        );
+        assert_eq!(
+            confirm_message(ConfirmAction::NetworksPrune),
+            resources::PRUNE_NETWORKS_MESSAGE
         );
     }
 

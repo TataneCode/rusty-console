@@ -302,18 +302,25 @@ interaction entre processus fils et terminal, gestion du code de retour (`ExitSt
 
 ---
 
-## Phase 4 — Networks (à venir)
+## Phase 4 — Networks (livrée — octobre 2026)
 
 Nouveau domaine `network/` qui reproduit le pattern DDD de A à Z :
 `domain` → `application` → `infrastructure` → `ui`.
-Objectif : appliquer le pattern seul, sans guide.
 
-**Contenu suggéré :**
-- `NetworkList` avec filtrage (`/`) et prune (`X`)
-- `NetworkDetails` : driver, scope, subnet, gateway, containers connectés
-- Déconnecter un container d'un réseau (`d`)
+**Livré :**
+- `NetworkList` avec filtrage (`/`), prune (`X`), delete (`d`) — réseaux prédéfinis
+  (`bridge`/`host`/`none`) et réseaux avec containers connectés refusés (règle métier
+  `Network::can_be_deleted()` dans le domaine, garde-fou UI en plus)
+- `NetworkDetails` : driver, scope, internal, attachable, subnet, gateway, containers
+  connectés (nom + IP)
+- Déconnecter un container d'un réseau (`d` sur l'écran details, confirmation, puis
+  refresh ciblé du réseau)
+- Détection builtin : nom ∈ {`bridge`, `host`, `none`} ou option
+  `com.docker.network.bridge.name` (comportement `docker network ls`)
+- Enrichissement : l'adapter fait un `inspect_network` par réseau au chargement de la
+  liste (IPAM + containers) ; échec d'inspect → fallback sur le mapping list seul
 
-**Bollard :** `list_networks()`, `inspect_network()`, `disconnect_network()`, `prune_networks()`
+**Bollard :** `list_networks()`, `inspect_network()`, `disconnect_network()`, `prune_networks()`, `remove_network()`
 
 ---
 

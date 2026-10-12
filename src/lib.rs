@@ -12,6 +12,7 @@ pub use application::container::{
 };
 pub use application::error::AppError;
 pub use application::image::{ImageDto, ImageRepository, ImageService};
+pub use application::network::{NetworkDto, NetworkRepository, NetworkService};
 pub use application::shared::PruneResultDto;
 pub use application::stack::traits::StackRepository;
 pub use application::stack::{StackContainerDto, StackDto, StackService};
@@ -19,6 +20,7 @@ pub use application::volume::{VolumeDto, VolumeRepository, VolumeService};
 pub use domain::container::{Container, ContainerState};
 pub use domain::error::DomainError;
 pub use domain::image::Image;
+pub use domain::network::Network;
 pub use domain::shared::ByteSize;
 pub use domain::stack::{Stack, StackContainer, StackContainerState, StackName};
 pub use domain::volume::Volume;

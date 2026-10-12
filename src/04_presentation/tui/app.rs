@@ -17,6 +17,9 @@ use crate::presentation::tui::exec::{
 use crate::presentation::tui::image::{
     filter_images, render_image_details, render_image_list, ImageActions, ImagePresenter,
 };
+use crate::presentation::tui::network::{
+    filter_networks, render_network_details, render_network_list, NetworkActions, NetworkPresenter,
+};
 use crate::presentation::tui::stack::{
     filter_stacks, render_stack_containers, render_stack_list, StackActions, StackPresenter,
 };
@@ -42,6 +45,8 @@ pub enum Screen {
     VolumeDetails,
     ImageList,
     ImageDetails,
+    NetworkList,
+    NetworkDetails,
     StackList,
     StackContainers,
 }
@@ -55,10 +60,12 @@ pub struct App {
     pub volume_presenter: VolumePresenter,
     pub image_presenter: ImagePresenter,
     pub stack_presenter: StackPresenter,
+    pub network_presenter: NetworkPresenter,
     pub container_actions: ContainerActions,
     pub volume_actions: VolumeActions,
     pub image_actions: ImageActions,
     pub stack_actions: StackActions,
+    pub network_actions: NetworkActions,
     pub confirm_dialog: Option<(ConfirmAction, bool)>,
     pub expanded_log_line: Option<usize>,
     pub popup_message: Option<PopupMessage>,
@@ -103,6 +110,7 @@ impl App {
         volume_actions: VolumeActions,
         image_actions: ImageActions,
         stack_actions: StackActions,
+        network_actions: NetworkActions,
         exec_command_config: ExecCommandConfig,
     ) -> Self {
         let mut menu_state = ListState::default();
@@ -117,10 +125,12 @@ impl App {
             volume_presenter: VolumePresenter::new(),
             image_presenter: ImagePresenter::new(),
             stack_presenter: StackPresenter::new(),
+            network_presenter: NetworkPresenter::new(),
             container_actions,
             volume_actions,
             image_actions,
             stack_actions,
+            network_actions,
             confirm_dialog: None,
             expanded_log_line: None,
             popup_message: None,
@@ -176,10 +186,10 @@ impl App {
                         // Key consumed by filter input
                     } else if let Some(action) = map_key_to_action_for_context(
                         key,
-                        if self.screen == Screen::ContainerLogs {
-                            KeyContext::ContainerLogs
-                        } else {
-                            KeyContext::Global
+                        match self.screen {
+                            Screen::ContainerLogs => KeyContext::ContainerLogs,
+                            Screen::NetworkDetails => KeyContext::NetworkDetails,
+                            _ => KeyContext::Global,
                         },
                     ) {
                         self.handle_action(action).await;
@@ -294,6 +304,35 @@ impl App {
             Screen::ImageDetails => {
                 if let Some(image) = &self.image_presenter.selected_image {
                     render_image_details(frame, area, image);
+                }
+            }
+            Screen::NetworkList => {
+                let presenter = &mut self.network_presenter;
+                let is_loading = presenter.is_loading();
+                let active_filter = presenter.active_filter().map(str::to_string);
+                let filter = presenter.filter.value().to_string();
+                let networks = &presenter.networks;
+                let selection_state = &mut presenter.selection.state;
+                let filtered = filter_networks(networks, &filter);
+                render_network_list(
+                    frame,
+                    area,
+                    &filtered,
+                    selection_state,
+                    active_filter.as_deref(),
+                    is_loading,
+                    spinner_char,
+                );
+            }
+            Screen::NetworkDetails => {
+                let presenter = &self.network_presenter;
+                if let Some(network) = &presenter.selected_network {
+                    render_network_details(
+                        frame,
+                        area,
+                        network,
+                        presenter.container_selection.selected(),
+                    );
                 }
             }
             Screen::StackList => {
@@ -471,6 +510,15 @@ impl App {
             Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
         }
         self.image_presenter.set_loading(false);
+    }
+
+    pub(crate) async fn load_networks(&mut self) {
+        self.network_presenter.set_loading(true);
+        match self.network_actions.load_networks().await {
+            Ok(networks) => self.network_presenter.set_networks(networks),
+            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+        }
+        self.network_presenter.set_loading(false);
     }
 
     pub(crate) async fn load_stacks(&mut self) {
@@ -733,6 +781,8 @@ mod tests {
     };
     use crate::application::image::traits::MockImageRepository;
     use crate::application::image::{ImageDto, ImageService};
+    use crate::application::network::traits::MockNetworkRepository;
+    use crate::application::network::{NetworkContainerDto, NetworkDto, NetworkService};
     use crate::application::shared::PruneResultDto;
     use crate::application::stack::traits::MockStackRepository;
     use crate::application::stack::{StackContainerDto, StackDto, StackService};
@@ -749,6 +799,7 @@ mod tests {
         build_exec_command, ExecShell, ExecShellDialog, PendingExec,
     };
     use crate::presentation::tui::image::ImageActions;
+    use crate::presentation::tui::network::NetworkActions;
     use crate::presentation::tui::stack::StackActions;
     use crate::presentation::tui::volume::VolumeActions;
     use chrono::Utc;
@@ -839,6 +890,33 @@ mod tests {
         }
     }
 
+    fn make_network_dto(builtin: bool, containers: usize) -> NetworkDto {
+        NetworkDto {
+            id: "net-1".to_string(),
+            name: if builtin {
+                "bridge".to_string()
+            } else {
+                "app-net".to_string()
+            },
+            driver: "bridge".to_string(),
+            scope: "local".to_string(),
+            internal: false,
+            attachable: false,
+            subnet: Some("172.20.0.0/16".to_string()),
+            gateway: Some("172.20.0.1".to_string()),
+            created: "2024-01-01".to_string(),
+            builtin,
+            containers: (0..containers)
+                .map(|index| NetworkContainerDto {
+                    name: format!("container-{index}"),
+                    ip: format!("172.20.0.{index}/16"),
+                })
+                .collect(),
+            can_delete: !builtin && containers == 0,
+            container_count: containers,
+        }
+    }
+
     fn make_stack_container(can_start: bool, can_stop: bool) -> StackContainerDto {
         StackContainerDto {
             id: "stack-1".to_string(),
@@ -914,17 +992,20 @@ mod tests {
         volume_repo: MockVolumeRepository,
         image_repo: MockImageRepository,
         stack_repo: MockStackRepository,
+        network_repo: MockNetworkRepository,
     ) -> App {
         let container_actions =
             ContainerActions::new(ContainerService::new(Arc::new(container_repo)));
         let volume_actions = VolumeActions::new(VolumeService::new(Arc::new(volume_repo)));
         let image_actions = ImageActions::new(ImageService::new(Arc::new(image_repo)));
         let stack_actions = StackActions::new(StackService::new(Arc::new(stack_repo)));
+        let network_actions = NetworkActions::new(NetworkService::new(Arc::new(network_repo)));
         App::new(
             container_actions,
             volume_actions,
             image_actions,
             stack_actions,
+            network_actions,
             ExecCommandConfig::new("unix:///var/run/docker.sock"),
         )
     }
@@ -941,6 +1022,7 @@ mod tests {
             MockVolumeRepository::new(),
             MockImageRepository::new(),
             MockStackRepository::new(),
+            MockNetworkRepository::new(),
         )
     }
 
@@ -1146,8 +1228,23 @@ mod tests {
         stack_repo
             .expect_get_all()
             .returning(|| Ok(vec![make_stack(1)]));
+        let mut network_repo = MockNetworkRepository::new();
+        network_repo.expect_get_all().returning(|| {
+            Ok(vec![crate::domain::network::Network::new(
+                crate::domain::network::NetworkId::new("net1").unwrap(),
+                "app-net",
+                "bridge",
+                crate::domain::network::NetworkScope::Local,
+            )])
+        });
 
-        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+        let mut app = build_app(
+            container_repo,
+            volume_repo,
+            image_repo,
+            stack_repo,
+            network_repo,
+        );
 
         app.menu_state.select(Some(0));
         app.handle_main_menu_action(AppAction::Select).await;
@@ -1171,6 +1268,12 @@ mod tests {
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::StackList);
         assert_eq!(app.stack_presenter.stacks.len(), 1);
+
+        app.screen = Screen::MainMenu;
+        app.menu_state.select(Some(4));
+        app.handle_main_menu_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::NetworkList);
+        assert_eq!(app.network_presenter.networks.len(), 1);
     }
 
     #[tokio::test]
@@ -1209,6 +1312,7 @@ mod tests {
             MockVolumeRepository::new(),
             MockImageRepository::new(),
             MockStackRepository::new(),
+            MockNetworkRepository::new(),
         );
         app.screen = Screen::ContainerList;
         app.container_presenter
@@ -1354,6 +1458,7 @@ mod tests {
             volume_repo,
             image_repo,
             MockStackRepository::new(),
+            MockNetworkRepository::new(),
         );
 
         app.screen = Screen::VolumeList;
@@ -1417,6 +1522,165 @@ mod tests {
             .await;
         assert!(app.image_presenter.is_filter_active());
         app.handle_image_list_action(AppAction::Refresh).await;
+    }
+
+    #[tokio::test]
+    async fn test_network_list_and_details_actions() {
+        let mut network_repo = MockNetworkRepository::new();
+        network_repo.expect_get_all().returning(|| {
+            Ok(vec![crate::domain::network::Network::new(
+                crate::domain::network::NetworkId::new("net1").unwrap(),
+                "app-net",
+                "bridge",
+                crate::domain::network::NetworkScope::Local,
+            )
+            .with_containers(vec![
+                crate::domain::network::NetworkContainer::new("container-0", "172.20.0.0/16"),
+            ])])
+        });
+
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            network_repo,
+        );
+
+        // Menu entry loads the network list
+        app.menu_state.select(Some(4));
+        app.handle_main_menu_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::NetworkList);
+        assert_eq!(app.network_presenter.networks.len(), 1);
+
+        app.handle_network_list_action(AppAction::NavigateDown)
+            .await;
+        app.handle_network_list_action(AppAction::NavigateUp).await;
+        app.handle_network_list_action(AppAction::ActivateFilter)
+            .await;
+        assert!(app.network_presenter.is_filter_active());
+        assert!(app.handle_filter_key(crossterm::event::KeyCode::Esc));
+
+        // Enter opens details, container navigation moves the selection
+        app.handle_network_list_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::NetworkDetails);
+        assert_eq!(
+            app.network_presenter.container_selection.selected(),
+            Some(0)
+        );
+
+        // 'd' on the details screen disconnects the selected container
+        app.handle_network_details_action(AppAction::DisconnectContainer)
+            .await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::NetworkDisconnect, true))
+        );
+        app.confirm_dialog = None;
+
+        // Back returns to the list and clears details
+        app.handle_network_details_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::NetworkList);
+        assert!(app.network_presenter.selected_network.is_none());
+
+        // Delete on a network with connected containers is refused
+        app.handle_network_list_action(AppAction::Delete).await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains(resources::NETWORK_IN_USE_DELETE_MESSAGE));
+        app.popup_message = None;
+
+        // Delete on a builtin network is refused
+        app.network_presenter
+            .set_networks(vec![make_network_dto(true, 0)]);
+        app.handle_network_list_action(AppAction::Delete).await;
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains(resources::NETWORK_BUILTIN_DELETE_MESSAGE));
+        app.popup_message = None;
+
+        // Delete on a deletable network asks for confirmation
+        app.network_presenter
+            .set_networks(vec![make_network_dto(false, 0)]);
+        app.handle_network_list_action(AppAction::Delete).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::NetworkDelete, true))
+        );
+        app.confirm_dialog = None;
+
+        // Prune asks for confirmation
+        app.handle_network_list_action(AppAction::Prune).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::NetworksPrune, true))
+        );
+        app.confirm_dialog = None;
+        app.handle_network_list_action(AppAction::Refresh).await;
+        app.handle_network_list_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::MainMenu);
+    }
+
+    #[tokio::test]
+    async fn test_execute_confirm_action_network_paths() {
+        let mut network_repo = MockNetworkRepository::new();
+        network_repo.expect_get_all().returning(|| Ok(vec![]));
+        network_repo.expect_delete().returning(|_| Ok(()));
+        network_repo.expect_prune().returning(|| {
+            Ok(PruneResultDto {
+                deleted_count: 2,
+                space_freed: 0,
+            })
+        });
+        network_repo
+            .expect_disconnect()
+            .withf(|network, container, force| {
+                network == "app-net" && container == "container-0" && !force
+            })
+            .returning(|_, _, _| Ok(()));
+
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            network_repo,
+        );
+
+        // Delete reloads the list after success
+        app.screen = Screen::NetworkList;
+        app.network_presenter
+            .set_networks(vec![make_network_dto(false, 0)]);
+        app.execute_confirm_action(ConfirmAction::NetworkDelete)
+            .await;
+        assert!(!app.network_presenter.is_loading());
+
+        // Disconnect refreshes the details view of the same network
+        app.screen = Screen::NetworkDetails;
+        app.network_presenter
+            .set_details(make_network_dto(false, 1));
+        app.execute_confirm_action(ConfirmAction::NetworkDisconnect)
+            .await;
+        assert!(!app.network_presenter.is_loading());
+
+        // Prune reports the deleted count
+        app.screen = Screen::NetworkList;
+        app.execute_confirm_action(ConfirmAction::NetworksPrune)
+            .await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        assert!(app
+            .popup_message
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Pruned 2 network(s)"));
     }
 
     #[test]
@@ -1647,7 +1911,13 @@ mod tests {
             .returning(|| Ok(vec![make_stack(1)]));
         stack_repo.expect_remove_all().returning(|_| Ok(()));
 
-        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+        let mut app = build_app(
+            container_repo,
+            volume_repo,
+            image_repo,
+            stack_repo,
+            MockNetworkRepository::new(),
+        );
         app.container_presenter
             .set_containers(vec![make_container_dto()]);
         app.volume_presenter
@@ -1719,7 +1989,13 @@ mod tests {
             .expect_get_all()
             .returning(|| Ok(vec![make_stack(1)]));
 
-        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+        let mut app = build_app(
+            container_repo,
+            volume_repo,
+            image_repo,
+            stack_repo,
+            MockNetworkRepository::new(),
+        );
 
         app.screen = Screen::ContainerList;
         app.container_presenter.activate_filter();
@@ -1767,7 +2043,13 @@ mod tests {
             .expect_get_all()
             .returning(|| Ok(vec![make_stack(0)]));
 
-        let mut app = build_app(container_repo, volume_repo, image_repo, stack_repo);
+        let mut app = build_app(
+            container_repo,
+            volume_repo,
+            image_repo,
+            stack_repo,
+            MockNetworkRepository::new(),
+        );
 
         // Initially not loading
         assert!(!app.container_presenter.is_loading());
@@ -1816,6 +2098,7 @@ mod tests {
             MockVolumeRepository::new(),
             MockImageRepository::new(),
             stack_repo,
+            MockNetworkRepository::new(),
         );
 
         app.toggle_container(&make_stopped_container_dto()).await;
@@ -1964,6 +2247,7 @@ mod tests {
             MockVolumeRepository::new(),
             MockImageRepository::new(),
             MockStackRepository::new(),
+            MockNetworkRepository::new(),
         );
         app.screen = Screen::ContainerLogs;
         app.container_presenter
@@ -2019,6 +2303,7 @@ mod tests {
             MockVolumeRepository::new(),
             MockImageRepository::new(),
             MockStackRepository::new(),
+            MockNetworkRepository::new(),
         );
         app.screen = Screen::ContainerLogs;
         app.container_presenter

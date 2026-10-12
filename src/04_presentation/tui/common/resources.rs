@@ -30,7 +30,7 @@ pub const CONTAINER_LIST_HELP: &str =
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
 pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back ";
 pub const CONTAINER_LOGS_HELP: &str =
-    " Esc/q: Back | j/k or ↑/↓: Line | PgUp/PgDn: Page | Enter: Expand ";
+    " Esc/q: Back | j/k: Line | PgUp/PgDn: Page | Enter: Expand | /: Search | n/N: Match ";
 pub const EXPANDED_LOG_LINE_TITLE: &str = " Expanded log line ";
 pub const CONTAINER_DETAILS_ENV_VARS_LABEL: &str = "Environment Variables";
 pub const CONTAINER_DETAILS_NETWORK_IO_LABEL: &str = "Network I/O";
@@ -103,6 +103,22 @@ pub fn filter_prompt_title(base_title: &str, active_filter: Option<&str>) -> Str
 pub fn logs_title(container_name: &str) -> String {
     format!(" Logs: {container_name} ")
 }
+
+pub fn logs_search_title(
+    container_name: &str,
+    active_search: Option<&str>,
+    counter: Option<(usize, usize)>,
+) -> String {
+    match (active_search, counter) {
+        (Some(term), Some((current, total))) => {
+            format!(" Logs: {container_name} [/{term} {current}/{total}] ")
+        }
+        (Some(term), None) => format!(" Logs: {container_name} [/{term}] "),
+        _ => logs_title(container_name),
+    }
+}
+
+pub const LOG_SEARCH_PROMPT: &str = " /";
 
 pub fn stack_containers_title(stack_name: &str) -> String {
     format!(" Stack: {stack_name} ")

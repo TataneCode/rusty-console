@@ -25,6 +25,9 @@ pub enum AppAction {
     StartAll,
     RemoveAll,
     PullImages,
+    ActivateLogSearch,
+    NextLogMatch,
+    PreviousLogMatch,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -54,11 +57,34 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('R') => Some(AppAction::Restart),
         KeyCode::Char('X') => Some(AppAction::Prune),
         KeyCode::Char('/') => Some(AppAction::ActivateFilter),
+        KeyCode::Char('n') => Some(AppAction::NextLogMatch),
+        KeyCode::Char('N') => Some(AppAction::PreviousLogMatch),
         KeyCode::Char('e') => Some(AppAction::Exec),
         KeyCode::Char('S') => Some(AppAction::StopAll),
         KeyCode::Char('D') => Some(AppAction::RemoveAll),
         KeyCode::Char('P') => Some(AppAction::PullImages),
         _ => None,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyContext {
+    Global,
+    ContainerLogs,
+}
+
+pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Option<AppAction> {
+    let action = map_key_to_action(key)?;
+    match context {
+        KeyContext::ContainerLogs => match action {
+            AppAction::ActivateFilter => Some(AppAction::ActivateLogSearch),
+            other => Some(other),
+        },
+        KeyContext::Global => match action {
+            AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
+            AppAction::ActivateLogSearch => None,
+            other => Some(other),
+        },
     }
 }
 

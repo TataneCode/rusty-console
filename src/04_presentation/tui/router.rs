@@ -11,6 +11,13 @@ use tokio::sync::oneshot;
 
 impl App {
     pub(crate) async fn handle_action(&mut self, action: AppAction) {
+        if matches!(action, AppAction::Select)
+            && self.screen == Screen::ContainerLogs
+            && self.container_presenter.is_log_search_active()
+        {
+            self.container_presenter.confirm_log_search();
+            return;
+        }
         if self.popup_message.is_some() {
             self.popup_message = None;
             return;
@@ -181,9 +188,13 @@ impl App {
     pub(crate) fn handle_container_logs_action(&mut self, action: AppAction) {
         match action {
             AppAction::Quit | AppAction::Back => {
+                self.container_presenter.deactivate_log_search();
                 self.container_presenter.clear_logs();
                 self.screen = Screen::ContainerList;
             }
+            AppAction::ActivateLogSearch => self.container_presenter.activate_log_search(),
+            AppAction::NextLogMatch => self.container_presenter.next_log_match(),
+            AppAction::PreviousLogMatch => self.container_presenter.previous_log_match(),
             AppAction::NavigateUp | AppAction::ScrollUp => {
                 self.container_presenter.previous_logs_line()
             }
@@ -439,6 +450,7 @@ impl App {
             Screen::VolumeList => self.volume_presenter.is_filter_active(),
             Screen::ImageList => self.image_presenter.is_filter_active(),
             Screen::StackList => self.stack_presenter.is_filter_active(),
+            Screen::ContainerLogs => self.container_presenter.is_log_search_active(),
             _ => false,
         }
     }
@@ -452,6 +464,7 @@ impl App {
                     Screen::VolumeList => self.volume_presenter.deactivate_filter(),
                     Screen::ImageList => self.image_presenter.deactivate_filter(),
                     Screen::StackList => self.stack_presenter.deactivate_filter(),
+                    Screen::ContainerLogs => self.container_presenter.deactivate_log_search(),
                     _ => {}
                 }
                 true
@@ -462,6 +475,7 @@ impl App {
                     Screen::VolumeList => self.volume_presenter.pop_filter_char(),
                     Screen::ImageList => self.image_presenter.pop_filter_char(),
                     Screen::StackList => self.stack_presenter.pop_filter_char(),
+                    Screen::ContainerLogs => self.container_presenter.pop_log_search_char(),
                     _ => {}
                 }
                 true
@@ -472,6 +486,7 @@ impl App {
                     Screen::VolumeList => self.volume_presenter.push_filter_char(c),
                     Screen::ImageList => self.image_presenter.push_filter_char(c),
                     Screen::StackList => self.stack_presenter.push_filter_char(c),
+                    Screen::ContainerLogs => self.container_presenter.push_log_search_char(c),
                     _ => {}
                 }
                 true

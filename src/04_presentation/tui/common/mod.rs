@@ -7,7 +7,7 @@ pub mod theme;
 pub mod widgets;
 
 pub use filter::FilterState;
-pub use keys::{map_key_to_action, AppAction};
+pub use keys::{map_key_to_action, map_key_to_action_for_context, AppAction, KeyContext};
 pub use menu::render_main_menu;
 pub use resources::filter_prompt_title;
 pub use spinner::Spinner;

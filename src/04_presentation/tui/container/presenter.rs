@@ -14,6 +14,9 @@ pub struct ContainerPresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
+    pub log_search: FilterState,
+    pub log_search_results: Vec<usize>,
+    pub log_search_position: usize,
     stats_by_container_id: HashMap<String, ContainerRuntimeStatsDto>,
 }
 
@@ -46,6 +49,9 @@ impl ContainerPresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
+            log_search: FilterState::new(),
+            log_search_results: Vec::new(),
+            log_search_position: 0,
             stats_by_container_id: HashMap::new(),
         }
     }
@@ -90,6 +96,8 @@ impl ContainerPresenter {
         if !self.logs.as_ref().unwrap().lines.is_empty() {
             self.logs_state.select(Some(0));
         }
+        self.log_search_results.clear();
+        self.log_search_position = 0;
     }
 
     pub fn clear_logs(&mut self) {
@@ -161,6 +169,89 @@ impl ContainerPresenter {
 
     pub fn logs_lines_len(&self) -> usize {
         self.logs.as_ref().map(|logs| logs.lines.len()).unwrap_or(0)
+    }
+
+    pub fn is_log_search_active(&self) -> bool {
+        self.log_search.is_active()
+    }
+
+    pub fn activate_log_search(&mut self) {
+        self.log_search.deactivate();
+        self.log_search.activate();
+        self.log_search_results.clear();
+        self.log_search_position = 0;
+    }
+
+    pub fn deactivate_log_search(&mut self) {
+        self.log_search.deactivate();
+        self.log_search_results.clear();
+        self.log_search_position = 0;
+    }
+
+    pub fn log_search_value(&self) -> &str {
+        self.log_search.value()
+    }
+
+    pub fn push_log_search_char(&mut self, c: char) {
+        self.log_search.push_char(c);
+    }
+
+    pub fn pop_log_search_char(&mut self) {
+        self.log_search.pop_char();
+    }
+
+    pub fn confirm_log_search(&mut self) {
+        let term = self.log_search.value().to_lowercase();
+        self.log_search_results = self
+            .logs
+            .iter()
+            .flat_map(|logs| logs.lines.iter())
+            .enumerate()
+            .filter(|(_, line)| !term.is_empty() && line.message.to_lowercase().contains(&term))
+            .map(|(index, _)| index)
+            .collect();
+        self.log_search_position = 0;
+        self.log_search.stop_input();
+        self.jump_to_current_match();
+    }
+
+    pub fn next_log_match(&mut self) {
+        if self.log_search_results.is_empty() {
+            return;
+        }
+        self.log_search_position = (self.log_search_position + 1) % self.log_search_results.len();
+        self.jump_to_current_match();
+    }
+
+    pub fn previous_log_match(&mut self) {
+        if self.log_search_results.is_empty() {
+            return;
+        }
+        self.log_search_position = if self.log_search_position == 0 {
+            self.log_search_results.len() - 1
+        } else {
+            self.log_search_position - 1
+        };
+        self.jump_to_current_match();
+    }
+
+    pub fn active_search_value(&self) -> Option<&str> {
+        (!self.log_search_results.is_empty()).then_some(self.log_search.value())
+    }
+
+    pub fn search_counter(&self) -> Option<(usize, usize)> {
+        (!self.log_search_results.is_empty())
+            .then(|| (self.log_search_position + 1, self.log_search_results.len()))
+    }
+
+    pub fn is_log_match(&self, index: usize) -> bool {
+        self.log_search_results.contains(&index)
+    }
+
+    fn jump_to_current_match(&mut self) {
+        if let Some(&index) = self.log_search_results.get(self.log_search_position) {
+            self.select_logs_line(index);
+        }
     }
 
     pub fn navigate_up(&mut self) {
@@ -619,5 +710,123 @@ mod tests {
         let p = ContainerPresenter::new();
         assert!(!p.is_loading());
         assert!(!p.loading);
+    }
+
+    fn make_searchable_logs() -> ContainerLogsDto {
+        ContainerLogsDto {
+            container_id: "c1".to_string(),
+            container_name: "alpha".to_string(),
+            lines: vec![
+                LogLineDto {
+                    timestamp: None,
+                    message: "starting app".to_string(),
+                },
+                LogLineDto {
+                    timestamp: None,
+                    message: "ERROR disk full".to_string(),
+                },
+                LogLineDto {
+                    timestamp: None,
+                    message: "still running".to_string(),
+                },
+                LogLineDto {
+                    timestamp: None,
+                    message: "error retrying".to_string(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn test_log_search_case_insensitive_confirm_jumps_to_first_match() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_searchable_logs());
+        p.activate_log_search();
+        for c in "error".chars() {
+            p.push_log_search_char(c);
+        }
+        p.confirm_log_search();
+        assert_eq!(p.log_search_results, vec![1, 3]);
+        assert_eq!(p.selected_logs_line(), Some(1));
+        assert_eq!(p.search_counter(), Some((1, 2)));
+        assert_eq!(p.active_search_value(), Some("error"));
+    }
+
+    #[test]
+    fn test_log_search_next_previous_wrap_around() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_searchable_logs());
+        p.activate_log_search();
+        for c in "error".chars() {
+            p.push_log_search_char(c);
+        }
+        p.confirm_log_search();
+        p.next_log_match();
+        assert_eq!(p.selected_logs_line(), Some(3));
+        assert_eq!(p.search_counter(), Some((2, 2)));
+        p.next_log_match();
+        assert_eq!(p.selected_logs_line(), Some(1));
+        assert_eq!(p.search_counter(), Some((1, 2)));
+        p.previous_log_match();
+        assert_eq!(p.selected_logs_line(), Some(3));
+        assert_eq!(p.search_counter(), Some((2, 2)));
+    }
+
+    #[test]
+    fn test_log_search_no_results_keeps_selection() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_searchable_logs());
+        p.next_logs_line();
+        p.activate_log_search();
+        for c in "zzzz".chars() {
+            p.push_log_search_char(c);
+        }
+        p.confirm_log_search();
+        assert!(p.log_search_results.is_empty());
+        assert_eq!(p.search_counter(), None);
+        assert_eq!(p.active_search_value(), None);
+        assert_eq!(p.selected_logs_line(), Some(1));
+        p.next_log_match();
+        p.previous_log_match();
+        assert_eq!(p.selected_logs_line(), Some(1));
+    }
+
+    #[test]
+    fn test_deactivate_log_search_clears_results() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_searchable_logs());
+        p.activate_log_search();
+        p.push_log_search_char('e');
+        p.confirm_log_search();
+        assert!(!p.log_search_results.is_empty());
+        p.deactivate_log_search();
+        assert!(!p.log_search.is_active());
+        assert!(p.log_search_results.is_empty());
+        assert_eq!(p.log_search_position, 0);
+    }
+
+    #[test]
+    fn test_is_log_match_and_pop_char() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_searchable_logs());
+        p.activate_log_search();
+        p.push_log_search_char('e');
+        p.push_log_search_char('r');
+        p.pop_log_search_char();
+        assert_eq!(p.log_search_value(), "e");
+        p.confirm_log_search();
+        assert!(p.is_log_match(1));
+        assert!(!p.is_log_match(0));
+    }
+
+    #[test]
+    fn test_reactivating_search_resets_term() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_searchable_logs());
+        p.activate_log_search();
+        p.push_log_search_char('x');
+        p.deactivate_log_search();
+        p.activate_log_search();
+        assert_eq!(p.log_search_value(), "");
     }
 }

@@ -73,26 +73,38 @@ pub fn render_container_list(
     render_help(frame, help_area, &help_text);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_container_logs(
     frame: &mut Frame,
     area: Rect,
     logs: &ContainerLogsDto,
     logs_state: &mut ListState,
+    search_active: bool,
+    search_value: &str,
+    active_search: Option<&str>,
+    search_counter: Option<(usize, usize)>,
+    match_indices: &[usize],
 ) {
     let [content_area, help_area] = split_content_area(area);
-    let title = resources::logs_title(&logs.container_name);
+    let title = resources::logs_search_title(&logs.container_name, active_search, search_counter);
 
     let items: Vec<ListItem> = logs
         .lines
         .iter()
-        .map(|line| {
+        .enumerate()
+        .map(|(index, line)| {
             let timestamp = line.timestamp_display();
+            let message = if match_indices.contains(&index) {
+                Span::styled(line.message.clone(), Theme::highlight_style())
+            } else {
+                Span::from(line.message.clone())
+            };
             if timestamp.is_empty() {
-                ListItem::new(Span::from(line.message.clone()))
+                ListItem::new(message)
             } else {
                 ListItem::new(Line::from(vec![
                     Span::styled(format!("{timestamp} "), Theme::help_style()),
-                    Span::from(line.message.clone()),
+                    message,
                 ]))
             }
         })
@@ -110,7 +122,14 @@ pub fn render_container_logs(
 
     frame.render_stateful_widget(log_list, content_area, logs_state);
 
-    render_help(frame, help_area, resources::CONTAINER_LOGS_HELP);
+    if search_active {
+        let prompt = Paragraph::new(format!("/{}{}", search_value, resources::FILTER_CURSOR))
+            .style(Theme::title_style())
+            .block(Block::default().borders(Borders::TOP));
+        frame.render_widget(prompt, help_area);
+    } else {
+        render_help(frame, help_area, resources::CONTAINER_LOGS_HELP);
+    }
 }
 
 pub fn render_container_details(frame: &mut Frame, area: Rect, container: &ContainerDto) {
@@ -286,7 +305,17 @@ mod tests {
 
         terminal
             .draw(|frame| {
-                render_container_logs(frame, frame.area(), &logs, &mut ListState::default())
+                render_container_logs(
+                    frame,
+                    frame.area(),
+                    &logs,
+                    &mut ListState::default(),
+                    false,
+                    "",
+                    None,
+                    None,
+                    &[],
+                )
             })
             .unwrap();
 
@@ -318,7 +347,19 @@ mod tests {
         let mut state = ListState::default();
         state.select(Some(0));
         terminal
-            .draw(|frame| render_container_logs(frame, frame.area(), &logs, &mut state))
+            .draw(|frame| {
+                render_container_logs(
+                    frame,
+                    frame.area(),
+                    &logs,
+                    &mut state,
+                    false,
+                    "",
+                    None,
+                    None,
+                    &[],
+                )
+            })
             .unwrap();
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("2026-10-26 10:30:00"));
@@ -344,5 +385,73 @@ mod tests {
         assert!(text.contains("RX 2.00 KB / TX 1.00 KB"));
         assert!(text.contains("RUST_LOG=info"));
         assert!(text.contains("bridge"));
+    }
+
+    #[test]
+    fn test_render_container_logs_search_input_bar() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let logs = ContainerLogsDto {
+            container_id: "abc123".to_string(),
+            container_name: "web".to_string(),
+            lines: vec![LogLineDto {
+                timestamp: None,
+                message: "line1".to_string(),
+            }],
+        };
+        terminal
+            .draw(|frame| {
+                render_container_logs(
+                    frame,
+                    frame.area(),
+                    &logs,
+                    &mut ListState::default(),
+                    true,
+                    "err",
+                    None,
+                    None,
+                    &[],
+                )
+            })
+            .unwrap();
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("/err"));
+    }
+
+    #[test]
+    fn test_render_container_logs_title_shows_search_term_and_counter() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let logs = ContainerLogsDto {
+            container_id: "abc123".to_string(),
+            container_name: "web".to_string(),
+            lines: vec![
+                LogLineDto {
+                    timestamp: None,
+                    message: "ok".to_string(),
+                },
+                LogLineDto {
+                    timestamp: None,
+                    message: "error here".to_string(),
+                },
+            ],
+        };
+        terminal
+            .draw(|frame| {
+                render_container_logs(
+                    frame,
+                    frame.area(),
+                    &logs,
+                    &mut ListState::default(),
+                    false,
+                    "error",
+                    Some("error"),
+                    Some((1, 1)),
+                    &[1],
+                )
+            })
+            .unwrap();
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("[/error 1/1]"));
     }
 }

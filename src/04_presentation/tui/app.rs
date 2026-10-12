@@ -1,7 +1,8 @@
 use crate::application::container::{ContainerDto, ContainerStatsSubscription};
 use crate::presentation::tui::common::{
-    map_key_to_action, render_confirm_dialog, render_expanded_log_line, render_main_menu,
-    render_popup_message, render_selection_dialog, resources, AppAction, PopupMessage, Spinner,
+    map_key_to_action_for_context, render_confirm_dialog, render_expanded_log_line,
+    render_main_menu, render_popup_message, render_selection_dialog, resources, AppAction,
+    KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -173,7 +174,14 @@ impl App {
                         && self.handle_filter_key(key.code)
                     {
                         // Key consumed by filter input
-                    } else if let Some(action) = map_key_to_action(key) {
+                    } else if let Some(action) = map_key_to_action_for_context(
+                        key,
+                        if self.screen == Screen::ContainerLogs {
+                            KeyContext::ContainerLogs
+                        } else {
+                            KeyContext::Global
+                        },
+                    ) {
                         self.handle_action(action).await;
                     }
                 }
@@ -223,12 +231,22 @@ impl App {
                 );
             }
             Screen::ContainerLogs => {
-                if let Some(logs) = &self.container_presenter.logs {
+                let presenter = &mut self.container_presenter;
+                if let Some(logs) = presenter.logs.as_ref() {
+                    let search_active = presenter.is_log_search_active();
+                    let search_value = presenter.log_search_value().to_string();
+                    let active_search = presenter.active_search_value().map(str::to_string);
+                    let search_counter = presenter.search_counter();
                     render_container_logs(
                         frame,
                         area,
                         logs,
-                        &mut self.container_presenter.logs_state,
+                        &mut presenter.logs_state,
+                        search_active,
+                        &search_value,
+                        active_search.as_deref(),
+                        search_counter,
+                        &presenter.log_search_results,
                     );
                 }
             }
@@ -719,6 +737,7 @@ mod tests {
     use crate::presentation::tui::stack::StackActions;
     use crate::presentation::tui::volume::VolumeActions;
     use chrono::Utc;
+    use crossterm::event::KeyCode;
     use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
     use std::os::unix::process::ExitStatusExt;
     use std::{io, sync::Arc};
@@ -1851,5 +1870,70 @@ mod tests {
             app.confirm_dialog,
             Some((ConfirmAction::StackContainersRemoveAll, true))
         );
+    }
+
+    #[tokio::test]
+    async fn test_log_search_workflow_via_actions() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "starting app".to_string(),
+                    },
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "ERROR disk full".to_string(),
+                    },
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "error retrying".to_string(),
+                    },
+                ],
+            });
+
+        // '/' on the logs screen activates the log search
+        app.handle_action(AppAction::ActivateLogSearch).await;
+        assert!(app.container_presenter.is_log_search_active());
+
+        // Typed characters are consumed by the input handler
+        assert!(app.handle_filter_key(KeyCode::Char('e')));
+        assert!(app.handle_filter_key(KeyCode::Char('r')));
+        assert!(app.handle_filter_key(KeyCode::Char('r')));
+        assert!(app.handle_filter_key(KeyCode::Char('o')));
+        assert!(app.handle_filter_key(KeyCode::Char('r')));
+        assert_eq!(app.container_presenter.log_search_value(), "error");
+
+        // Enter confirms and jumps to the first match
+        app.handle_action(AppAction::Select).await;
+        assert!(!app.container_presenter.is_log_search_active());
+        assert_eq!(app.container_presenter.log_search_results, vec![1, 2]);
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(1));
+
+        // n / N navigate between matches with wrap-around
+        app.handle_action(AppAction::NextLogMatch).await;
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(2));
+        app.handle_action(AppAction::NextLogMatch).await;
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(1));
+        app.handle_action(AppAction::PreviousLogMatch).await;
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(2));
+
+        // Esc during input closes without validating
+        app.handle_action(AppAction::ActivateLogSearch).await;
+        assert!(app.handle_filter_key(KeyCode::Char('x')));
+        assert!(app.handle_filter_key(KeyCode::Esc));
+        assert!(!app.container_presenter.is_log_search_active());
+        assert_eq!(app.container_presenter.log_search_value(), "");
+        assert!(app.container_presenter.log_search_results.is_empty());
+
+        // Leaving the screen clears the search
+        app.handle_action(AppAction::ActivateLogSearch).await;
+        app.handle_action(AppAction::Back).await;
+        assert!(app.container_presenter.log_search_results.is_empty());
+        assert!(app.container_presenter.logs.is_none());
     }
 }

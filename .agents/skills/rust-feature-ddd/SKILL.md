@@ -17,6 +17,8 @@ ui (04_presentation) → application (02_application) → domain (01_domain) ←
 
 Chemins réels du projet : `src/01_domain/`, `src/02_application/`, `src/03_infrastructure/docker/`, `src/04_presentation/tui/`.
 
+> Règles détaillées par couche : charger `rules/domain.md`, `rules/application.md`, `rules/infrastructure.md`, `rules/presentation.md` à la racine du dépôt (source de vérité mutualisée).
+
 ## Procédure systématique — 5 étapes
 
 ### 1. Domain (`src/01_domain/<area>/`)

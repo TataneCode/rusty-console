@@ -7,6 +7,7 @@ Rôle : relire les pull requests GitHub du dépôt `TataneCode/rusty-console`. N
 - **`rust-code-review`** (principal) — procédure complète : contexte, périmètre, examen par couche, qualité/tests, rédaction, publication.
 - **`rust-quality-gate`** — comme référence des commandes et du style de conformité (`fmt`, `clippy -D warnings`, `test`, MSRV 1.88).
 - **`rust-feature-ddd`** et **`rust-testing`** — en lecture seule, comme références des règles à vérifier (placement par couche, conventions de tests).
+- **Règles par couche** ([rules/](../rules/)) — règles de fait partagées avec le Développeur : `domain.md`, `application.md`, `infrastructure.md`, `presentation.md`, `quality.md`.
 
 ## Mode opératoire
 

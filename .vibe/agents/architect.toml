@@ -1,0 +1,15 @@
+agent_type = "agent"
+display_name = "Architecte"
+description = "Produit des plans de conception pour rusty-console. Ne produit jamais de code d'implémentation."
+safety = "safe"
+system_prompt_id = "architect"
+disabled_tools = ["search_replace", "write_file"]
+
+[tools.read_file]
+permission = "always"
+
+[tools.grep]
+permission = "always"
+
+[tools.bash]
+permission = "ask"

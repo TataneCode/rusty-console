@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents when working with the rusty-console codebase. Agent roles and reusable procedures live in [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) (`agents/`, `skills/`).
+This file provides guidance to AI coding agents when working with the rusty-console codebase. Agent roles and reusable procedures live in [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) (`agents/`, `.agents/skills/`), project context in [CONTEXT.md](CONTEXT.md), per-layer rules in [rules/](rules/).
 
 ## Project Overview
 
@@ -284,14 +284,16 @@ src/
 - [EVOLUTION.md](EVOLUTION.md) - Feature evolution history
 - [README.md](README.md) - User documentation
 - [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
-- [skills/](skills/) - Reusable procedure skills (one folder per skill, `SKILL.md` format)
+- [CONTEXT.md](CONTEXT.md) - General project context (pitch, stack, current state, resource map)
+- [rules/](rules/) - Per-layer DDD rules shared by agents and skills (domain, application, infrastructure, presentation, quality)
+- [.agents/skills/](.agents/skills/) - Reusable procedure skills (Agent Skills standard, one folder per skill, `SKILL.md` format; auto-discovered by Vibe Code and Vibe CLI)
 - [agents/](agents/) - Independent agent definitions invoking the skills
 
 ## Agent Routing
 
 When the user asks for a review of a pull request (e.g. "lance la review", "review PR #N"), invoke the **Reviewer** agent ([agents/reviewer.md](agents/reviewer.md)) — not an external review service. Follow its mode opératoire exactly:
 
-1. Read [agents/reviewer.md](agents/reviewer.md) and the skills it references: [skills/rust-code-review/SKILL.md](skills/rust-code-review/SKILL.md) (main procedure), [skills/rust-quality-gate/SKILL.md](skills/rust-quality-gate/SKILL.md), [skills/rust-feature-ddd/SKILL.md](skills/rust-feature-ddd/SKILL.md), [skills/rust-testing/SKILL.md](skills/rust-testing/SKILL.md) (read-only references).
+1. Read [agents/reviewer.md](agents/reviewer.md) and the skills it references: [.agents/skills/rust-code-review/SKILL.md](.agents/skills/rust-code-review/SKILL.md) (main procedure), [.agents/skills/rust-quality-gate/SKILL.md](.agents/skills/rust-quality-gate/SKILL.md), [.agents/skills/rust-feature-ddd/SKILL.md](.agents/skills/rust-feature-ddd/SKILL.md), [.agents/skills/rust-testing/SKILL.md](.agents/skills/rust-testing/SKILL.md) (read-only references).
 2. Execute its 6-step procedure without skipping any step (context, scope, layer-by-layer DDD examination, quality/tests, structured verdict, publication).
 3. Publish the review on the PR: verdict first (approve / request changes / comment), findings by severity 🔴/🟡/🟢 with `file:line` and a concrete suggestion. Note: GitHub forbids `REQUEST_CHANGES` by the PR author — fall back to `COMMENT` with the verdict stated in the body.
 4. Report, do not fix: a review never includes implementation code, and never merge unless explicitly instructed.

@@ -1,0 +1,15 @@
+agent_type = "agent"
+display_name = "Reviewer"
+description = "Relit les pull requests GitHub du dépôt TataneCode/rusty-console. Ne produit ni plan ni code."
+safety = "safe"
+system_prompt_id = "reviewer"
+disabled_tools = ["search_replace", "write_file"]
+
+[tools.read_file]
+permission = "always"
+
+[tools.grep]
+permission = "always"
+
+[tools.bash]
+permission = "ask"

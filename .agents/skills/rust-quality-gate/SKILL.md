@@ -19,6 +19,9 @@ Toute livraison doit passer `fmt` + `clippy -D warnings` + `test` sans erreur.
 
 ## Règles de style du projet
 
+> Source de vérité mutualisée : `rules/quality.md` et les règles par couche (`rules/*.md`) à la racine du dépôt. Cette section en est le résumé opérationnel.
+
+
 - Édition 2021, MSRV **1.88** (déclaré dans `Cargo.toml` via `rust-version`). Pas de feature nightly ni de crates exigeant un toolchain plus récent.
 - Gestion d'erreurs : **toujours `thiserror`** pour les erreurs de couches (jamais de `String` ni `anyhow` dans les erreurs attendues des couches). `anyhow` réservé au bord de `main.rs`.
 - Chaîne d'erreurs à 3 niveaux : `DomainError` → `AppError` (`#[from]`) → `InfraError` (conversion bollard) → `AppError` pour l'UI.

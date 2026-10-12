@@ -44,6 +44,14 @@ pub const VOLUME_LIST_HELP: &str =
 pub const VOLUME_DETAILS_TITLE: &str = " Volume Details ";
 pub const VOLUME_DETAILS_HELP: &str = " Esc/q: Back ";
 
+pub const NETWORK_TITLE: &str = "Networks";
+pub const NETWORK_HEADERS: [&str; 5] = ["Name", "Driver", "Scope", "Subnet", "Containers"];
+pub const NETWORK_LIST_HELP: &str =
+    " q: Quit | /: Filter | j/k: Navigate | Enter/c: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
+pub const NETWORK_DETAILS_TITLE: &str = " Network Details ";
+pub const NETWORK_DETAILS_HELP: &str =
+    " Esc/q: Back | j/k: Select container | d: Disconnect | r: Refresh ";
+
 pub const IMAGE_TITLE: &str = "Images";
 pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use", "Created"];
 pub const IMAGE_LIST_HELP: &str =
@@ -75,6 +83,12 @@ pub const LABEL_FULL_NAME: &str = "Full Name:";
 pub const LABEL_SIZE: &str = "Size:";
 pub const LABEL_IN_USE: &str = "In Use:";
 pub const LABEL_LINKED_CONTAINERS: &str = "Linked Containers:";
+pub const LABEL_SCOPE: &str = "Scope:";
+pub const LABEL_INTERNAL: &str = "Internal:";
+pub const LABEL_ATTACHABLE: &str = "Attachable:";
+pub const LABEL_SUBNET: &str = "Subnet:";
+pub const LABEL_GATEWAY: &str = "Gateway:";
+pub const LABEL_CONTAINERS: &str = "Containers:";
 pub const LABEL_DANGLING: &str = "Dangling:";
 pub const VALUE_YES: &str = "Yes";
 pub const VALUE_NO: &str = "No";
@@ -82,6 +96,9 @@ pub const VALUE_NO: &str = "No";
 pub const DELETE_CONTAINER_MESSAGE: &str = "Delete this container?";
 pub const FORCE_DELETE_CONTAINER_MESSAGE: &str = "Force delete this container?";
 pub const DELETE_VOLUME_MESSAGE: &str = "Delete this volume?";
+pub const DELETE_NETWORK_MESSAGE: &str = "Delete this network?";
+pub const PRUNE_NETWORKS_MESSAGE: &str = "Prune all unused networks?";
+pub const DISCONNECT_CONTAINER_MESSAGE: &str = "Disconnect this container from the network?";
 pub const DELETE_IMAGE_MESSAGE: &str = "Delete this image?";
 pub const FORCE_DELETE_IMAGE_MESSAGE: &str = "Force delete this image?";
 pub const PRUNE_CONTAINERS_MESSAGE: &str = "Prune all stopped containers?";
@@ -92,6 +109,9 @@ pub const REMOVE_ALL_STACK_CONTAINERS_MESSAGE: &str =
 
 pub const CONTAINER_NOT_FOUND_MESSAGE: &str = "Container not found";
 pub const VOLUME_IN_USE_DELETE_MESSAGE: &str = "Cannot delete volume: it is in use";
+pub const NETWORK_BUILTIN_DELETE_MESSAGE: &str = "Cannot delete network: it is predefined";
+pub const NETWORK_IN_USE_DELETE_MESSAGE: &str =
+    "Cannot delete network: containers are connected";
 
 pub fn filter_prompt_title(base_title: &str, active_filter: Option<&str>) -> String {
     match active_filter {

@@ -5,6 +5,7 @@ pub mod container;
 pub mod event;
 pub mod exec;
 pub mod image;
+pub mod network;
 pub mod router;
 pub mod stack;
 pub mod volume;

@@ -7,6 +7,7 @@ use crate::infrastructure::docker::network::mapper::NetworkInfraMapper;
 use crate::infrastructure::error::InfraError;
 use async_trait::async_trait;
 use bollard::models::NetworkDisconnectRequest;
+use futures_util::future::join_all;
 
 pub struct NetworkAdapter {
     docker: DockerClient,
@@ -30,23 +31,26 @@ impl NetworkRepository for NetworkAdapter {
             .map_err(AppError::from)?;
 
         // `list_networks` does not reliably fill `containers` or IPAM details,
-        // so each network is enriched with an inspect call. A failed inspect
-        // (e.g. the network vanished between list and inspect) falls back to
-        // the list-only mapping instead of failing the whole screen.
-        let mut result = Vec::with_capacity(networks.len());
-        for network in &networks {
-            match network.name.as_deref() {
-                Some(name) => match self.inspect(name).await {
-                    Ok(enriched) => result.push(enriched),
-                    Err(_) => {
-                        if let Some(mapped) = NetworkInfraMapper::from_docker(network) {
-                            result.push(mapped);
-                        }
-                    }
-                },
-                None => continue,
-            }
-        }
+        // so each network is enriched with an inspect call, run concurrently
+        // to keep the screen responsive. A failed inspect (e.g. the network
+        // vanished between list and inspect) falls back to the list-only
+        // mapping instead of failing the whole screen.
+        let enriched = join_all(networks.iter().map(|network| async move {
+            let name = network.name.as_deref();
+            let inspect = match name {
+                Some(name) => self.inspect(name).await.ok(),
+                None => None,
+            };
+            (network, inspect)
+        }))
+        .await;
+
+        let result = enriched
+            .into_iter()
+            .filter_map(|(network, inspect)| {
+                inspect.or_else(|| NetworkInfraMapper::from_docker(network))
+            })
+            .collect();
 
         Ok(result)
     }

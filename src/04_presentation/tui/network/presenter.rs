@@ -6,7 +6,6 @@ pub struct NetworkPresenter {
     pub selection: TableSelection,
     pub selected_network: Option<NetworkDto>,
     pub loading: bool,
-    pub error: Option<String>,
     pub filter: FilterState,
     pub container_selection: TableSelection,
 }
@@ -30,7 +29,6 @@ impl NetworkPresenter {
             selection: TableSelection::new(),
             selected_network: None,
             loading: false,
-            error: None,
             filter: FilterState::new(),
             container_selection: TableSelection::new(),
         }
@@ -39,15 +37,6 @@ impl NetworkPresenter {
     pub fn set_networks(&mut self, networks: Vec<NetworkDto>) {
         self.networks = networks;
         self.update_filtered_selection();
-        self.error = None;
-    }
-
-    pub fn set_error(&mut self, error: String) {
-        self.error = Some(error);
-    }
-
-    pub fn clear_error(&mut self) {
-        self.error = None;
     }
 
     pub fn set_loading(&mut self, loading: bool) {
@@ -197,7 +186,6 @@ mod tests {
         p.set_networks(three_networks());
         assert_eq!(p.networks.len(), 3);
         assert_eq!(p.selection.selected(), Some(0));
-        assert!(p.error.is_none());
     }
 
     #[test]

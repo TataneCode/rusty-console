@@ -587,12 +587,9 @@ impl App {
                 self.network_presenter.set_loading(true);
                 match self.network_actions.prune_networks().await {
                     Ok(result) => {
-                        self.popup_message =
-                            Some(PopupMessage::Info(resources::prune_result_message(
-                                "network",
-                                result.deleted_count,
-                                &format_bytes(result.space_freed),
-                            )));
+                        self.popup_message = Some(PopupMessage::Info(
+                            resources::prune_networks_result_message(result.deleted_count),
+                        ));
                         self.load_networks().await;
                     }
                     Err(e) => {

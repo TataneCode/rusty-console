@@ -156,6 +156,10 @@ pub fn prune_result_message(resource_name: &str, deleted_count: u32, freed: &str
     format!("Pruned {deleted_count} {resource_name}(s), freed {freed}")
 }
 
+pub fn prune_networks_result_message(deleted_count: u32) -> String {
+    format!("Pruned {deleted_count} network(s)")
+}
+
 pub fn stack_pull_pending_message(stack_name: &str) -> String {
     format!("Pulling images for stack {stack_name}…")
 }
@@ -204,6 +208,11 @@ mod tests {
             prune_result_message("image", 3, "5.0 MB"),
             "Pruned 3 image(s), freed 5.0 MB"
         );
+    }
+
+    #[test]
+    fn test_prune_networks_result_message_omits_freed_space() {
+        assert_eq!(prune_networks_result_message(2), "Pruned 2 network(s)");
     }
 
     #[test]

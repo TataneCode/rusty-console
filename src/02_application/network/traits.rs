@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 use crate::application::error::AppError;
 use crate::domain::network::Network;
 use async_trait::async_trait;

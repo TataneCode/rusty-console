@@ -73,20 +73,36 @@ pub fn render_container_list(
     render_help(frame, help_area, &help_text);
 }
 
-#[allow(clippy::too_many_arguments)]
+pub struct LogSearchView<'a> {
+    pub active: bool,
+    pub value: &'a str,
+    pub active_term: Option<&'a str>,
+    pub counter: Option<(usize, usize)>,
+    pub matches: &'a [usize],
+}
+
+impl LogSearchView<'_> {
+    pub fn inactive() -> Self {
+        LogSearchView {
+            active: false,
+            value: "",
+            active_term: None,
+            counter: None,
+            matches: &[],
+        }
+    }
+}
+
 pub fn render_container_logs(
     frame: &mut Frame,
     area: Rect,
     logs: &ContainerLogsDto,
     logs_state: &mut ListState,
-    search_active: bool,
-    search_value: &str,
-    active_search: Option<&str>,
-    search_counter: Option<(usize, usize)>,
-    match_indices: &[usize],
+    search: &LogSearchView,
 ) {
     let [content_area, help_area] = split_content_area(area);
-    let title = resources::logs_search_title(&logs.container_name, active_search, search_counter);
+    let title =
+        resources::logs_search_title(&logs.container_name, search.active_term, search.counter);
 
     let items: Vec<ListItem> = logs
         .lines
@@ -94,7 +110,7 @@ pub fn render_container_logs(
         .enumerate()
         .map(|(index, line)| {
             let timestamp = line.timestamp_display();
-            let message = if match_indices.contains(&index) {
+            let message = if search.matches.contains(&index) {
                 Span::styled(line.message.clone(), Theme::highlight_style())
             } else {
                 Span::from(line.message.clone())
@@ -122,8 +138,8 @@ pub fn render_container_logs(
 
     frame.render_stateful_widget(log_list, content_area, logs_state);
 
-    if search_active {
-        let prompt = Paragraph::new(format!("/{}{}", search_value, resources::FILTER_CURSOR))
+    if search.active {
+        let prompt = Paragraph::new(format!("/{}{}", search.value, resources::FILTER_CURSOR))
             .style(Theme::title_style())
             .block(Block::default().borders(Borders::TOP));
         frame.render_widget(prompt, help_area);
@@ -205,7 +221,9 @@ mod tests {
     use chrono::TimeZone;
     use chrono::Utc;
 
-    use super::{render_container_details, render_container_list, render_container_logs};
+    use super::{
+        render_container_details, render_container_list, render_container_logs, LogSearchView,
+    };
     use crate::application::container::{ContainerDto, ContainerLogsDto, LogLineDto};
     use crate::domain::container::ContainerState;
     use ratatui::{
@@ -310,11 +328,7 @@ mod tests {
                     frame.area(),
                     &logs,
                     &mut ListState::default(),
-                    false,
-                    "",
-                    None,
-                    None,
-                    &[],
+                    &LogSearchView::inactive(),
                 )
             })
             .unwrap();
@@ -353,11 +367,7 @@ mod tests {
                     frame.area(),
                     &logs,
                     &mut state,
-                    false,
-                    "",
-                    None,
-                    None,
-                    &[],
+                    &LogSearchView::inactive(),
                 )
             })
             .unwrap();
@@ -406,11 +416,13 @@ mod tests {
                     frame.area(),
                     &logs,
                     &mut ListState::default(),
-                    true,
-                    "err",
-                    None,
-                    None,
-                    &[],
+                    &LogSearchView {
+                        active: true,
+                        value: "err",
+                        active_term: None,
+                        counter: None,
+                        matches: &[],
+                    },
                 )
             })
             .unwrap();
@@ -443,11 +455,13 @@ mod tests {
                     frame.area(),
                     &logs,
                     &mut ListState::default(),
-                    false,
-                    "error",
-                    Some("error"),
-                    Some((1, 1)),
-                    &[1],
+                    &LogSearchView {
+                        active: false,
+                        value: "error",
+                        active_term: Some("error"),
+                        counter: Some((1, 1)),
+                        matches: &[1],
+                    },
                 )
             })
             .unwrap();

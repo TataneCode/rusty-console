@@ -6,7 +6,7 @@ use crate::application::container::mapper::ContainerMapper;
 use crate::application::container::traits::ContainerRepository;
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub struct ContainerService {
@@ -42,21 +42,29 @@ impl ContainerService {
         })
     }
 
-    pub async fn export_logs(&self, id: &str, name: &str) -> Result<PathBuf, AppError> {
+    pub async fn export_logs_to(
+        &self,
+        id: &str,
+        name: &str,
+        export_dir: &Path,
+    ) -> Result<PathBuf, AppError> {
         let logs = self.repository.export_logs(id).await?;
-        let path = Self::export_file_path(name)?;
+        let path = Self::export_file_path(name, export_dir);
         tokio::fs::write(&path, logs)
             .await
             .map_err(|e| AppError::operation_failed(format!("cannot write {path:?}: {e}")))?;
         Ok(path)
     }
 
-    pub fn export_file_path(name: &str) -> Result<PathBuf, AppError> {
+    pub async fn export_logs(&self, id: &str, name: &str) -> Result<PathBuf, AppError> {
+        let export_dir = std::env::current_dir()
+            .map_err(|e| AppError::operation_failed(format!("cannot resolve current dir: {e}")))?;
+        self.export_logs_to(id, name, &export_dir).await
+    }
+
+    pub fn export_file_path(name: &str, export_dir: &Path) -> PathBuf {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let file_name = format!("{name}_{timestamp}.log");
-        Ok(std::env::current_dir()
-            .map_err(|e| AppError::operation_failed(format!("cannot resolve current dir: {e}")))?
-            .join(file_name))
+        export_dir.join(format!("{name}_{timestamp}.log"))
     }
 
     pub async fn start_container(&self, id: &str) -> Result<(), AppError> {
@@ -277,8 +285,6 @@ mod tests {
     async fn test_export_logs_writes_file_and_returns_path() {
         let dir = std::env::temp_dir().join(format!("rusty_console_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&dir).unwrap();
 
         let mut mock = MockContainerRepository::new();
         mock.expect_export_logs()
@@ -286,7 +292,7 @@ mod tests {
             .returning(|_| Ok("2026-10-26T10:30:00Z line1\nline2\n".to_string()));
         let service = ContainerService::new(Arc::new(mock));
 
-        let result = service.export_logs("abc123", "web").await.unwrap();
+        let result = service.export_logs_to("abc123", "web", &dir).await.unwrap();
         assert!(result
             .file_name()
             .unwrap()
@@ -300,7 +306,6 @@ mod tests {
         let content = std::fs::read_to_string(&result).unwrap();
         assert!(content.contains("line1"));
 
-        std::env::set_current_dir(previous).unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -316,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_export_file_path_format() {
-        let path = ContainerService::export_file_path("my-web").unwrap();
+        let path = ContainerService::export_file_path("my-web", Path::new("/tmp"));
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         assert!(name.starts_with("my-web_"));
         assert!(name.ends_with(".log"));

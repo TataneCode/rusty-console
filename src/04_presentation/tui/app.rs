@@ -7,7 +7,7 @@ use crate::presentation::tui::common::{
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
     filter_containers, render_container_details, render_container_list, render_container_logs,
-    ContainerActions, ContainerPresenter,
+    ContainerActions, ContainerPresenter, LogSearchView,
 };
 use crate::presentation::tui::event::{AppEvent, EventHandler};
 use crate::presentation::tui::exec::{
@@ -233,21 +233,16 @@ impl App {
             Screen::ContainerLogs => {
                 let presenter = &mut self.container_presenter;
                 if let Some(logs) = presenter.logs.as_ref() {
-                    let search_active = presenter.is_log_search_active();
                     let search_value = presenter.log_search_value().to_string();
                     let active_search = presenter.active_search_value().map(str::to_string);
-                    let search_counter = presenter.search_counter();
-                    render_container_logs(
-                        frame,
-                        area,
-                        logs,
-                        &mut presenter.logs_state,
-                        search_active,
-                        &search_value,
-                        active_search.as_deref(),
-                        search_counter,
-                        &presenter.log_search_results,
-                    );
+                    let search = LogSearchView {
+                        active: presenter.is_log_search_active(),
+                        value: &search_value,
+                        active_term: active_search.as_deref(),
+                        counter: presenter.search_counter(),
+                        matches: &presenter.log_search_results,
+                    };
+                    render_container_logs(frame, area, logs, &mut presenter.logs_state, &search);
                 }
             }
             Screen::ContainerDetails => {
@@ -707,6 +702,26 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crossterm::event::KeyCode;
+
+    struct CwdGuard {
+        previous: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn new(dir: &std::path::Path) -> Self {
+            let previous = std::env::current_dir().unwrap();
+            std::env::set_current_dir(dir).unwrap();
+            CwdGuard { previous }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.previous).unwrap();
+        }
+    }
+
     use super::{
         finalize_exec_command_result, finalize_run_result, format_bytes, App, ExecCommandConfig,
         ExecCommandResult, ExecRefreshTarget, Screen,
@@ -737,7 +752,6 @@ mod tests {
     use crate::presentation::tui::stack::StackActions;
     use crate::presentation::tui::volume::VolumeActions;
     use chrono::Utc;
-    use crossterm::event::KeyCode;
     use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
     use std::os::unix::process::ExitStatusExt;
     use std::{io, sync::Arc};
@@ -1968,10 +1982,10 @@ mod tests {
         assert!(app.popup_message.is_none());
 
         // With logs -> export succeeds, info popup with file name
-        let dir = std::env::temp_dir().join(format!("rusty_app_test_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("rusty_app_test_{}_{}", std::process::id(), line!()));
         std::fs::create_dir_all(&dir).unwrap();
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&dir).unwrap();
+        let _cwd_guard = CwdGuard::new(&dir);
         app.container_presenter
             .set_logs(crate::application::container::ContainerLogsDto {
                 container_id: "abc123".to_string(),
@@ -1990,7 +2004,8 @@ mod tests {
             other => panic!("expected info popup, got {other:?}"),
         }
         app.popup_message = None;
-        std::env::set_current_dir(previous).unwrap();
+        drop(_cwd_guard);
+        std::fs::remove_dir_all(&dir).ok();
 
         // Error case -> error popup
         let mut mock = MockContainerRepository::new();

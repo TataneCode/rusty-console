@@ -26,6 +26,29 @@ impl ContainerAdapter {
     pub fn new(docker: DockerClient) -> Self {
         ContainerAdapter { docker }
     }
+
+    async fn collect_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {
+        let options = LogsOptions {
+            stdout: true,
+            stderr: true,
+            timestamps: true,
+            tail: tail.map(|t| t.to_string()).unwrap_or_default(),
+            ..Default::default()
+        };
+        let mut stream = self.docker.inner().logs(id, Some(options));
+        let mut logs = String::new();
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(output) => {
+                    logs.push_str(&output.to_string());
+                }
+                Err(e) => {
+                    return Err(AppError::from(InfraError::from(e)));
+                }
+            }
+        }
+        Ok(logs)
+    }
 }
 
 #[async_trait]
@@ -100,31 +123,7 @@ impl ContainerRepository for ContainerAdapter {
     }
 
     async fn get_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {
-        let options = LogsOptions {
-            stdout: true,
-            stderr: true,
-            timestamps: true,
-            tail: tail
-                .map(|t| t.to_string())
-                .unwrap_or_else(|| "100".to_string()),
-            ..Default::default()
-        };
-
-        let mut stream = self.docker.inner().logs(id, Some(options));
-        let mut logs = String::new();
-
-        while let Some(result) = stream.next().await {
-            match result {
-                Ok(output) => {
-                    logs.push_str(&output.to_string());
-                }
-                Err(e) => {
-                    return Err(AppError::from(InfraError::from(e)));
-                }
-            }
-        }
-
-        Ok(logs)
+        self.collect_logs(id, Some(tail.unwrap_or(100))).await
     }
 
     async fn start(&self, id: &str) -> Result<(), AppError> {

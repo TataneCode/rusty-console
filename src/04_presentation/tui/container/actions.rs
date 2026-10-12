@@ -28,12 +28,6 @@ impl ContainerActions {
             .await
     }
 
-    pub async fn export_logs(&self, container: &ContainerDto) -> Result<PathBuf, AppError> {
-        self.service
-            .export_logs(&container.id, &container.name)
-            .await
-    }
-
     pub async fn export_logs_by(
         &self,
         container_id: &str,

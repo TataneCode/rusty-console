@@ -77,6 +77,28 @@ impl ContainerRepository for ContainerAdapter {
         Ok(ContainerInfraMapper::from_inspect(&response))
     }
 
+    async fn export_logs(&self, id: &str) -> Result<String, AppError> {
+        let options = LogsOptions {
+            stdout: true,
+            stderr: true,
+            timestamps: true,
+            ..Default::default()
+        };
+        let mut stream = self.docker.inner().logs(id, Some(options));
+        let mut logs = String::new();
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(output) => {
+                    logs.push_str(&output.to_string());
+                }
+                Err(e) => {
+                    return Err(AppError::from(InfraError::from(e)));
+                }
+            }
+        }
+        Ok(logs)
+    }
+
     async fn get_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {
         let options = LogsOptions {
             stdout: true,

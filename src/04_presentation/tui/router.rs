@@ -62,7 +62,7 @@ impl App {
         match &self.screen {
             Screen::MainMenu => self.handle_main_menu_action(action).await,
             Screen::ContainerList => self.handle_container_list_action(action).await,
-            Screen::ContainerLogs => self.handle_container_logs_action(action),
+            Screen::ContainerLogs => self.handle_container_logs_action(action).await,
             Screen::ContainerDetails => self.handle_details_action(action),
             Screen::VolumeList => self.handle_volume_list_action(action).await,
             Screen::VolumeDetails => self.handle_details_action(action),
@@ -185,7 +185,7 @@ impl App {
         }
     }
 
-    pub(crate) fn handle_container_logs_action(&mut self, action: AppAction) {
+    pub(crate) async fn handle_container_logs_action(&mut self, action: AppAction) {
         match action {
             AppAction::Quit | AppAction::Back => {
                 self.container_presenter.deactivate_log_search();
@@ -193,6 +193,29 @@ impl App {
                 self.screen = Screen::ContainerList;
             }
             AppAction::ActivateLogSearch => self.container_presenter.activate_log_search(),
+            AppAction::ExportLogs => {
+                if let Some(logs) = &self.container_presenter.logs {
+                    let container_id = logs.container_id.clone();
+                    let container_name = logs.container_name.clone();
+                    match self
+                        .container_actions
+                        .export_logs_by(&container_id, &container_name)
+                        .await
+                    {
+                        Ok(path) => {
+                            self.popup_message =
+                                Some(PopupMessage::Info(resources::logs_export_success_message(
+                                    &path.file_name().unwrap_or_default().to_string_lossy(),
+                                )));
+                        }
+                        Err(e) => {
+                            self.popup_message = Some(PopupMessage::Error(
+                                resources::logs_export_error_message(&e.to_string()),
+                            ));
+                        }
+                    }
+                }
+            }
             AppAction::NextLogMatch => self.container_presenter.next_log_match(),
             AppAction::PreviousLogMatch => self.container_presenter.previous_log_match(),
             AppAction::NavigateUp | AppAction::ScrollUp => {

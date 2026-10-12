@@ -1263,9 +1263,10 @@ mod tests {
                     message: "line1".to_string(),
                 }],
             });
-        app.handle_container_logs_action(AppAction::ScrollDown);
-        app.handle_container_logs_action(AppAction::ScrollUp);
-        app.handle_container_logs_action(AppAction::Back);
+        app.handle_container_logs_action(AppAction::ScrollDown)
+            .await;
+        app.handle_container_logs_action(AppAction::ScrollUp).await;
+        app.handle_container_logs_action(AppAction::Back).await;
         assert_eq!(app.screen, Screen::ContainerList);
         assert!(app.container_presenter.logs.is_none());
     }
@@ -1296,7 +1297,8 @@ mod tests {
         assert_eq!(app.expanded_log_line, None);
         assert_eq!(app.screen, Screen::ContainerLogs);
         // Selection still intact after closing
-        app.handle_container_logs_action(AppAction::NavigateDown);
+        app.handle_container_logs_action(AppAction::NavigateDown)
+            .await;
         assert_eq!(app.container_presenter.selected_logs_line(), Some(1));
         app.handle_action(AppAction::Select).await;
         assert_eq!(app.expanded_log_line, Some(1));
@@ -1935,5 +1937,88 @@ mod tests {
         app.handle_action(AppAction::Back).await;
         assert!(app.container_presenter.log_search_results.is_empty());
         assert!(app.container_presenter.logs.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_export_logs_action_success_and_error_feedback() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_export_logs()
+            .withf(|id| id == "abc123")
+            .returning(|_| Ok("2026-10-26T10:30:00Z line1\n".to_string()));
+        let mut app = build_app(
+            mock,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+        );
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
+            });
+
+        // No logs loaded -> E does nothing
+        app.container_presenter.clear_logs();
+        app.handle_action(AppAction::ExportLogs).await;
+        assert!(app.popup_message.is_none());
+
+        // With logs -> export succeeds, info popup with file name
+        let dir = std::env::temp_dir().join(format!("rusty_app_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let previous = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
+            });
+        app.handle_action(AppAction::ExportLogs).await;
+        match &app.popup_message {
+            Some(PopupMessage::Info(msg)) => {
+                assert!(msg.starts_with("Logs exported to web_"));
+                assert!(msg.ends_with(".log"));
+            }
+            other => panic!("expected info popup, got {other:?}"),
+        }
+        app.popup_message = None;
+        std::env::set_current_dir(previous).unwrap();
+
+        // Error case -> error popup
+        let mut mock = MockContainerRepository::new();
+        mock.expect_export_logs().returning(|_| {
+            Err(crate::application::error::AppError::repository(
+                "docker down",
+            ))
+        });
+        let mut app = build_app(
+            mock,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+        );
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
+            });
+        app.handle_action(AppAction::ExportLogs).await;
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("docker down")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
     }
 }

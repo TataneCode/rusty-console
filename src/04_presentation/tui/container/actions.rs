@@ -3,6 +3,7 @@ use crate::application::container::{
 };
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
+use std::path::PathBuf;
 
 pub struct ContainerActions {
     service: ContainerService,
@@ -25,6 +26,20 @@ impl ContainerActions {
         self.service
             .get_logs(&container.id, &container.name, tail)
             .await
+    }
+
+    pub async fn export_logs(&self, container: &ContainerDto) -> Result<PathBuf, AppError> {
+        self.service
+            .export_logs(&container.id, &container.name)
+            .await
+    }
+
+    pub async fn export_logs_by(
+        &self,
+        container_id: &str,
+        container_name: &str,
+    ) -> Result<PathBuf, AppError> {
+        self.service.export_logs(container_id, container_name).await
     }
 
     pub async fn load_container_details(&self, id: &str) -> Result<Option<ContainerDto>, AppError> {

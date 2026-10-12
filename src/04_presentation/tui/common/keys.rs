@@ -28,6 +28,7 @@ pub enum AppAction {
     ActivateLogSearch,
     NextLogMatch,
     PreviousLogMatch,
+    ExportLogs,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -60,6 +61,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('n') => Some(AppAction::NextLogMatch),
         KeyCode::Char('N') => Some(AppAction::PreviousLogMatch),
         KeyCode::Char('e') => Some(AppAction::Exec),
+        KeyCode::Char('E') => Some(AppAction::ExportLogs),
         KeyCode::Char('S') => Some(AppAction::StopAll),
         KeyCode::Char('D') => Some(AppAction::RemoveAll),
         KeyCode::Char('P') => Some(AppAction::PullImages),
@@ -83,6 +85,7 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
         KeyContext::Global => match action {
             AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
             AppAction::ActivateLogSearch => None,
+            AppAction::ExportLogs => None,
             other => Some(other),
         },
     }
@@ -313,5 +316,33 @@ mod tests {
     #[test]
     fn test_unknown_key_returns_none() {
         assert_eq!(map_key_to_action(key_event(KeyCode::F(12))), None);
+    }
+
+    #[test]
+    fn test_export_logs_key_e() {
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('E')), KeyContext::ContainerLogs),
+            Some(AppAction::ExportLogs)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('E')), KeyContext::Global),
+            None
+        );
+    }
+
+    #[test]
+    fn test_n_keys_inert_off_logs_screen() {
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('n')), KeyContext::Global),
+            None
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('N')), KeyContext::Global),
+            None
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('n')), KeyContext::ContainerLogs),
+            Some(AppAction::NextLogMatch)
+        );
     }
 }

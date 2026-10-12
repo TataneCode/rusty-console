@@ -1,6 +1,7 @@
 use crate::application::container::dto::{
     ContainerDto, ContainerLogsDto, ContainerStatsSubscription,
 };
+use crate::application::container::log_parser;
 use crate::application::container::mapper::ContainerMapper;
 use crate::application::container::traits::ContainerRepository;
 use crate::application::error::AppError;
@@ -32,11 +33,11 @@ impl ContainerService {
         name: &str,
         tail: Option<usize>,
     ) -> Result<ContainerLogsDto, AppError> {
-        let logs = self.repository.get_logs(id, tail).await?;
+        let raw_logs = self.repository.get_logs(id, tail).await?;
         Ok(ContainerLogsDto {
             container_id: id.to_string(),
             container_name: name.to_string(),
-            logs,
+            lines: log_parser::parse_log_lines(&raw_logs),
         })
     }
 
@@ -167,13 +168,17 @@ mod tests {
         let mut mock = MockContainerRepository::new();
         mock.expect_get_logs()
             .withf(|id, tail| id == "abc123" && *tail == Some(100))
-            .returning(|_, _| Ok("line1\nline2".to_string()));
+            .returning(|_, _| Ok("2026-10-26T10:30:00Z line1\nline2\n".to_string()));
 
         let service = ContainerService::new(Arc::new(mock));
         let result = service.get_logs("abc123", "web", Some(100)).await.unwrap();
         assert_eq!(result.container_id, "abc123");
         assert_eq!(result.container_name, "web");
-        assert_eq!(result.logs, "line1\nline2");
+        assert_eq!(result.lines.len(), 2);
+        assert!(result.lines[0].timestamp.is_some());
+        assert_eq!(result.lines[0].message, "line1");
+        assert_eq!(result.lines[1].timestamp, None);
+        assert_eq!(result.lines[1].message, "line2");
     }
 
     #[tokio::test]

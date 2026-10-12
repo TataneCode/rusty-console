@@ -81,7 +81,13 @@ pub fn render_container_logs(
     let [content_area, help_area] = split_content_area(area);
     let title = resources::logs_title(&logs.container_name);
 
-    let log_content = Paragraph::new(logs.logs.clone())
+    let log_text = logs
+        .lines
+        .iter()
+        .map(|line| format!("{} {}", line.timestamp_display(), line.message))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let log_content = Paragraph::new(log_text)
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -168,7 +174,7 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
 #[cfg(test)]
 mod tests {
     use super::{render_container_details, render_container_list, render_container_logs};
-    use crate::application::container::{ContainerDto, ContainerLogsDto};
+    use crate::application::container::{ContainerDto, ContainerLogsDto, LogLineDto};
     use crate::domain::container::ContainerState;
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
 
@@ -248,7 +254,16 @@ mod tests {
         let logs = ContainerLogsDto {
             container_id: "abc123".to_string(),
             container_name: "web".to_string(),
-            logs: "line1\nline2".to_string(),
+            lines: vec![
+                LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                },
+                LogLineDto {
+                    timestamp: None,
+                    message: "line2".to_string(),
+                },
+            ],
         };
 
         terminal

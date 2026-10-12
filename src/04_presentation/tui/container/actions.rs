@@ -121,10 +121,10 @@ mod tests {
         let container = containers[0].clone();
 
         assert_eq!(containers.len(), 1);
-        assert_eq!(
-            actions.load_logs(&container, Some(10)).await.unwrap().logs,
-            "line1\nline2"
-        );
+        let logs = actions.load_logs(&container, Some(10)).await.unwrap();
+        assert_eq!(logs.lines.len(), 2);
+        assert_eq!(logs.lines[0].message, "line1");
+        assert_eq!(logs.lines[1].message, "line2");
         assert!(actions
             .load_container_details(&container.id)
             .await

@@ -970,7 +970,10 @@ mod tests {
             .set_logs(crate::application::container::ContainerLogsDto {
                 container_id: container.id.clone(),
                 container_name: container.name.clone(),
-                logs: "line1".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
             });
         app.container_presenter.set_details(container.clone());
         app.volume_presenter.set_volumes(vec![volume]);
@@ -1223,7 +1226,10 @@ mod tests {
             .set_logs(crate::application::container::ContainerLogsDto {
                 container_id: "abc123".to_string(),
                 container_name: "web".to_string(),
-                logs: "line1".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
             });
         app.handle_container_logs_action(AppAction::ScrollDown);
         app.handle_container_logs_action(AppAction::ScrollUp);

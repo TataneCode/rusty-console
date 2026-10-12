@@ -201,6 +201,7 @@ impl Default for ContainerPresenter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::container::LogLineDto;
     use crate::domain::container::ContainerState;
 
     fn make_container(name: &str, image: &str) -> ContainerDto {
@@ -386,7 +387,10 @@ mod tests {
         let logs = ContainerLogsDto {
             container_id: "c1".to_string(),
             container_name: "alpha".to_string(),
-            logs: "line1\nline2".to_string(),
+            lines: vec![LogLineDto {
+                timestamp: None,
+                message: "line1".to_string(),
+            }],
         };
         p.set_logs(logs);
         assert!(p.logs.is_some());

@@ -63,10 +63,7 @@ mod tests {
     #[test]
     fn test_network_id_empty() {
         let result = NetworkId::new("");
-        assert!(matches!(
-            result,
-            Err(DomainError::InvalidNetwork(_))
-        ));
+        assert!(matches!(result, Err(DomainError::InvalidNetwork(_))));
     }
 
     #[test]

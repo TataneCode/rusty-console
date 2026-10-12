@@ -90,7 +90,9 @@ impl NetworkPresenter {
         }
     }
 
-    pub fn selected_network_container(&self) -> Option<&crate::application::network::NetworkContainerDto> {
+    pub fn selected_network_container(
+        &self,
+    ) -> Option<&crate::application::network::NetworkContainerDto> {
         self.selected_network.as_ref().and_then(|network| {
             self.container_selection
                 .selected()

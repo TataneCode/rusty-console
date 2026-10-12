@@ -60,7 +60,10 @@ impl NetworkRepository for NetworkAdapter {
         let inspect = self
             .docker
             .inner()
-            .inspect_network(name, None::<bollard::query_parameters::InspectNetworkOptions>)
+            .inspect_network(
+                name,
+                None::<bollard::query_parameters::InspectNetworkOptions>,
+            )
             .await
             .map_err(InfraError::from)
             .map_err(AppError::from)?;

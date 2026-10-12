@@ -198,8 +198,8 @@ mod tests {
 
     #[test]
     fn test_cannot_be_deleted_when_containers_connected() {
-        let network = make_network()
-            .with_containers(vec![NetworkContainer::new("web", "172.20.0.2")]);
+        let network =
+            make_network().with_containers(vec![NetworkContainer::new("web", "172.20.0.2")]);
         assert!(!network.can_be_deleted());
     }
 
@@ -208,8 +208,7 @@ mod tests {
         let network = make_network();
         assert!(!network.can_disconnect());
 
-        let network =
-            network.with_containers(vec![NetworkContainer::new("web", "172.20.0.2")]);
+        let network = network.with_containers(vec![NetworkContainer::new("web", "172.20.0.2")]);
         assert!(network.can_disconnect());
     }
 

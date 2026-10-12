@@ -29,6 +29,7 @@ pub enum AppAction {
     NextLogMatch,
     PreviousLogMatch,
     ExportLogs,
+    DisconnectContainer,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -73,6 +74,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
 pub enum KeyContext {
     Global,
     ContainerLogs,
+    NetworkDetails,
 }
 
 pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Option<AppAction> {
@@ -82,10 +84,15 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
             AppAction::ActivateFilter => Some(AppAction::ActivateLogSearch),
             other => Some(other),
         },
+        KeyContext::NetworkDetails => match action {
+            AppAction::Delete => Some(AppAction::DisconnectContainer),
+            other => Some(other),
+        },
         KeyContext::Global => match action {
             AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
             AppAction::ActivateLogSearch => None,
             AppAction::ExportLogs => None,
+            AppAction::DisconnectContainer => None,
             other => Some(other),
         },
     }
@@ -343,6 +350,21 @@ mod tests {
         assert_eq!(
             map_key_to_action_for_context(key_event(KeyCode::Char('n')), KeyContext::ContainerLogs),
             Some(AppAction::NextLogMatch)
+        );
+    }
+
+    #[test]
+    fn test_d_maps_to_disconnect_only_on_network_details() {
+        assert_eq!(
+            map_key_to_action_for_context(
+                key_event(KeyCode::Char('d')),
+                KeyContext::NetworkDetails
+            ),
+            Some(AppAction::DisconnectContainer)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('d')), KeyContext::Global),
+            Some(AppAction::Delete)
         );
     }
 }

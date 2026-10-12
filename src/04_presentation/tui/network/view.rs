@@ -93,10 +93,7 @@ pub fn render_network_details(
                 } else {
                     ""
                 };
-                format!(
-                    "{marker} {} ({})",
-                    container.name, container.ip
-                )
+                format!("{marker} {} ({})", container.name, container.ip)
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -249,9 +246,7 @@ mod tests {
         let network = make_network_dto();
 
         terminal
-            .draw(|frame| {
-                render_network_details(frame, frame.area(), &network, Some(0))
-            })
+            .draw(|frame| render_network_details(frame, frame.area(), &network, Some(0)))
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());
@@ -270,9 +265,7 @@ mod tests {
         let network = make_network_dto();
 
         terminal
-            .draw(|frame| {
-                render_network_details(frame, frame.area(), &network, Some(0))
-            })
+            .draw(|frame| render_network_details(frame, frame.area(), &network, Some(0)))
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());

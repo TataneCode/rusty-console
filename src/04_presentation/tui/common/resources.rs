@@ -5,11 +5,12 @@ pub const MAIN_MENU_TITLE: &str = "Rusty Console - Docker Manager";
 pub const MAIN_MENU_BLOCK_TITLE: &str = " Menu ";
 pub const MAIN_MENU_HELP: &str = " j/k: Navigate | Enter: Select | q: Quit ";
 pub const MAIN_MENU_HIGHLIGHT_SYMBOL: &str = "> ";
-pub const MAIN_MENU_ITEMS: [&str; 5] = [
+pub const MAIN_MENU_ITEMS: [&str; 6] = [
     "  Containers",
     "  Volumes",
     "  Images",
     "  Stacks",
+    "  Networks",
     "  Quit",
 ];
 
@@ -110,8 +111,7 @@ pub const REMOVE_ALL_STACK_CONTAINERS_MESSAGE: &str =
 pub const CONTAINER_NOT_FOUND_MESSAGE: &str = "Container not found";
 pub const VOLUME_IN_USE_DELETE_MESSAGE: &str = "Cannot delete volume: it is in use";
 pub const NETWORK_BUILTIN_DELETE_MESSAGE: &str = "Cannot delete network: it is predefined";
-pub const NETWORK_IN_USE_DELETE_MESSAGE: &str =
-    "Cannot delete network: containers are connected";
+pub const NETWORK_IN_USE_DELETE_MESSAGE: &str = "Cannot delete network: containers are connected";
 
 pub fn filter_prompt_title(base_title: &str, active_filter: Option<&str>) -> String {
     match active_filter {

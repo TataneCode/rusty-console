@@ -68,6 +68,8 @@ impl App {
             Screen::VolumeDetails => self.handle_details_action(action),
             Screen::ImageList => self.handle_image_list_action(action).await,
             Screen::ImageDetails => self.handle_details_action(action),
+            Screen::NetworkList => self.handle_network_list_action(action).await,
+            Screen::NetworkDetails => self.handle_network_details_action(action).await,
             Screen::StackList => self.handle_stack_list_action(action).await,
             Screen::StackContainers => self.handle_stack_containers_action(action).await,
         }
@@ -117,7 +119,11 @@ impl App {
                             self.screen = Screen::StackList;
                             self.load_stacks().await;
                         }
-                        4 => self.should_quit = true,
+                        4 => {
+                            self.screen = Screen::NetworkList;
+                            self.load_networks().await;
+                        }
+                        5 => self.should_quit = true,
                         _ => {}
                     }
                 }
@@ -319,6 +325,96 @@ impl App {
         }
     }
 
+    pub(crate) async fn handle_network_list_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::Quit => self.should_quit = true,
+            AppAction::Back => self.screen = Screen::MainMenu,
+            AppAction::NavigateUp => self.network_presenter.navigate_up(),
+            AppAction::NavigateDown => self.network_presenter.navigate_down(),
+            AppAction::Select | AppAction::ViewDetails => {
+                if let Some(network) = self.network_presenter.selected_network().cloned() {
+                    self.network_presenter.set_details(network);
+                    self.screen = Screen::NetworkDetails;
+                }
+            }
+            AppAction::Delete => {
+                if let Some(network) = self.network_presenter.selected_network() {
+                    if network.builtin {
+                        self.popup_message = Some(PopupMessage::Error(
+                            resources::NETWORK_BUILTIN_DELETE_MESSAGE.to_string(),
+                        ));
+                    } else if !network.can_delete {
+                        self.popup_message = Some(PopupMessage::Error(
+                            resources::NETWORK_IN_USE_DELETE_MESSAGE.to_string(),
+                        ));
+                    } else {
+                        self.confirm_dialog = Some((ConfirmAction::NetworkDelete, true));
+                    }
+                }
+            }
+            AppAction::Refresh => self.load_networks().await,
+            AppAction::Prune => {
+                self.confirm_dialog = Some((ConfirmAction::NetworksPrune, true));
+            }
+            AppAction::ActivateFilter => {
+                self.network_presenter.activate_filter();
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) async fn handle_network_details_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::Quit | AppAction::Back => {
+                self.network_presenter.clear_details();
+                self.screen = Screen::NetworkList;
+            }
+            AppAction::NavigateUp => self.network_presenter.navigate_container_up(),
+            AppAction::NavigateDown => self.network_presenter.navigate_container_down(),
+            AppAction::DisconnectContainer => {
+                if self
+                    .network_presenter
+                    .selected_network_container()
+                    .is_some()
+                {
+                    self.confirm_dialog = Some((ConfirmAction::NetworkDisconnect, true));
+                }
+            }
+            AppAction::Refresh => self.refresh_network_details().await,
+            _ => {}
+        }
+    }
+
+    /// Reloads networks and restores the details view for the currently
+    /// selected network, falling back to the list screen if it disappeared.
+    pub(crate) async fn refresh_network_details(&mut self) {
+        let selected_name = self
+            .network_presenter
+            .selected_network
+            .as_ref()
+            .map(|network| network.name.clone());
+
+        self.load_networks().await;
+
+        match selected_name {
+            Some(name)
+                if self
+                    .network_presenter
+                    .networks
+                    .iter()
+                    .any(|network| network.name == name) =>
+            {
+                self.network_presenter.select_network_by_name(&name);
+            }
+            Some(_) => {
+                self.network_presenter.clear_details();
+                self.screen = Screen::NetworkList;
+            }
+            None => {}
+        }
+        self.network_presenter.set_loading(false);
+    }
+
     pub(crate) async fn execute_confirm_action(&mut self, action: ConfirmAction) {
         // Set loading state based on current screen
         match self.screen {
@@ -333,6 +429,9 @@ impl App {
             }
             Screen::StackList => {
                 self.stack_presenter.set_loading(true);
+            }
+            Screen::NetworkList | Screen::NetworkDetails => {
+                self.network_presenter.set_loading(true);
             }
             _ => {}
         }
@@ -391,6 +490,45 @@ impl App {
                     self.image_presenter.set_loading(false);
                 }
             }
+            ConfirmAction::NetworkDelete => {
+                if let Some(network) = self.network_presenter.selected_network().cloned() {
+                    if let Err(e) = self.network_actions.delete_network(&network.name).await {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.network_presenter.set_loading(false);
+                    } else {
+                        self.load_networks().await;
+                    }
+                } else {
+                    self.network_presenter.set_loading(false);
+                }
+            }
+            ConfirmAction::NetworkDisconnect => {
+                let target = self
+                    .network_presenter
+                    .selected_network
+                    .as_ref()
+                    .map(|network| network.name.clone())
+                    .zip(
+                        self.network_presenter
+                            .selected_network_container()
+                            .map(|container| container.name.clone()),
+                    );
+
+                if let Some((network_name, container_name)) = target {
+                    if let Err(e) = self
+                        .network_actions
+                        .disconnect_container(&network_name, &container_name)
+                        .await
+                    {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.network_presenter.set_loading(false);
+                    } else {
+                        self.refresh_network_details().await;
+                    }
+                } else {
+                    self.network_presenter.set_loading(false);
+                }
+            }
             ConfirmAction::ContainersPrune => {
                 self.container_presenter.set_loading(true);
                 match self.container_actions.prune_containers().await {
@@ -445,6 +583,24 @@ impl App {
                     }
                 }
             }
+            ConfirmAction::NetworksPrune => {
+                self.network_presenter.set_loading(true);
+                match self.network_actions.prune_networks().await {
+                    Ok(result) => {
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::prune_result_message(
+                                "network",
+                                result.deleted_count,
+                                &format_bytes(result.space_freed),
+                            )));
+                        self.load_networks().await;
+                    }
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        self.network_presenter.set_loading(false);
+                    }
+                }
+            }
             ConfirmAction::StackContainersRemoveAll => {
                 self.stack_presenter.set_loading(true);
                 let ids: Vec<String> = self
@@ -472,6 +628,7 @@ impl App {
             Screen::ContainerList => self.container_presenter.is_filter_active(),
             Screen::VolumeList => self.volume_presenter.is_filter_active(),
             Screen::ImageList => self.image_presenter.is_filter_active(),
+            Screen::NetworkList => self.network_presenter.is_filter_active(),
             Screen::StackList => self.stack_presenter.is_filter_active(),
             Screen::ContainerLogs => self.container_presenter.is_log_search_active(),
             _ => false,
@@ -486,6 +643,7 @@ impl App {
                     Screen::ContainerList => self.container_presenter.deactivate_filter(),
                     Screen::VolumeList => self.volume_presenter.deactivate_filter(),
                     Screen::ImageList => self.image_presenter.deactivate_filter(),
+                    Screen::NetworkList => self.network_presenter.deactivate_filter(),
                     Screen::StackList => self.stack_presenter.deactivate_filter(),
                     Screen::ContainerLogs => self.container_presenter.deactivate_log_search(),
                     _ => {}
@@ -497,6 +655,7 @@ impl App {
                     Screen::ContainerList => self.container_presenter.pop_filter_char(),
                     Screen::VolumeList => self.volume_presenter.pop_filter_char(),
                     Screen::ImageList => self.image_presenter.pop_filter_char(),
+                    Screen::NetworkList => self.network_presenter.pop_filter_char(),
                     Screen::StackList => self.stack_presenter.pop_filter_char(),
                     Screen::ContainerLogs => self.container_presenter.pop_log_search_char(),
                     _ => {}
@@ -508,6 +667,7 @@ impl App {
                     Screen::ContainerList => self.container_presenter.push_filter_char(c),
                     Screen::VolumeList => self.volume_presenter.push_filter_char(c),
                     Screen::ImageList => self.image_presenter.push_filter_char(c),
+                    Screen::NetworkList => self.network_presenter.push_filter_char(c),
                     Screen::StackList => self.stack_presenter.push_filter_char(c),
                     Screen::ContainerLogs => self.container_presenter.push_log_search_char(c),
                     _ => {}

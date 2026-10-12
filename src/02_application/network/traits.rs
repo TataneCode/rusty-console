@@ -13,10 +13,6 @@ pub trait NetworkRepository: Send + Sync {
     async fn inspect(&self, name: &str) -> Result<Network, AppError>;
     async fn delete(&self, name: &str) -> Result<(), AppError>;
     async fn prune(&self) -> Result<PruneResultDto, AppError>;
-    async fn disconnect(
-        &self,
-        network: &str,
-        container: &str,
-        force: bool,
-    ) -> Result<(), AppError>;
+    async fn disconnect(&self, network: &str, container: &str, force: bool)
+        -> Result<(), AppError>;
 }

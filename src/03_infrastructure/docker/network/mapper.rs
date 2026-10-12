@@ -75,7 +75,10 @@ impl NetworkInfraMapper {
                     .iter()
                     .map(|(container_id, endpoint)| {
                         NetworkContainer::new(
-                            endpoint.name.clone().unwrap_or_else(|| container_id.clone()),
+                            endpoint
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| container_id.clone()),
                             endpoint
                                 .ipv4_address
                                 .clone()
@@ -190,8 +193,7 @@ mod tests {
 
     #[test]
     fn from_inspect_maps_connected_containers_sorted() {
-        let network =
-            NetworkInfraMapper::from_inspect(&make_bollard_inspect("app-net")).unwrap();
+        let network = NetworkInfraMapper::from_inspect(&make_bollard_inspect("app-net")).unwrap();
 
         assert_eq!(network.containers().len(), 2);
         assert_eq!(network.containers()[0].name(), "api");
@@ -214,7 +216,10 @@ mod tests {
             "docker0".to_string(),
         );
         assert!(NetworkInfraMapper::is_builtin("docker0", Some(&options)));
-        assert!(!NetworkInfraMapper::is_builtin("docker0", Some(&HashMap::new())));
+        assert!(!NetworkInfraMapper::is_builtin(
+            "docker0",
+            Some(&HashMap::new())
+        ));
     }
 
     #[test]

@@ -28,7 +28,9 @@ impl NetworkActions {
         network: &str,
         container: &str,
     ) -> Result<(), AppError> {
-        self.service.disconnect_container(network, container, false).await
+        self.service
+            .disconnect_container(network, container, false)
+            .await
     }
 }
 
@@ -63,9 +65,7 @@ mod tests {
             })
         });
         mock.expect_disconnect()
-            .withf(|network, container, force| {
-                network == "app-net" && container == "web" && !force
-            })
+            .withf(|network, container, force| network == "app-net" && container == "web" && !force)
             .returning(|_, _, _| Ok(()));
 
         let actions = NetworkActions::new(NetworkService::new(Arc::new(mock)));
@@ -75,11 +75,6 @@ mod tests {
         assert_eq!(networks[0].container_count, 1);
         assert!(actions.delete_network(&networks[0].name).await.is_ok());
         assert_eq!(actions.prune_networks().await.unwrap().deleted_count, 1);
-        assert!(
-            actions
-                .disconnect_container("app-net", "web")
-                .await
-                .is_ok()
-        );
+        assert!(actions.disconnect_container("app-net", "web").await.is_ok());
     }
 }

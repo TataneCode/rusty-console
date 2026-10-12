@@ -51,8 +51,8 @@ impl NetworkService {
 mod tests {
     use super::*;
     use crate::application::error::AppError;
-    use crate::application::shared::PruneResultDto;
     use crate::application::network::traits::MockNetworkRepository;
+    use crate::application::shared::PruneResultDto;
     use crate::domain::network::{Network, NetworkContainer, NetworkId, NetworkScope};
     use std::sync::Arc;
 
@@ -162,12 +162,10 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         let service = NetworkService::new(Arc::new(mock));
-        assert!(
-            service
-                .disconnect_container("my-network", "web", false)
-                .await
-                .is_ok()
-        );
+        assert!(service
+            .disconnect_container("my-network", "web", false)
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
@@ -189,7 +187,9 @@ mod tests {
             .returning(|_, _, _| Err(AppError::repository("not connected")));
 
         let service = NetworkService::new(Arc::new(mock));
-        let result = service.disconnect_container("my-network", "web", false).await;
+        let result = service
+            .disconnect_container("my-network", "web", false)
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not connected"));
     }

@@ -286,3 +286,12 @@ src/
 - [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
 - [skills/](skills/) - Reusable procedure skills (one folder per skill, `SKILL.md` format)
 - [agents/](agents/) - Independent agent definitions invoking the skills
+
+## Agent Routing
+
+When the user asks for a review of a pull request (e.g. "lance la review", "review PR #N"), invoke the **Reviewer** agent ([agents/reviewer.md](agents/reviewer.md)) — not an external review service. Follow its mode opératoire exactly:
+
+1. Read [agents/reviewer.md](agents/reviewer.md) and the skills it references: [skills/rust-code-review/SKILL.md](skills/rust-code-review/SKILL.md) (main procedure), [skills/rust-quality-gate/SKILL.md](skills/rust-quality-gate/SKILL.md), [skills/rust-feature-ddd/SKILL.md](skills/rust-feature-ddd/SKILL.md), [skills/rust-testing/SKILL.md](skills/rust-testing/SKILL.md) (read-only references).
+2. Execute its 6-step procedure without skipping any step (context, scope, layer-by-layer DDD examination, quality/tests, structured verdict, publication).
+3. Publish the review on the PR: verdict first (approve / request changes / comment), findings by severity 🔴/🟡/🟢 with `file:line` and a concrete suggestion. Note: GitHub forbids `REQUEST_CHANGES` by the PR author — fall back to `COMMENT` with the verdict stated in the body.
+4. Report, do not fix: a review never includes implementation code, and never merge unless explicitly instructed.

@@ -1,12 +1,13 @@
 use crate::application::container::{ContainerDto, ContainerStatsSubscription};
 use crate::presentation::tui::common::{
-    map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message,
-    render_selection_dialog, resources, AppAction, PopupMessage, Spinner,
+    map_key_to_action_for_context, render_confirm_dialog, render_expanded_log_line,
+    render_main_menu, render_popup_message, render_selection_dialog, resources, AppAction,
+    KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
     filter_containers, render_container_details, render_container_list, render_container_logs,
-    ContainerActions, ContainerPresenter,
+    ContainerActions, ContainerPresenter, LogSearchView,
 };
 use crate::presentation::tui::event::{AppEvent, EventHandler};
 use crate::presentation::tui::exec::{
@@ -59,6 +60,7 @@ pub struct App {
     pub image_actions: ImageActions,
     pub stack_actions: StackActions,
     pub confirm_dialog: Option<(ConfirmAction, bool)>,
+    pub expanded_log_line: Option<usize>,
     pub popup_message: Option<PopupMessage>,
     pub spinner: Spinner,
     exec_command_config: ExecCommandConfig,
@@ -120,6 +122,7 @@ impl App {
             image_actions,
             stack_actions,
             confirm_dialog: None,
+            expanded_log_line: None,
             popup_message: None,
             spinner: Spinner::new(),
             exec_command_config,
@@ -171,7 +174,14 @@ impl App {
                         && self.handle_filter_key(key.code)
                     {
                         // Key consumed by filter input
-                    } else if let Some(action) = map_key_to_action(key) {
+                    } else if let Some(action) = map_key_to_action_for_context(
+                        key,
+                        if self.screen == Screen::ContainerLogs {
+                            KeyContext::ContainerLogs
+                        } else {
+                            KeyContext::Global
+                        },
+                    ) {
                         self.handle_action(action).await;
                     }
                 }
@@ -221,8 +231,18 @@ impl App {
                 );
             }
             Screen::ContainerLogs => {
-                if let Some(logs) = &self.container_presenter.logs {
-                    render_container_logs(frame, area, logs, self.container_presenter.logs_scroll);
+                let presenter = &mut self.container_presenter;
+                if let Some(logs) = presenter.logs.as_ref() {
+                    let search_value = presenter.log_search_value().to_string();
+                    let active_search = presenter.active_search_value().map(str::to_string);
+                    let search = LogSearchView {
+                        active: presenter.is_log_search_active(),
+                        value: &search_value,
+                        active_term: active_search.as_deref(),
+                        counter: presenter.search_counter(),
+                        matches: &presenter.log_search_results,
+                    };
+                    render_container_logs(frame, area, logs, &mut presenter.logs_state, &search);
                 }
             }
             Screen::ContainerDetails => {
@@ -314,6 +334,12 @@ impl App {
             }
         }
 
+        if let Some(line) = self.container_presenter.logs.as_ref().and_then(|logs| {
+            self.expanded_log_line
+                .and_then(|index| logs.lines.get(index))
+        }) {
+            render_expanded_log_line(frame, &line.timestamp_display(), &line.message);
+        }
         if let Some((action, selected_yes)) = &self.confirm_dialog {
             render_confirm_dialog(frame, confirm_message(*action), *selected_yes);
         }
@@ -676,6 +702,26 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crossterm::event::KeyCode;
+
+    struct CwdGuard {
+        previous: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn new(dir: &std::path::Path) -> Self {
+            let previous = std::env::current_dir().unwrap();
+            std::env::set_current_dir(dir).unwrap();
+            CwdGuard { previous }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.previous).unwrap();
+        }
+    }
+
     use super::{
         finalize_exec_command_result, finalize_run_result, format_bytes, App, ExecCommandConfig,
         ExecCommandResult, ExecRefreshTarget, Screen,
@@ -970,7 +1016,10 @@ mod tests {
             .set_logs(crate::application::container::ContainerLogsDto {
                 container_id: container.id.clone(),
                 container_name: container.name.clone(),
-                logs: "line1".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
             });
         app.container_presenter.set_details(container.clone());
         app.volume_presenter.set_volumes(vec![volume]);
@@ -1223,13 +1272,56 @@ mod tests {
             .set_logs(crate::application::container::ContainerLogsDto {
                 container_id: "abc123".to_string(),
                 container_name: "web".to_string(),
-                logs: "line1".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
             });
-        app.handle_container_logs_action(AppAction::ScrollDown);
-        app.handle_container_logs_action(AppAction::ScrollUp);
-        app.handle_container_logs_action(AppAction::Back);
+        app.handle_container_logs_action(AppAction::ScrollDown)
+            .await;
+        app.handle_container_logs_action(AppAction::ScrollUp).await;
+        app.handle_container_logs_action(AppAction::Back).await;
         assert_eq!(app.screen, Screen::ContainerList);
         assert!(app.container_presenter.logs.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_expanded_log_line_overlay_open_and_close() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "line1".to_string(),
+                    },
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "line2".to_string(),
+                    },
+                ],
+            });
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.expanded_log_line, Some(0));
+        // While the overlay is open, screen actions are intercepted
+        app.handle_action(AppAction::Back).await;
+        assert_eq!(app.expanded_log_line, None);
+        assert_eq!(app.screen, Screen::ContainerLogs);
+        // Selection still intact after closing
+        app.handle_container_logs_action(AppAction::NavigateDown)
+            .await;
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(1));
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.expanded_log_line, Some(1));
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.expanded_log_line, None);
+        app.expanded_log_line = Some(0);
+        app.handle_action(AppAction::Quit).await;
+        assert_eq!(app.expanded_log_line, None);
+        assert!(!app.should_quit);
 
         app.screen = Screen::ContainerDetails;
         app.container_presenter.set_details(make_container_dto());
@@ -1794,5 +1886,154 @@ mod tests {
             app.confirm_dialog,
             Some((ConfirmAction::StackContainersRemoveAll, true))
         );
+    }
+
+    #[tokio::test]
+    async fn test_log_search_workflow_via_actions() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "starting app".to_string(),
+                    },
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "ERROR disk full".to_string(),
+                    },
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "error retrying".to_string(),
+                    },
+                ],
+            });
+
+        // '/' on the logs screen activates the log search
+        app.handle_action(AppAction::ActivateLogSearch).await;
+        assert!(app.container_presenter.is_log_search_active());
+
+        // Typed characters are consumed by the input handler
+        assert!(app.handle_filter_key(KeyCode::Char('e')));
+        assert!(app.handle_filter_key(KeyCode::Char('r')));
+        assert!(app.handle_filter_key(KeyCode::Char('r')));
+        assert!(app.handle_filter_key(KeyCode::Char('o')));
+        assert!(app.handle_filter_key(KeyCode::Char('r')));
+        assert_eq!(app.container_presenter.log_search_value(), "error");
+
+        // Enter confirms and jumps to the first match
+        app.handle_action(AppAction::Select).await;
+        assert!(!app.container_presenter.is_log_search_active());
+        assert_eq!(app.container_presenter.log_search_results, vec![1, 2]);
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(1));
+
+        // n / N navigate between matches with wrap-around
+        app.handle_action(AppAction::NextLogMatch).await;
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(2));
+        app.handle_action(AppAction::NextLogMatch).await;
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(1));
+        app.handle_action(AppAction::PreviousLogMatch).await;
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(2));
+
+        // Esc during input closes without validating
+        app.handle_action(AppAction::ActivateLogSearch).await;
+        assert!(app.handle_filter_key(KeyCode::Char('x')));
+        assert!(app.handle_filter_key(KeyCode::Esc));
+        assert!(!app.container_presenter.is_log_search_active());
+        assert_eq!(app.container_presenter.log_search_value(), "");
+        assert!(app.container_presenter.log_search_results.is_empty());
+
+        // Leaving the screen clears the search
+        app.handle_action(AppAction::ActivateLogSearch).await;
+        app.handle_action(AppAction::Back).await;
+        assert!(app.container_presenter.log_search_results.is_empty());
+        assert!(app.container_presenter.logs.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_export_logs_action_success_and_error_feedback() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_export_logs()
+            .withf(|id| id == "abc123")
+            .returning(|_| Ok("2026-10-26T10:30:00Z line1\n".to_string()));
+        let mut app = build_app(
+            mock,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+        );
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
+            });
+
+        // No logs loaded -> E does nothing
+        app.container_presenter.clear_logs();
+        app.handle_action(AppAction::ExportLogs).await;
+        assert!(app.popup_message.is_none());
+
+        // With logs -> export succeeds, info popup with file name
+        let dir =
+            std::env::temp_dir().join(format!("rusty_app_test_{}_{}", std::process::id(), line!()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let _cwd_guard = CwdGuard::new(&dir);
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
+            });
+        app.handle_action(AppAction::ExportLogs).await;
+        match &app.popup_message {
+            Some(PopupMessage::Info(msg)) => {
+                assert!(msg.starts_with("Logs exported to web_"));
+                assert!(msg.ends_with(".log"));
+            }
+            other => panic!("expected info popup, got {other:?}"),
+        }
+        app.popup_message = None;
+        drop(_cwd_guard);
+        std::fs::remove_dir_all(&dir).ok();
+
+        // Error case -> error popup
+        let mut mock = MockContainerRepository::new();
+        mock.expect_export_logs().returning(|_| {
+            Err(crate::application::error::AppError::repository(
+                "docker down",
+            ))
+        });
+        let mut app = build_app(
+            mock,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+        );
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
+            });
+        app.handle_action(AppAction::ExportLogs).await;
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("docker down")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
     }
 }

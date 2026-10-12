@@ -1,5 +1,6 @@
 use crate::domain::container::ContainerState;
 use crate::domain::shared::ByteSize;
+use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
@@ -64,7 +65,21 @@ impl ContainerDto {
 pub struct ContainerLogsDto {
     pub container_id: String,
     pub container_name: String,
-    pub logs: String,
+    pub lines: Vec<LogLineDto>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogLineDto {
+    pub timestamp: Option<DateTime<Utc>>,
+    pub message: String,
+}
+
+impl LogLineDto {
+    pub fn timestamp_display(&self) -> String {
+        self.timestamp
+            .map(|ts| ts.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

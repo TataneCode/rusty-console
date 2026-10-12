@@ -30,6 +30,10 @@ impl FilterState {
         self.value.clear();
     }
 
+    pub fn stop_input(&mut self) {
+        self.active = false;
+    }
+
     pub fn push_char(&mut self, c: char) {
         self.value.push(c);
     }

@@ -217,6 +217,27 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
     frame.render_widget(no_text, no_area);
 }
 
+pub fn render_expanded_log_line(frame: &mut Frame, timestamp: &str, message: &str) {
+    let area = centered_rect(80, 60, frame.area());
+    frame.render_widget(Clear, area);
+
+    let text = if timestamp.is_empty() {
+        message.to_string()
+    } else {
+        format!("{timestamp}\n\n{message}")
+    };
+    let dialog = Paragraph::new(text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(resources::EXPANDED_LOG_LINE_TITLE)
+                .title_style(Theme::title_style())
+                .border_style(Theme::selected_border_style()),
+        )
+        .wrap(Wrap { trim: false });
+    frame.render_widget(dialog, area);
+}
+
 pub fn render_popup_message(frame: &mut Frame, message: &PopupMessage) {
     let area = centered_rect(
         ERROR_DIALOG_WIDTH_PERCENT,
@@ -348,7 +369,10 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_selection_dialog, truncate_text, PopupMessage, TableSelection};
+    use super::{
+        render_expanded_log_line, render_selection_dialog, truncate_text, PopupMessage,
+        TableSelection,
+    };
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::ListState, Terminal};
 
     #[test]
@@ -416,5 +440,29 @@ mod tests {
         assert!(text.contains("sh"));
         assert!(text.contains("bash"));
         assert!(text.contains("Enter: Select"));
+    }
+
+    #[test]
+    fn test_render_expanded_log_line_wraps_long_message() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let long_message = "a".repeat(300);
+        terminal
+            .draw(|frame| render_expanded_log_line(frame, "2026-10-26 10:30:00", &long_message))
+            .unwrap();
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Expanded log line"));
+        assert!(text.contains("2026-10-26 10:30:00"));
+    }
+
+    #[test]
+    fn test_render_expanded_log_line_without_timestamp() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| render_expanded_log_line(frame, "", "plain message"))
+            .unwrap();
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("plain message"));
     }
 }

@@ -1,10 +1,12 @@
 use crate::application::container::dto::{
     ContainerDto, ContainerLogsDto, ContainerStatsSubscription,
 };
+use crate::application::container::log_parser;
 use crate::application::container::mapper::ContainerMapper;
 use crate::application::container::traits::ContainerRepository;
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub struct ContainerService {
@@ -32,12 +34,37 @@ impl ContainerService {
         name: &str,
         tail: Option<usize>,
     ) -> Result<ContainerLogsDto, AppError> {
-        let logs = self.repository.get_logs(id, tail).await?;
+        let raw_logs = self.repository.get_logs(id, tail).await?;
         Ok(ContainerLogsDto {
             container_id: id.to_string(),
             container_name: name.to_string(),
-            logs,
+            lines: log_parser::parse_log_lines(&raw_logs),
         })
+    }
+
+    pub async fn export_logs_to(
+        &self,
+        id: &str,
+        name: &str,
+        export_dir: &Path,
+    ) -> Result<PathBuf, AppError> {
+        let logs = self.repository.export_logs(id).await?;
+        let path = Self::export_file_path(name, export_dir);
+        tokio::fs::write(&path, logs)
+            .await
+            .map_err(|e| AppError::operation_failed(format!("cannot write {path:?}: {e}")))?;
+        Ok(path)
+    }
+
+    pub async fn export_logs(&self, id: &str, name: &str) -> Result<PathBuf, AppError> {
+        let export_dir = std::env::current_dir()
+            .map_err(|e| AppError::operation_failed(format!("cannot resolve current dir: {e}")))?;
+        self.export_logs_to(id, name, &export_dir).await
+    }
+
+    pub fn export_file_path(name: &str, export_dir: &Path) -> PathBuf {
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        export_dir.join(format!("{name}_{timestamp}.log"))
     }
 
     pub async fn start_container(&self, id: &str) -> Result<(), AppError> {
@@ -167,13 +194,17 @@ mod tests {
         let mut mock = MockContainerRepository::new();
         mock.expect_get_logs()
             .withf(|id, tail| id == "abc123" && *tail == Some(100))
-            .returning(|_, _| Ok("line1\nline2".to_string()));
+            .returning(|_, _| Ok("2026-10-26T10:30:00Z line1\nline2\n".to_string()));
 
         let service = ContainerService::new(Arc::new(mock));
         let result = service.get_logs("abc123", "web", Some(100)).await.unwrap();
         assert_eq!(result.container_id, "abc123");
         assert_eq!(result.container_name, "web");
-        assert_eq!(result.logs, "line1\nline2");
+        assert_eq!(result.lines.len(), 2);
+        assert!(result.lines[0].timestamp.is_some());
+        assert_eq!(result.lines[0].message, "line1");
+        assert_eq!(result.lines[1].timestamp, None);
+        assert_eq!(result.lines[1].message, "line2");
     }
 
     #[tokio::test]
@@ -248,5 +279,53 @@ mod tests {
             .subscribe_stats(vec!["abc123".to_string()])
             .await
             .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_export_logs_writes_file_and_returns_path() {
+        let dir = std::env::temp_dir().join(format!("rusty_console_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut mock = MockContainerRepository::new();
+        mock.expect_export_logs()
+            .withf(|id| id == "abc123")
+            .returning(|_| Ok("2026-10-26T10:30:00Z line1\nline2\n".to_string()));
+        let service = ContainerService::new(Arc::new(mock));
+
+        let result = service.export_logs_to("abc123", "web", &dir).await.unwrap();
+        assert!(result
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("web_"));
+        assert!(result
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .ends_with(".log"));
+        let content = std::fs::read_to_string(&result).unwrap();
+        assert!(content.contains("line1"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn test_export_logs_propagates_repository_error() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_export_logs()
+            .returning(|_| Err(AppError::repository("docker down")));
+        let service = ContainerService::new(Arc::new(mock));
+        let err = service.export_logs("abc123", "web").await.unwrap_err();
+        assert!(err.to_string().contains("docker down"));
+    }
+
+    #[test]
+    fn test_export_file_path_format() {
+        let path = ContainerService::export_file_path("my-web", Path::new("/tmp"));
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        assert!(name.starts_with("my-web_"));
+        assert!(name.ends_with(".log"));
+        let timestamp_part = name.trim_start_matches("my-web_").trim_end_matches(".log");
+        assert_eq!(timestamp_part.len(), 15);
     }
 }

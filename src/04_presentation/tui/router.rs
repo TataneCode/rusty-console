@@ -11,6 +11,13 @@ use tokio::sync::oneshot;
 
 impl App {
     pub(crate) async fn handle_action(&mut self, action: AppAction) {
+        if matches!(action, AppAction::Select)
+            && self.screen == Screen::ContainerLogs
+            && self.container_presenter.is_log_search_active()
+        {
+            self.container_presenter.confirm_log_search();
+            return;
+        }
         if self.popup_message.is_some() {
             self.popup_message = None;
             return;
@@ -38,6 +45,15 @@ impl App {
             return;
         }
 
+        if self.expanded_log_line.is_some() {
+            match action {
+                AppAction::Back | AppAction::Quit | AppAction::Select => {
+                    self.expanded_log_line = None;
+                }
+                _ => {}
+            }
+            return;
+        }
         if self.exec_shell_dialog.is_some() {
             self.handle_exec_shell_action(action);
             return;
@@ -46,7 +62,7 @@ impl App {
         match &self.screen {
             Screen::MainMenu => self.handle_main_menu_action(action).await,
             Screen::ContainerList => self.handle_container_list_action(action).await,
-            Screen::ContainerLogs => self.handle_container_logs_action(action),
+            Screen::ContainerLogs => self.handle_container_logs_action(action).await,
             Screen::ContainerDetails => self.handle_details_action(action),
             Screen::VolumeList => self.handle_volume_list_action(action).await,
             Screen::VolumeDetails => self.handle_details_action(action),
@@ -169,14 +185,52 @@ impl App {
         }
     }
 
-    pub(crate) fn handle_container_logs_action(&mut self, action: AppAction) {
+    pub(crate) async fn handle_container_logs_action(&mut self, action: AppAction) {
         match action {
             AppAction::Quit | AppAction::Back => {
+                self.container_presenter.deactivate_log_search();
                 self.container_presenter.clear_logs();
                 self.screen = Screen::ContainerList;
             }
-            AppAction::ScrollUp => self.container_presenter.scroll_logs_up(10),
-            AppAction::ScrollDown => self.container_presenter.scroll_logs_down(10),
+            AppAction::ActivateLogSearch => self.container_presenter.activate_log_search(),
+            AppAction::ExportLogs => {
+                if let Some(logs) = &self.container_presenter.logs {
+                    let container_id = logs.container_id.clone();
+                    let container_name = logs.container_name.clone();
+                    match self
+                        .container_actions
+                        .export_logs_by(&container_id, &container_name)
+                        .await
+                    {
+                        Ok(path) => {
+                            self.popup_message =
+                                Some(PopupMessage::Info(resources::logs_export_success_message(
+                                    &path.file_name().unwrap_or_default().to_string_lossy(),
+                                )));
+                        }
+                        Err(e) => {
+                            self.popup_message = Some(PopupMessage::Error(
+                                resources::logs_export_error_message(&e.to_string()),
+                            ));
+                        }
+                    }
+                }
+            }
+            AppAction::NextLogMatch => self.container_presenter.next_log_match(),
+            AppAction::PreviousLogMatch => self.container_presenter.previous_log_match(),
+            AppAction::NavigateUp | AppAction::ScrollUp => {
+                self.container_presenter.previous_logs_line()
+            }
+            AppAction::NavigateDown | AppAction::ScrollDown => {
+                self.container_presenter.next_logs_line()
+            }
+            AppAction::PageUp => self.container_presenter.previous_logs_page(10),
+            AppAction::PageDown => self.container_presenter.next_logs_page(10),
+            AppAction::Select => {
+                if let Some(index) = self.container_presenter.selected_logs_line() {
+                    self.expanded_log_line = Some(index);
+                }
+            }
             _ => {}
         }
     }
@@ -419,6 +473,7 @@ impl App {
             Screen::VolumeList => self.volume_presenter.is_filter_active(),
             Screen::ImageList => self.image_presenter.is_filter_active(),
             Screen::StackList => self.stack_presenter.is_filter_active(),
+            Screen::ContainerLogs => self.container_presenter.is_log_search_active(),
             _ => false,
         }
     }
@@ -432,6 +487,7 @@ impl App {
                     Screen::VolumeList => self.volume_presenter.deactivate_filter(),
                     Screen::ImageList => self.image_presenter.deactivate_filter(),
                     Screen::StackList => self.stack_presenter.deactivate_filter(),
+                    Screen::ContainerLogs => self.container_presenter.deactivate_log_search(),
                     _ => {}
                 }
                 true
@@ -442,6 +498,7 @@ impl App {
                     Screen::VolumeList => self.volume_presenter.pop_filter_char(),
                     Screen::ImageList => self.image_presenter.pop_filter_char(),
                     Screen::StackList => self.stack_presenter.pop_filter_char(),
+                    Screen::ContainerLogs => self.container_presenter.pop_log_search_char(),
                     _ => {}
                 }
                 true
@@ -452,6 +509,7 @@ impl App {
                     Screen::VolumeList => self.volume_presenter.push_filter_char(c),
                     Screen::ImageList => self.image_presenter.push_filter_char(c),
                     Screen::StackList => self.stack_presenter.push_filter_char(c),
+                    Screen::ContainerLogs => self.container_presenter.push_log_search_char(c),
                     _ => {}
                 }
                 true

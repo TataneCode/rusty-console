@@ -6,7 +6,8 @@ use crate::presentation::tui::common::{
 };
 use ratatui::{
     layout::{Constraint, Rect},
-    widgets::{Block, Borders, Cell, Paragraph, Row, TableState, Wrap},
+    text::{Line, Span},
+    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, TableState, Wrap},
     Frame,
 };
 
@@ -76,18 +77,28 @@ pub fn render_container_logs(
     frame: &mut Frame,
     area: Rect,
     logs: &ContainerLogsDto,
-    scroll_offset: u16,
+    logs_state: &mut ListState,
 ) {
     let [content_area, help_area] = split_content_area(area);
     let title = resources::logs_title(&logs.container_name);
 
-    let log_text = logs
+    let items: Vec<ListItem> = logs
         .lines
         .iter()
-        .map(|line| format!("{} {}", line.timestamp_display(), line.message))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let log_content = Paragraph::new(log_text)
+        .map(|line| {
+            let timestamp = line.timestamp_display();
+            if timestamp.is_empty() {
+                ListItem::new(Span::from(line.message.clone()))
+            } else {
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("{timestamp} "), Theme::help_style()),
+                    Span::from(line.message.clone()),
+                ]))
+            }
+        })
+        .collect();
+
+    let log_list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -95,10 +106,9 @@ pub fn render_container_logs(
                 .title_style(Theme::title_style())
                 .border_style(Theme::border_style()),
         )
-        .wrap(Wrap { trim: false })
-        .scroll((scroll_offset, 0));
+        .highlight_symbol("> ");
 
-    frame.render_widget(log_content, content_area);
+    frame.render_stateful_widget(log_list, content_area, logs_state);
 
     render_help(frame, help_area, resources::CONTAINER_LOGS_HELP);
 }
@@ -173,10 +183,18 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
 
 #[cfg(test)]
 mod tests {
+    use chrono::TimeZone;
+    use chrono::Utc;
+
     use super::{render_container_details, render_container_list, render_container_logs};
     use crate::application::container::{ContainerDto, ContainerLogsDto, LogLineDto};
     use crate::domain::container::ContainerState;
-    use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
+    use ratatui::{
+        backend::TestBackend,
+        buffer::Buffer,
+        widgets::{ListState, TableState},
+        Terminal,
+    };
 
     fn buffer_text(buffer: &Buffer) -> String {
         buffer
@@ -267,13 +285,46 @@ mod tests {
         };
 
         terminal
-            .draw(|frame| render_container_logs(frame, frame.area(), &logs, 0))
+            .draw(|frame| {
+                render_container_logs(frame, frame.area(), &logs, &mut ListState::default())
+            })
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("Logs: web"));
         assert!(text.contains("line1"));
-        assert!(text.contains("Ctrl+u/d"));
+        assert!(text.contains("PgUp/PgDn"));
+    }
+
+    #[test]
+    fn test_render_container_logs_shows_timestamp_and_selection_symbol() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let timestamp = Utc.with_ymd_and_hms(2026, 10, 26, 10, 30, 0).unwrap();
+        let logs = ContainerLogsDto {
+            container_id: "abc123".to_string(),
+            container_name: "web".to_string(),
+            lines: vec![
+                LogLineDto {
+                    timestamp: Some(timestamp),
+                    message: "first".to_string(),
+                },
+                LogLineDto {
+                    timestamp: None,
+                    message: "second".to_string(),
+                },
+            ],
+        };
+        let mut state = ListState::default();
+        state.select(Some(0));
+        terminal
+            .draw(|frame| render_container_logs(frame, frame.area(), &logs, &mut state))
+            .unwrap();
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("2026-10-26 10:30:00"));
+        assert!(text.contains("first"));
+        assert!(text.contains("second"));
+        assert!(text.contains("> "));
     }
 
     #[test]

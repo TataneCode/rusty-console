@@ -2,13 +2,14 @@ use crate::application::container::{
     ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto, ContainerStatsUpdate,
 };
 use crate::presentation::tui::common::{FilterState, TableSelection};
+use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
 
 pub struct ContainerPresenter {
     pub containers: Vec<ContainerDto>,
     pub selection: TableSelection,
     pub logs: Option<ContainerLogsDto>,
-    pub logs_scroll: u16,
+    pub logs_state: ListState,
     pub selected_container: Option<ContainerDto>,
     pub loading: bool,
     pub error: Option<String>,
@@ -40,7 +41,7 @@ impl ContainerPresenter {
             containers: Vec::new(),
             selection: TableSelection::new(),
             logs: None,
-            logs_scroll: 0,
+            logs_state: ListState::default(),
             selected_container: None,
             loading: false,
             error: None,
@@ -85,12 +86,15 @@ impl ContainerPresenter {
 
     pub fn set_logs(&mut self, logs: ContainerLogsDto) {
         self.logs = Some(logs);
-        self.logs_scroll = 0;
+        self.logs_state = ListState::default();
+        if !self.logs.as_ref().unwrap().lines.is_empty() {
+            self.logs_state.select(Some(0));
+        }
     }
 
     pub fn clear_logs(&mut self) {
         self.logs = None;
-        self.logs_scroll = 0;
+        self.logs_state = ListState::default();
     }
 
     pub fn set_details(&mut self, container: ContainerDto) {
@@ -103,12 +107,60 @@ impl ContainerPresenter {
         self.selected_container = None;
     }
 
-    pub fn scroll_logs_up(&mut self, amount: u16) {
-        self.logs_scroll = self.logs_scroll.saturating_sub(amount);
+    pub fn next_logs_line(&mut self) {
+        let len = self.logs_lines_len();
+        if len == 0 {
+            return;
+        }
+        let current = self.logs_state.selected().unwrap_or(0);
+        let next = if current + 1 >= len { 0 } else { current + 1 };
+        self.logs_state.select(Some(next));
     }
 
-    pub fn scroll_logs_down(&mut self, amount: u16) {
-        self.logs_scroll = self.logs_scroll.saturating_add(amount);
+    pub fn previous_logs_line(&mut self) {
+        let len = self.logs_lines_len();
+        if len == 0 {
+            return;
+        }
+        let current = self.logs_state.selected().unwrap_or(0);
+        let previous = if current == 0 { len - 1 } else { current - 1 };
+        self.logs_state.select(Some(previous));
+    }
+
+    pub fn next_logs_page(&mut self, amount: usize) {
+        let len = self.logs_lines_len();
+        if len == 0 {
+            return;
+        }
+        let current = self.logs_state.selected().unwrap_or(0);
+        let next = (current + amount).min(len - 1);
+        self.logs_state.select(Some(next));
+    }
+
+    pub fn previous_logs_page(&mut self, amount: usize) {
+        let len = self.logs_lines_len();
+        if len == 0 {
+            return;
+        }
+        let current = self.logs_state.selected().unwrap_or(0);
+        let previous = current.saturating_sub(amount);
+        self.logs_state.select(Some(previous));
+    }
+
+    pub fn select_logs_line(&mut self, index: usize) {
+        let len = self.logs_lines_len();
+        if len == 0 {
+            return;
+        }
+        self.logs_state.select(Some(index.min(len - 1)));
+    }
+
+    pub fn selected_logs_line(&self) -> Option<usize> {
+        self.logs_state.selected()
+    }
+
+    pub fn logs_lines_len(&self) -> usize {
+        self.logs.as_ref().map(|logs| logs.lines.len()).unwrap_or(0)
     }
 
     pub fn navigate_up(&mut self) {
@@ -239,7 +291,7 @@ mod tests {
         let p = ContainerPresenter::new();
         assert!(p.containers.is_empty());
         assert!(p.logs.is_none());
-        assert_eq!(p.logs_scroll, 0);
+        assert!(p.logs_state.selected().is_none());
         assert!(p.selected_container.is_none());
         assert!(!p.loading);
         assert!(p.error.is_none());
@@ -394,24 +446,84 @@ mod tests {
         };
         p.set_logs(logs);
         assert!(p.logs.is_some());
-        assert_eq!(p.logs_scroll, 0);
+        assert_eq!(p.logs_state.selected(), Some(0));
         p.clear_logs();
         assert!(p.logs.is_none());
-        assert_eq!(p.logs_scroll, 0);
+        assert!(p.logs_state.selected().is_none());
+    }
+
+    fn make_logs(lines: usize) -> ContainerLogsDto {
+        ContainerLogsDto {
+            container_id: "c1".to_string(),
+            container_name: "alpha".to_string(),
+            lines: (0..lines)
+                .map(|i| LogLineDto {
+                    timestamp: None,
+                    message: format!("line{i}"),
+                })
+                .collect(),
+        }
     }
 
     #[test]
-    fn test_scroll_logs() {
+    fn test_next_previous_logs_line_wrap_around() {
         let mut p = ContainerPresenter::new();
-        p.scroll_logs_down(5);
-        assert_eq!(p.logs_scroll, 5);
-        p.scroll_logs_down(3);
-        assert_eq!(p.logs_scroll, 8);
-        p.scroll_logs_up(2);
-        assert_eq!(p.logs_scroll, 6);
-        // Saturating sub — can't go below 0
-        p.scroll_logs_up(100);
-        assert_eq!(p.logs_scroll, 0);
+        p.set_logs(make_logs(3));
+        assert_eq!(p.logs_state.selected(), Some(0));
+        p.next_logs_line();
+        assert_eq!(p.logs_state.selected(), Some(1));
+        p.next_logs_line();
+        assert_eq!(p.logs_state.selected(), Some(2));
+        p.next_logs_line();
+        assert_eq!(p.logs_state.selected(), Some(0));
+        p.previous_logs_line();
+        assert_eq!(p.logs_state.selected(), Some(2));
+        p.previous_logs_line();
+        assert_eq!(p.logs_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_next_previous_logs_page_clamps_at_bounds() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_logs(30));
+        p.next_logs_page(10);
+        assert_eq!(p.logs_state.selected(), Some(10));
+        p.next_logs_page(10);
+        assert_eq!(p.logs_state.selected(), Some(20));
+        p.next_logs_page(10);
+        assert_eq!(p.logs_state.selected(), Some(29));
+        p.previous_logs_page(25);
+        assert_eq!(p.logs_state.selected(), Some(4));
+        p.previous_logs_page(100);
+        assert_eq!(p.logs_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_logs_navigation_no_logs_is_noop() {
+        let mut p = ContainerPresenter::new();
+        p.next_logs_line();
+        p.previous_logs_line();
+        p.next_logs_page(10);
+        p.previous_logs_page(10);
+        assert!(p.logs_state.selected().is_none());
+    }
+
+    #[test]
+    fn test_select_logs_line_clamps_index() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_logs(3));
+        p.select_logs_line(100);
+        assert_eq!(p.logs_state.selected(), Some(2));
+        p.select_logs_line(0);
+        assert_eq!(p.selected_logs_line(), Some(0));
+    }
+
+    #[test]
+    fn test_set_logs_with_empty_lines_has_no_selection() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_logs(0));
+        assert!(p.logs_state.selected().is_none());
+        assert_eq!(p.logs_lines_len(), 0);
     }
 
     #[test]

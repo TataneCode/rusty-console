@@ -222,7 +222,12 @@ impl App {
             }
             Screen::ContainerLogs => {
                 if let Some(logs) = &self.container_presenter.logs {
-                    render_container_logs(frame, area, logs, self.container_presenter.logs_scroll);
+                    render_container_logs(
+                        frame,
+                        area,
+                        logs,
+                        &mut self.container_presenter.logs_state,
+                    );
                 }
             }
             Screen::ContainerDetails => {

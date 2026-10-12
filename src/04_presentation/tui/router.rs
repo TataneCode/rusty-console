@@ -175,8 +175,14 @@ impl App {
                 self.container_presenter.clear_logs();
                 self.screen = Screen::ContainerList;
             }
-            AppAction::ScrollUp => self.container_presenter.scroll_logs_up(10),
-            AppAction::ScrollDown => self.container_presenter.scroll_logs_down(10),
+            AppAction::NavigateUp | AppAction::ScrollUp => {
+                self.container_presenter.previous_logs_line()
+            }
+            AppAction::NavigateDown | AppAction::ScrollDown => {
+                self.container_presenter.next_logs_line()
+            }
+            AppAction::PageUp => self.container_presenter.previous_logs_page(10),
+            AppAction::PageDown => self.container_presenter.next_logs_page(10),
             _ => {}
         }
     }

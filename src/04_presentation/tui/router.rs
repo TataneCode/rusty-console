@@ -38,6 +38,15 @@ impl App {
             return;
         }
 
+        if self.expanded_log_line.is_some() {
+            match action {
+                AppAction::Back | AppAction::Quit | AppAction::Select => {
+                    self.expanded_log_line = None;
+                }
+                _ => {}
+            }
+            return;
+        }
         if self.exec_shell_dialog.is_some() {
             self.handle_exec_shell_action(action);
             return;
@@ -183,6 +192,11 @@ impl App {
             }
             AppAction::PageUp => self.container_presenter.previous_logs_page(10),
             AppAction::PageDown => self.container_presenter.next_logs_page(10),
+            AppAction::Select => {
+                if let Some(index) = self.container_presenter.selected_logs_line() {
+                    self.expanded_log_line = Some(index);
+                }
+            }
             _ => {}
         }
     }

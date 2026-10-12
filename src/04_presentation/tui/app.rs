@@ -1,7 +1,7 @@
 use crate::application::container::{ContainerDto, ContainerStatsSubscription};
 use crate::presentation::tui::common::{
-    map_key_to_action, render_confirm_dialog, render_main_menu, render_popup_message,
-    render_selection_dialog, resources, AppAction, PopupMessage, Spinner,
+    map_key_to_action, render_confirm_dialog, render_expanded_log_line, render_main_menu,
+    render_popup_message, render_selection_dialog, resources, AppAction, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -59,6 +59,7 @@ pub struct App {
     pub image_actions: ImageActions,
     pub stack_actions: StackActions,
     pub confirm_dialog: Option<(ConfirmAction, bool)>,
+    pub expanded_log_line: Option<usize>,
     pub popup_message: Option<PopupMessage>,
     pub spinner: Spinner,
     exec_command_config: ExecCommandConfig,
@@ -120,6 +121,7 @@ impl App {
             image_actions,
             stack_actions,
             confirm_dialog: None,
+            expanded_log_line: None,
             popup_message: None,
             spinner: Spinner::new(),
             exec_command_config,
@@ -319,6 +321,13 @@ impl App {
             }
         }
 
+        if let Some(index) = self.expanded_log_line {
+            if let Some(logs) = &self.container_presenter.logs {
+                if let Some(line) = logs.lines.get(index) {
+                    render_expanded_log_line(frame, &line.timestamp_display(), &line.message);
+                }
+            }
+        }
         if let Some((action, selected_yes)) = &self.confirm_dialog {
             render_confirm_dialog(frame, confirm_message(*action), *selected_yes);
         }
@@ -1241,6 +1250,44 @@ mod tests {
         app.handle_container_logs_action(AppAction::Back);
         assert_eq!(app.screen, Screen::ContainerList);
         assert!(app.container_presenter.logs.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_expanded_log_line_overlay_open_and_close() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "line1".to_string(),
+                    },
+                    crate::application::container::LogLineDto {
+                        timestamp: None,
+                        message: "line2".to_string(),
+                    },
+                ],
+            });
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.expanded_log_line, Some(0));
+        // While the overlay is open, screen actions are intercepted
+        app.handle_action(AppAction::Back).await;
+        assert_eq!(app.expanded_log_line, None);
+        assert_eq!(app.screen, Screen::ContainerLogs);
+        // Selection still intact after closing
+        app.handle_container_logs_action(AppAction::NavigateDown);
+        assert_eq!(app.container_presenter.selected_logs_line(), Some(1));
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.expanded_log_line, Some(1));
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.expanded_log_line, None);
+        app.expanded_log_line = Some(0);
+        app.handle_action(AppAction::Quit).await;
+        assert_eq!(app.expanded_log_line, None);
+        assert!(!app.should_quit);
 
         app.screen = Screen::ContainerDetails;
         app.container_presenter.set_details(make_container_dto());

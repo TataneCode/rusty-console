@@ -321,12 +321,11 @@ impl App {
             }
         }
 
-        if let Some(index) = self.expanded_log_line {
-            if let Some(logs) = &self.container_presenter.logs {
-                if let Some(line) = logs.lines.get(index) {
-                    render_expanded_log_line(frame, &line.timestamp_display(), &line.message);
-                }
-            }
+        if let Some(line) = self.container_presenter.logs.as_ref().and_then(|logs| {
+            self.expanded_log_line
+                .and_then(|index| logs.lines.get(index))
+        }) {
+            render_expanded_log_line(frame, &line.timestamp_display(), &line.message);
         }
         if let Some((action, selected_yes)) = &self.confirm_dialog {
             render_confirm_dialog(frame, confirm_message(*action), *selected_yes);

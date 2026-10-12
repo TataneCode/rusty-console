@@ -8,6 +8,9 @@ pub enum DomainError {
     #[error("Invalid volume ID: {0}")]
     InvalidVolume(String),
 
+    #[error("Invalid network ID: {0}")]
+    InvalidNetwork(String),
+
     #[error("Invalid image ID: {0}")]
     InvalidImage(String),
 

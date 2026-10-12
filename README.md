@@ -1,11 +1,12 @@
 # Rusty Console
 
-A terminal user interface (TUI) for managing Docker containers, volumes, and images — written in Rust. This is a port of [FancyContainerConsole](https://github.com) (originally in C#/.NET) to Rust.
+A terminal user interface (TUI) for managing Docker containers, volumes, images, networks, and stacks — written in Rust. This is a port of [FancyContainerConsole](https://github.com) (originally in C#/.NET) to Rust.
 
 ## Features
 
 - **Containers** — list all containers regardless of state, with live CPU and memory usage in the list; start/stop, pause/unpause, restart, open an interactive exec shell (`sh` or `bash`), view real-time logs, inspect details (incl. env vars and live network I/O), delete (with force option for running containers), prune stopped containers, filter by name
 - **Volumes** — list all volumes, detect which ones are in use, delete unused volumes, prune unused volumes, filter by name
+- **Networks** — list all networks (name, driver, scope, subnet, connected container count), inspect details (internal/attachable flags, subnet, gateway, connected containers with their IPs), disconnect a container from a network, delete user-defined networks (predefined `bridge`/`host`/`none` are protected), prune unused networks, filter by name
 - **Images** — list all images with usage status, inspect details, delete (with force option for in-use images), prune dangling images, filter by name
 - **Stacks** — detect Docker Compose stacks from container labels, list stacks with running/total counts, drill down into a stack's containers, start/stop/remove all containers in a stack at once
 - Confirmation dialogs for all destructive actions
@@ -97,6 +98,25 @@ Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then
 | `X` | Prune unused volumes / dangling images (shows loading spinner during operation) |
 | `P` | Pull images for selected stack (shows loading spinner during operation) |
 
+### Networks
+
+| Key | Action |
+|-----|--------|
+| `Enter` / `c` | View network details (driver, scope, subnet, gateway, connected containers) |
+| `d` | Delete the selected network (opens confirmation dialog; predefined networks and networks with connected containers are refused) |
+| `X` | Prune unused networks (shows loading spinner during operation) |
+| `/` | Filter networks by name |
+| `r` | Refresh |
+
+### Network Details
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Select a connected container |
+| `d` | Disconnect the selected container from the network (opens confirmation dialog) |
+| `r` | Refresh |
+| `Esc` / `q` | Back to the network list |
+
 ---
 
 ## Architecture
@@ -175,23 +195,23 @@ At the root, `shared.rs` remains as the small shared value module used across la
 #### `01_domain/*`
 The core of the application. Contains the business logic and domain concepts. It is still isolated from application, infrastructure, and presentation code, but it currently depends on a small number of external crates for timestamps and typed errors.
 
-- **Entities** — `Container`, `Volume`, `Image`. Each entity encapsulates its own business rules (e.g. `Container::can_be_started()`, `Container::uses_volume()`).
-- **Value Objects** — `ContainerId`, `PortMapping`, `NetworkInfo`, `MountInfo`, `VolumeId`, `ImageId`. Immutable, identity-free wrappers.
+- **Entities** — `Container`, `Volume`, `Image`, `Network`, `Stack`. Each entity encapsulates its own business rules (e.g. `Container::can_be_started()`, `Network::can_be_deleted()`).
+- **Value Objects** — `ContainerId`, `PortMapping`, `NetworkInfo`, `MountInfo`, `VolumeId`, `ImageId`, `NetworkId`, `NetworkScope`. Immutable, identity-free wrappers.
 - **Domain state** — `ContainerState` enum (`Running`, `Paused`, `Exited`, `Dead`, …) with derived predicates used to drive UI affordances.
 - **Errors** — `01_domain/error.rs`, re-wrapped at each outer layer.
 
 #### `02_application/*`
 Orchestration layer. Defines the contracts the rest of the system depends on and provides use-case implementations.
 
-- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository`, `StackRepository` (in each feature's `traits.rs`). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
-- **Services** — `ContainerService`, `VolumeService`, `ImageService`, `StackService`. Thin use-case coordinators that call a repository and return DTOs.
-- **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`, `StackDto`, `StackContainerDto`. Plain data structs crossing the application→UI boundary.
+- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository`, `StackRepository`, `NetworkRepository` (in each feature's `traits.rs`). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
+- **Services** — `ContainerService`, `VolumeService`, `ImageService`, `StackService`, `NetworkService`. Thin use-case coordinators that call a repository and return DTOs.
+- **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`, `StackDto`, `StackContainerDto`, `NetworkDto`, `NetworkContainerDto`. Plain data structs crossing the application→UI boundary.
 - **Mappers** — `ContainerMapper`, etc. Convert domain entities into DTOs.
 
 #### `03_infrastructure/*`
 Adapts the Docker daemon API to the application's repository traits using [bollard](https://crates.io/crates/bollard).
 
-- **Adapters** — `ContainerAdapter`, `VolumeAdapter`, `ImageAdapter`. Each implements the corresponding repository trait. Log streaming uses `futures_util::StreamExt` to consume bollard's async stream.
+- **Adapters** — `ContainerAdapter`, `VolumeAdapter`, `ImageAdapter`, `NetworkAdapter`. Each implements the corresponding repository trait. Log streaming uses `futures_util::StreamExt` to consume bollard's async stream. The network adapter enriches each listed network with an `inspect_network` call to fill IPAM and connected-container data.
 - **Mappers** — `ContainerInfraMapper`, etc. Convert raw bollard API types into domain entities.
 - **`docker/client.rs`** — `DockerClient`, a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
 
@@ -199,7 +219,7 @@ Adapts the Docker daemon API to the application's repository traits using [bolla
 Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
 
 - **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `popup_message`, exec shell picker) are evaluated before any screen-specific handler.
-- **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `StackList`, `StackContainers`.
+- **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `NetworkList`, `NetworkDetails`, `StackList`, `StackContainers`.
 - **Per-feature triad** (e.g. `04_presentation/tui/container/`):
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
   - `view.rs` — pure ratatui widget composition functions
@@ -244,6 +264,7 @@ DockerClient
   └─► Arc<VolumeAdapter>     →  VolumeService     →  VolumeActions
   └─► Arc<ImageAdapter>      →  ImageService      →  ImageActions
   └─► Arc<StackAdapter>      →  StackService      →  StackActions
+  └─► Arc<NetworkAdapter>    →  NetworkService    →  NetworkActions
                                                          │
                                                          ▼
                                                        App::new(…)

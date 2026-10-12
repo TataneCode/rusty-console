@@ -81,6 +81,7 @@ impl ContainerRepository for ContainerAdapter {
         let options = LogsOptions {
             stdout: true,
             stderr: true,
+            timestamps: true,
             tail: tail
                 .map(|t| t.to_string())
                 .unwrap_or_else(|| "100".to_string()),

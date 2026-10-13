@@ -1,4 +1,4 @@
-use super::{render_help, resources, split_menu_area, Theme};
+use super::{render_action_bar, resources, split_menu_area, Theme};
 use ratatui::{
     layout::Rect,
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
@@ -35,7 +35,7 @@ pub fn render_main_menu(frame: &mut Frame, area: Rect, state: &mut ListState) {
         .highlight_symbol(resources::MAIN_MENU_HIGHLIGHT_SYMBOL);
 
     frame.render_stateful_widget(list, menu_area, state);
-    render_help(frame, help_area, resources::MAIN_MENU_HELP);
+    render_action_bar(frame, help_area, resources::MAIN_MENU_HELP);
 }
 
 #[cfg(test)]

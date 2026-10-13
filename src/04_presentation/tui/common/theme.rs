@@ -73,6 +73,16 @@ impl Theme {
     pub fn breadcrumb_border_style() -> Style {
         Style::default().fg(Color::Cyan)
     }
+
+    pub fn action_key_style() -> Style {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    pub fn action_label_style() -> Style {
+        Style::default().fg(Color::White)
+    }
 }
 
 #[cfg(test)]
@@ -100,6 +110,16 @@ mod tests {
         assert_eq!(Theme::error_style().fg, Some(Color::Red));
         assert_eq!(Theme::info_style().fg, Some(Color::Cyan));
         assert_eq!(Theme::success_style().fg, Some(Color::Green));
+    }
+
+    #[test]
+    fn test_action_bar_styles() {
+        let key = Theme::action_key_style();
+        assert_eq!(key.fg, Some(Color::Yellow));
+        assert!(key.add_modifier.contains(Modifier::BOLD));
+
+        let label = Theme::action_label_style();
+        assert_eq!(label.fg, Some(Color::White));
     }
 
     #[test]

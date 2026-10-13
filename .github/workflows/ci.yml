@@ -60,6 +60,8 @@ jobs:
         run: cargo test --test integration_docker
       - name: Run breadcrumb UI integration tests
         run: cargo test --test breadcrumb_ui
+      - name: Run action bar UI integration tests
+        run: cargo test --test action_bar_ui
 
   coverage:
     name: Coverage

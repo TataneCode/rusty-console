@@ -140,14 +140,6 @@ pub fn render_table<'a>(
     frame.render_stateful_widget(table, area, state);
 }
 
-pub fn render_help(frame: &mut Frame, area: Rect, help_text: &str) {
-    let help = Paragraph::new(help_text)
-        .style(Theme::help_style())
-        .block(Block::default().borders(Borders::TOP));
-
-    frame.render_widget(help, area);
-}
-
 pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: bool) {
     let area = centered_rect(
         CONFIRM_DIALOG_WIDTH_PERCENT,
@@ -296,12 +288,9 @@ pub fn render_selection_dialog(
         )
         .highlight_style(Theme::highlight_style())
         .highlight_symbol(resources::MAIN_MENU_HIGHLIGHT_SYMBOL);
-    let help = Paragraph::new(help_text)
-        .style(Theme::help_style())
-        .block(Block::default().borders(Borders::TOP));
 
     frame.render_stateful_widget(list, chunks[0], state);
-    frame.render_widget(help, chunks[1]);
+    super::action_bar::render_action_bar(frame, chunks[1], help_text);
 }
 
 pub fn split_app_area(area: Rect) -> [Rect; 2] {

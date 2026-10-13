@@ -47,6 +47,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
 
+  integration:
+    name: Integration (Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify Docker daemon
+        run: docker version
+      - name: Run integration tests
+        run: cargo test --test integration_docker
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

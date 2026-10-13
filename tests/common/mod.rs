@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 // Mirrors the manual DI wiring of main.rs. The bollard client connects
 // lazily, so no Docker daemon is required: rendering performs no I/O.
-#[allow(dead_code)]
 pub fn build_app() -> Option<App> {
     let Ok(docker) = DockerClient::new() else {
         eprintln!("Docker client unavailable, skipping integration test");

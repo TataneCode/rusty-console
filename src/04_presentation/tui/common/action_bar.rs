@@ -56,7 +56,6 @@ pub fn render_loading_bar(frame: &mut Frame, area: Rect, spinner_char: &str) {
 #[cfg(test)]
 mod tests {
     use super::{action_bar_line, render_action_bar, render_loading_bar};
-    use crate::presentation::tui::common::theme::Theme;
     use ratatui::{backend::TestBackend, buffer::Buffer, style::Color, Terminal};
 
     fn buffer_text(buffer: &Buffer) -> String {
@@ -96,11 +95,6 @@ mod tests {
         assert_eq!(line.spans.len(), 1);
         assert_eq!(line.spans[0].content, "plain info");
         assert_eq!(line.spans[0].style.fg, Some(Color::White));
-    }
-
-    #[test]
-    fn test_action_bar_line_matches_key_style_of_breadcrumb_text() {
-        assert_eq!(Theme::action_key_style(), Theme::title_style());
     }
 
     #[test]

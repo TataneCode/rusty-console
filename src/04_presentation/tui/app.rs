@@ -213,6 +213,7 @@ impl App {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn render(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
@@ -433,41 +434,61 @@ impl App {
                             .map(|container| container.name.clone())
                     });
                 if let Some(name) = name {
-                    segments.push(format!("{name} logs"));
+                    segments.push(format!("{name} {}", resources::BREADCRUMB_LOGS_LABEL));
                 }
             }
             Screen::ContainerDetails => {
                 segments.push(resources::CONTAINER_TITLE.to_string());
                 if let Some(container) = &self.container_presenter.selected_container {
-                    segments.push(format!("{} details", container.name));
+                    segments.push(format!(
+                        "{} {}",
+                        container.name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
                 }
             }
             Screen::VolumeList => segments.push(resources::VOLUME_TITLE.to_string()),
             Screen::VolumeDetails => {
                 segments.push(resources::VOLUME_TITLE.to_string());
                 if let Some(volume) = &self.volume_presenter.selected_volume {
-                    segments.push(format!("{} details", volume.name));
+                    segments.push(format!(
+                        "{} {}",
+                        volume.name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
                 }
             }
             Screen::ImageList => segments.push(resources::IMAGE_TITLE.to_string()),
             Screen::ImageDetails => {
                 segments.push(resources::IMAGE_TITLE.to_string());
                 if let Some(image) = &self.image_presenter.selected_image {
-                    segments.push(format!("{} details", image.full_name));
+                    segments.push(format!(
+                        "{} {}",
+                        image.full_name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
                 }
             }
             Screen::NetworkList => segments.push(resources::NETWORK_TITLE.to_string()),
             Screen::NetworkDetails => {
                 segments.push(resources::NETWORK_TITLE.to_string());
                 if let Some(network) = &self.network_presenter.selected_network {
-                    segments.push(format!("{} details", network.name));
+                    segments.push(format!(
+                        "{} {}",
+                        network.name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
                 }
             }
             Screen::StackList => segments.push(resources::STACK_TITLE.to_string()),
             Screen::StackContainers => {
                 segments.push(resources::STACK_TITLE.to_string());
                 if let Some(stack) = self.stack_presenter.selected_stack() {
-                    segments.push(format!("{} containers", stack.name));
+                    segments.push(format!(
+                        "{} {}",
+                        stack.name,
+                        resources::BREADCRUMB_CONTAINERS_LABEL
+                    ));
                 }
             }
         }

@@ -120,9 +120,8 @@ async fn container_lifecycle_integration() {
 
     let missing = adapter
         .get_by_id("0000000000000000000000000000000000000000000000000000000000000000")
-        .await
-        .expect("get missing container");
-    assert!(missing.is_none());
+        .await;
+    assert!(missing.is_err());
 
     adapter.delete(&id, false).await.expect("delete");
     let after = adapter.get_all().await.expect("list containers");

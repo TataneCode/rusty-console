@@ -58,6 +58,8 @@ jobs:
         run: docker version
       - name: Run integration tests
         run: cargo test --test integration_docker
+      - name: Run breadcrumb UI integration tests
+        run: cargo test --test breadcrumb_ui
 
   coverage:
     name: Coverage

@@ -69,6 +69,10 @@ impl Theme {
     pub fn selected_border_style() -> Style {
         Style::default().fg(Color::Cyan)
     }
+
+    pub fn breadcrumb_border_style() -> Style {
+        Style::default().fg(Color::Cyan)
+    }
 }
 
 #[cfg(test)]
@@ -80,7 +84,9 @@ mod tests {
     fn test_default_related_styles() {
         assert_eq!(Theme::default_style().fg, Some(Color::White));
         assert_eq!(Theme::border_style().fg, Some(Color::White));
-        assert_eq!(Theme::selected_border_style().fg, Some(Color::Cyan));
+        let selected_border = Theme::selected_border_style();
+        assert_eq!(selected_border.fg, Some(Color::Cyan));
+        assert_eq!(Theme::breadcrumb_border_style().fg, Some(Color::Cyan));
         assert_eq!(Theme::help_style().fg, Some(Color::DarkGray));
     }
 

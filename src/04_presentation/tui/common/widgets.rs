@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use super::{resources, theme::Theme};
+use super::{resources, theme::Theme, BREADCRUMB_BAR_HEIGHT};
 
 #[derive(Debug, Clone)]
 pub enum PopupMessage {
@@ -302,6 +302,18 @@ pub fn render_selection_dialog(
 
     frame.render_stateful_widget(list, chunks[0], state);
     frame.render_widget(help, chunks[1]);
+}
+
+pub fn split_app_area(area: Rect) -> [Rect; 2] {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(BREADCRUMB_BAR_HEIGHT),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    [chunks[0], chunks[1]]
 }
 
 pub fn split_content_area(area: Rect) -> [Rect; 2] {

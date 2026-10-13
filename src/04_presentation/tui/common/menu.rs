@@ -1,4 +1,4 @@
-use super::{render_help, resources, split_menu_area, Theme};
+use super::{render_action_bar, resources, split_menu_area, Theme};
 use ratatui::{
     layout::Rect,
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
@@ -8,7 +8,7 @@ use ratatui::{
 pub fn render_main_menu(frame: &mut Frame, area: Rect, state: &mut ListState) {
     let [title_area, menu_area, help_area] = split_menu_area(area);
 
-    let title = Paragraph::new(resources::MAIN_MENU_TITLE)
+    let title = Paragraph::new(resources::APP_TITLE)
         .style(Theme::title_style())
         .block(
             Block::default()
@@ -35,7 +35,7 @@ pub fn render_main_menu(frame: &mut Frame, area: Rect, state: &mut ListState) {
         .highlight_symbol(resources::MAIN_MENU_HIGHLIGHT_SYMBOL);
 
     frame.render_stateful_widget(list, menu_area, state);
-    render_help(frame, help_area, resources::MAIN_MENU_HELP);
+    render_action_bar(frame, help_area, resources::MAIN_MENU_HELP);
 }
 
 #[cfg(test)]
@@ -64,7 +64,7 @@ mod tests {
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());
-        assert!(text.contains(resources::MAIN_MENU_TITLE));
+        assert!(text.contains(resources::APP_TITLE));
         assert!(text.contains(resources::MAIN_MENU_BLOCK_TITLE.trim()));
         assert!(text.contains(resources::MAIN_MENU_HELP.trim()));
         assert!(text.contains("Containers"));

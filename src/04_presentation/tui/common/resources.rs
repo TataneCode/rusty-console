@@ -1,7 +1,11 @@
 pub const FILTER_CURSOR: &str = "▏";
 pub const TRUNCATION_MARKER: &str = "...";
 
-pub const MAIN_MENU_TITLE: &str = "Rusty Console - Docker Manager";
+pub const APP_TITLE: &str = "Rusty - docker manager";
+pub const BREADCRUMB_SEPARATOR: &str = " > ";
+pub const BREADCRUMB_LOGS_LABEL: &str = "logs";
+pub const BREADCRUMB_DETAILS_LABEL: &str = "details";
+pub const BREADCRUMB_CONTAINERS_LABEL: &str = "containers";
 pub const MAIN_MENU_BLOCK_TITLE: &str = " Menu ";
 pub const MAIN_MENU_HELP: &str = " j/k: Navigate | Enter: Select | q: Quit ";
 pub const MAIN_MENU_HIGHLIGHT_SYMBOL: &str = "> ";

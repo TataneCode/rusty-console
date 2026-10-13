@@ -1,8 +1,8 @@
 use crate::application::stack::{StackContainerDto, StackDto};
 use crate::domain::stack::StackContainerState;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_help, render_table, resources, split_content_area, truncate_text,
-    Theme,
+    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
+    split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -57,12 +57,11 @@ pub fn render_stack_list(
         state,
     );
 
-    let help_text = if is_loading {
-        format!(" {} Loading...", spinner_char)
+    if is_loading {
+        render_loading_bar(frame, help_area, spinner_char);
     } else {
-        resources::STACK_LIST_HELP.to_string()
-    };
-    render_help(frame, help_area, &help_text);
+        render_action_bar(frame, help_area, resources::STACK_LIST_HELP);
+    }
 }
 
 pub fn render_stack_containers(
@@ -116,12 +115,11 @@ pub fn render_stack_containers(
         state,
     );
 
-    let help_text = if is_loading {
-        format!(" {} Loading...", spinner_char)
+    if is_loading {
+        render_loading_bar(frame, help_area, spinner_char);
     } else {
-        resources::STACK_CONTAINERS_HELP.to_string()
-    };
-    render_help(frame, help_area, &help_text);
+        render_action_bar(frame, help_area, resources::STACK_CONTAINERS_HELP);
+    }
 }
 
 #[cfg(test)]

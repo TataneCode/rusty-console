@@ -1,8 +1,8 @@
 use crate::application::container::{ContainerDto, ContainerStatsSubscription};
 use crate::presentation::tui::common::{
-    map_key_to_action_for_context, render_confirm_dialog, render_expanded_log_line,
-    render_main_menu, render_popup_message, render_selection_dialog, resources, AppAction,
-    KeyContext, PopupMessage, Spinner,
+    map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
+    render_expanded_log_line, render_main_menu, render_popup_message, render_selection_dialog,
+    resources, split_app_area, AppAction, KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -213,15 +213,26 @@ impl App {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame) {
+    #[doc(hidden)]
+    pub fn render(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
         // Update spinner animation
         self.spinner.update();
         let spinner_char = self.spinner.current_char();
 
+        let content_area = if self.screen == Screen::MainMenu {
+            area
+        } else {
+            let [breadcrumb_area, rest] = split_app_area(area);
+            let segments = self.breadcrumb_segments();
+            let refs: Vec<&str> = segments.iter().map(String::as_str).collect();
+            render_breadcrumb(frame, breadcrumb_area, &refs);
+            rest
+        };
+
         match &self.screen {
-            Screen::MainMenu => render_main_menu(frame, area, &mut self.menu_state),
+            Screen::MainMenu => render_main_menu(frame, content_area, &mut self.menu_state),
             Screen::ContainerList => {
                 let presenter = &mut self.container_presenter;
                 let is_loading = presenter.is_loading();
@@ -232,7 +243,7 @@ impl App {
                 let filtered = filter_containers(containers, &filter);
                 render_container_list(
                     frame,
-                    area,
+                    content_area,
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
@@ -252,12 +263,18 @@ impl App {
                         counter: presenter.search_counter(),
                         matches: &presenter.log_search_results,
                     };
-                    render_container_logs(frame, area, logs, &mut presenter.logs_state, &search);
+                    render_container_logs(
+                        frame,
+                        content_area,
+                        logs,
+                        &mut presenter.logs_state,
+                        &search,
+                    );
                 }
             }
             Screen::ContainerDetails => {
                 if let Some(container) = &self.container_presenter.selected_container {
-                    render_container_details(frame, area, container);
+                    render_container_details(frame, content_area, container);
                 }
             }
             Screen::VolumeList => {
@@ -270,7 +287,7 @@ impl App {
                 let filtered = filter_volumes(volumes, &filter);
                 render_volume_list(
                     frame,
-                    area,
+                    content_area,
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
@@ -280,7 +297,7 @@ impl App {
             }
             Screen::VolumeDetails => {
                 if let Some(volume) = &self.volume_presenter.selected_volume {
-                    render_volume_details(frame, area, volume);
+                    render_volume_details(frame, content_area, volume);
                 }
             }
             Screen::ImageList => {
@@ -293,7 +310,7 @@ impl App {
                 let filtered = filter_images(images, &filter);
                 render_image_list(
                     frame,
-                    area,
+                    content_area,
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
@@ -303,7 +320,7 @@ impl App {
             }
             Screen::ImageDetails => {
                 if let Some(image) = &self.image_presenter.selected_image {
-                    render_image_details(frame, area, image);
+                    render_image_details(frame, content_area, image);
                 }
             }
             Screen::NetworkList => {
@@ -316,7 +333,7 @@ impl App {
                 let filtered = filter_networks(networks, &filter);
                 render_network_list(
                     frame,
-                    area,
+                    content_area,
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
@@ -329,7 +346,7 @@ impl App {
                 if let Some(network) = &presenter.selected_network {
                     render_network_details(
                         frame,
-                        area,
+                        content_area,
                         network,
                         presenter.container_selection.selected(),
                     );
@@ -345,7 +362,7 @@ impl App {
                 let filtered = filter_stacks(stacks, &filter);
                 render_stack_list(
                     frame,
-                    area,
+                    content_area,
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
@@ -363,7 +380,7 @@ impl App {
                 let is_loading = self.stack_presenter.is_loading();
                 render_stack_containers(
                     frame,
-                    area,
+                    content_area,
                     &stack_name,
                     &self.stack_presenter.stack_containers,
                     &mut self.stack_presenter.container_selection.state,
@@ -396,6 +413,86 @@ impl App {
                 resources::EXEC_SHELL_DIALOG_HELP,
             );
         }
+    }
+
+    fn breadcrumb_segments(&self) -> Vec<String> {
+        let mut segments = vec![resources::APP_TITLE.to_string()];
+        match self.screen {
+            Screen::MainMenu => return segments,
+            Screen::ContainerList => segments.push(resources::CONTAINER_TITLE.to_string()),
+            Screen::ContainerLogs => {
+                segments.push(resources::CONTAINER_TITLE.to_string());
+                let name = self
+                    .container_presenter
+                    .logs
+                    .as_ref()
+                    .map(|logs| logs.container_name.clone())
+                    .or_else(|| {
+                        self.container_presenter
+                            .selected_container
+                            .as_ref()
+                            .map(|container| container.name.clone())
+                    });
+                if let Some(name) = name {
+                    segments.push(format!("{name} {}", resources::BREADCRUMB_LOGS_LABEL));
+                }
+            }
+            Screen::ContainerDetails => {
+                segments.push(resources::CONTAINER_TITLE.to_string());
+                if let Some(container) = &self.container_presenter.selected_container {
+                    segments.push(format!(
+                        "{} {}",
+                        container.name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
+                }
+            }
+            Screen::VolumeList => segments.push(resources::VOLUME_TITLE.to_string()),
+            Screen::VolumeDetails => {
+                segments.push(resources::VOLUME_TITLE.to_string());
+                if let Some(volume) = &self.volume_presenter.selected_volume {
+                    segments.push(format!(
+                        "{} {}",
+                        volume.name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
+                }
+            }
+            Screen::ImageList => segments.push(resources::IMAGE_TITLE.to_string()),
+            Screen::ImageDetails => {
+                segments.push(resources::IMAGE_TITLE.to_string());
+                if let Some(image) = &self.image_presenter.selected_image {
+                    segments.push(format!(
+                        "{} {}",
+                        image.full_name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
+                }
+            }
+            Screen::NetworkList => segments.push(resources::NETWORK_TITLE.to_string()),
+            Screen::NetworkDetails => {
+                segments.push(resources::NETWORK_TITLE.to_string());
+                if let Some(network) = &self.network_presenter.selected_network {
+                    segments.push(format!(
+                        "{} {}",
+                        network.name,
+                        resources::BREADCRUMB_DETAILS_LABEL
+                    ));
+                }
+            }
+            Screen::StackList => segments.push(resources::STACK_TITLE.to_string()),
+            Screen::StackContainers => {
+                segments.push(resources::STACK_TITLE.to_string());
+                if let Some(stack) = self.stack_presenter.selected_stack() {
+                    segments.push(format!(
+                        "{} {}",
+                        stack.name,
+                        resources::BREADCRUMB_CONTAINERS_LABEL
+                    ));
+                }
+            }
+        }
+        segments
     }
 
     pub(crate) async fn load_containers(&mut self) {
@@ -1039,7 +1136,7 @@ mod tests {
         let rendered = render_app(&mut app);
         assert_eq!(app.screen, Screen::MainMenu);
         assert_eq!(app.menu_state.selected(), Some(0));
-        assert!(rendered.contains(resources::MAIN_MENU_TITLE));
+        assert!(rendered.contains(resources::APP_TITLE));
 
         assert_eq!(
             confirm_message(ConfirmAction::ContainerDelete(false)),
@@ -1155,6 +1252,67 @@ mod tests {
         assert!(rendered.contains(resources::EXEC_SHELL_DIALOG_TITLE.trim()));
         assert!(rendered.contains("sh"));
         assert!(rendered.contains("bash"));
+    }
+
+    #[test]
+    fn test_breadcrumb_on_every_non_menu_screen() {
+        let mut app = empty_app();
+        let container = make_container_dto();
+        let volume = make_volume_dto(false, true);
+        let image = make_image_dto(true);
+        let stack = make_stack_dto(vec![make_stack_container(false, true)]);
+
+        app.container_presenter.set_details(container.clone());
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: container.id.clone(),
+                container_name: container.name.clone(),
+                lines: vec![],
+            });
+        app.volume_presenter.set_details(volume);
+        app.image_presenter.set_details(image);
+        app.stack_presenter.set_stacks(vec![stack]);
+        app.stack_presenter
+            .set_stack_containers(vec![make_stack_container(false, true)]);
+
+        app.screen = Screen::ContainerList;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Containers"));
+        app.screen = Screen::ContainerLogs;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Containers > web logs"));
+        app.screen = Screen::ContainerDetails;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Containers > web details"));
+        app.screen = Screen::VolumeList;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Volumes"));
+        app.screen = Screen::VolumeDetails;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Volumes > db-data details"));
+        app.screen = Screen::ImageList;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Images"));
+        app.screen = Screen::ImageDetails;
+        assert!(
+            render_app(&mut app).contains("Rusty - docker manager > Images > nginx:latest details")
+        );
+        app.screen = Screen::NetworkList;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Networks"));
+        app.network_presenter.set_details(make_network_dto(true, 2));
+        app.screen = Screen::NetworkDetails;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Networks > bridge details"));
+        app.screen = Screen::StackList;
+        assert!(render_app(&mut app).contains("Rusty - docker manager > Stacks"));
+        app.screen = Screen::StackContainers;
+        assert!(render_app(&mut app)
+            .contains("Rusty - docker manager > Stacks > compose-app containers"));
+    }
+
+    #[test]
+    fn test_main_menu_renders_title_without_breadcrumb_path() {
+        let mut app = empty_app();
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains(resources::APP_TITLE));
+        assert!(!rendered.contains(&format!(
+            "{}{}",
+            resources::APP_TITLE,
+            resources::BREADCRUMB_SEPARATOR
+        )));
     }
 
     #[tokio::test]

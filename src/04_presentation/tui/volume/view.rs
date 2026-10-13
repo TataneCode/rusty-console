@@ -1,7 +1,7 @@
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_help, render_table, resources, split_content_area, truncate_text,
-    Theme,
+    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
+    split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -65,12 +65,11 @@ pub fn render_volume_list(
         state,
     );
 
-    let help_text = if is_loading {
-        format!(" {} Loading...", spinner_char)
+    if is_loading {
+        render_loading_bar(frame, help_area, spinner_char);
     } else {
-        resources::VOLUME_LIST_HELP.to_string()
-    };
-    render_help(frame, help_area, &help_text);
+        render_action_bar(frame, help_area, resources::VOLUME_LIST_HELP);
+    }
 }
 
 pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) {
@@ -130,7 +129,7 @@ pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) 
 
     frame.render_widget(details_widget, content_area);
 
-    render_help(frame, help_area, resources::VOLUME_DETAILS_HELP);
+    render_action_bar(frame, help_area, resources::VOLUME_DETAILS_HELP);
 }
 
 #[cfg(test)]

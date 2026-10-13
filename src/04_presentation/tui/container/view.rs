@@ -1,8 +1,8 @@
 use crate::application::container::{ContainerDto, ContainerLogsDto};
 use crate::domain::container::ContainerState;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_help, render_table, resources, split_content_area, truncate_text,
-    Theme,
+    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
+    split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -65,12 +65,11 @@ pub fn render_container_list(
         state,
     );
 
-    let help_text = if is_loading {
-        format!(" {} Loading...", spinner_char)
+    if is_loading {
+        render_loading_bar(frame, help_area, spinner_char);
     } else {
-        resources::CONTAINER_LIST_HELP.to_string()
-    };
-    render_help(frame, help_area, &help_text);
+        render_action_bar(frame, help_area, resources::CONTAINER_LIST_HELP);
+    }
 }
 
 pub struct LogSearchView<'a> {
@@ -144,7 +143,7 @@ pub fn render_container_logs(
             .block(Block::default().borders(Borders::TOP));
         frame.render_widget(prompt, help_area);
     } else {
-        render_help(frame, help_area, resources::CONTAINER_LOGS_HELP);
+        render_action_bar(frame, help_area, resources::CONTAINER_LOGS_HELP);
     }
 }
 
@@ -213,7 +212,7 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
 
     frame.render_widget(details_widget, content_area);
 
-    render_help(frame, help_area, resources::CONTAINER_DETAILS_HELP);
+    render_action_bar(frame, help_area, resources::CONTAINER_DETAILS_HELP);
 }
 
 #[cfg(test)]

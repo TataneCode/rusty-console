@@ -95,9 +95,10 @@ async fn container_lifecycle_integration() {
     let id = create_container(&bollard, &name, ALPINE_IMAGE, vec!["sleep", "300"]).await;
 
     let found = adapter.get_all().await.expect("list containers");
+    let docker_name = format!("/{}", name);
     let created = found
         .iter()
-        .find(|c| c.name() == name)
+        .find(|c| c.name() == docker_name)
         .expect("created container listed");
     assert_eq!(created.id().as_str(), id);
     assert!(!created.is_running());
@@ -125,7 +126,7 @@ async fn container_lifecycle_integration() {
 
     adapter.delete(&id, false).await.expect("delete");
     let after = adapter.get_all().await.expect("list containers");
-    assert!(after.iter().all(|c| c.name() != name));
+    assert!(after.iter().all(|c| c.name() != docker_name));
 }
 
 #[tokio::test]
@@ -225,6 +226,8 @@ async fn image_lifecycle_integration() {
         return;
     };
     let adapter = ImageAdapter::new(client);
+
+    pull_image(&bollard, ALPINE_IMAGE).await;
 
     let all = adapter.get_all().await.expect("list images");
     assert!(all.iter().any(|i| i.repository() == "alpine"));
@@ -341,7 +344,9 @@ async fn volume_in_use_detection_integration() {
         .find(|v| v.name() == name)
         .expect("volume listed");
     assert!(volume.in_use());
-    assert!(volume.linked_containers().contains(&container_name));
+    assert!(volume
+        .linked_containers()
+        .contains(&format!("/{}", container_name)));
 
     remove_container(&bollard, &created.id).await;
     adapter

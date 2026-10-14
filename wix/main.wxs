@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Per-user MSI installer for rusty_console.
+
+  Key points:
+  - Installs into %LOCALAPPDATA%\rusty_console (no admin rights required).
+  - Adds the install directory to the *user* PATH environment variable.
+  - UpgradeCode is fixed: it must never change between releases.
+
+  `cargo wix` passes the package version at build time via the `Version`
+  preprocessor variable, so the installer version always matches the Git tag.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+    <Package
+        Name="rusty_console"
+        UpgradeCode="7e63fcfd-e8d0-479a-bf9e-fbaf5f9bcc1c"
+        Manufacturer="TataneCode"
+        Language="1033"
+        Codepage="1252"
+        Version="$(var.Version)"
+        InstallerVersion="450"
+        Scope="perUser">
+        <SummaryInformation
+            Keywords="Installer"
+            Manufacturer="TataneCode"
+            Description="A Docker TUI console built with Rust, Ratatui and Bollard" />
+        <MajorUpgrade
+            Schedule="afterInstallInitialize"
+            DowngradeErrorMessage="A newer version of [ProductName] is already installed. Setup will now exit." />
+        <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" DiskPrompt="CD-ROM #1" />
+        <Property Id="DiskPrompt" Value="rusty_console Installation" />
+        <Property Id="ARPPRODUCTICON" Value="ProductICO" />
+        <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" />
+
+        <Feature
+            Id="Binaries"
+            Title="rusty_console"
+            Description="Installs the rusty_console executable and adds its directory to the user PATH."
+            Level="1">
+            <ComponentRef Id="Binary" />
+            <ComponentRef Id="Path" />
+        </Feature>
+
+        <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+        <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+        <StandardDirectory Id="LocalAppDataFolder">
+            <Directory Id="INSTALLFOLDER" Name="rusty_console">
+                <Component Id="Binary" Guid="4942f4bd-27e8-45db-be7a-8cb7b15e2bd1">
+                    <File Id="ExeFile" Source="$(var.CargoTargetBinDir)rusty_console.exe" KeyPath="yes" />
+                </Component>
+                <Component Id="Path" Guid="94a2f1c3-5b6e-4d7a-9c80-1e2f3a4b5c6d">
+                    <Environment
+                        Id="UserPath"
+                        Name="PATH"
+                        Value="[INSTALLFOLDER]"
+                        Permanent="no"
+                        Part="last"
+                        Action="set"
+                        System="no" />
+                    <RegistryValue Root="HKCU" Key="Software\TataneCode\rusty_console" Name="installed" Type="integer" Value="1" KeyPath="no" />
+                </Component>
+            </Directory>
+        </StandardDirectory>
+    </Package>
+</Wix>

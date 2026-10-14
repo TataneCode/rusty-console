@@ -5,7 +5,7 @@ use crate::presentation::tui::common::{
 };
 use ratatui::{
     layout::{Constraint, Rect},
-    widgets::{Block, Borders, Cell, Paragraph, Row, TableState, Wrap},
+    widgets::{Cell, Paragraph, Row, TableState, Wrap},
     Frame,
 };
 
@@ -140,13 +140,7 @@ pub fn render_network_details(
     );
 
     let details_widget = Paragraph::new(details)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(resources::NETWORK_DETAILS_TITLE)
-                .title_style(Theme::title_style())
-                .border_style(Theme::border_style()),
-        )
+        .block(Theme::section_block(Some(resources::NETWORK_DETAILS_TITLE)))
         .wrap(Wrap { trim: false });
 
     frame.render_widget(details_widget, content_area);

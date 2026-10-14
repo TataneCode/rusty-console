@@ -1,7 +1,7 @@
 use super::{render_action_bar, resources, split_menu_area, Theme};
 use ratatui::{
     layout::Rect,
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -10,11 +10,7 @@ pub fn render_main_menu(frame: &mut Frame, area: Rect, state: &mut ListState) {
 
     let title = Paragraph::new(resources::APP_TITLE)
         .style(Theme::title_style())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Theme::border_style()),
-        );
+        .block(Theme::section_block(None));
     frame.render_widget(title, title_area);
 
     let items: Vec<ListItem> = resources::MAIN_MENU_ITEMS
@@ -24,13 +20,7 @@ pub fn render_main_menu(frame: &mut Frame, area: Rect, state: &mut ListState) {
         .collect();
 
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(resources::MAIN_MENU_BLOCK_TITLE)
-                .title_style(Theme::title_style())
-                .border_style(Theme::border_style()),
-        )
+        .block(Theme::section_block(Some(resources::MAIN_MENU_BLOCK_TITLE)))
         .highlight_style(Theme::highlight_style())
         .highlight_symbol(resources::MAIN_MENU_HIGHLIGHT_SYMBOL);
 

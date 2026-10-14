@@ -40,10 +40,10 @@ fn container_list_action_bar_shows_help_text_and_highlighted_keys() {
         "action bar keys are not highlighted (yellow bold)"
     );
 
-    let cyan_borders = styles.iter().filter(|(fg, _)| *fg == Color::Cyan).count();
+    let white_borders = styles.iter().filter(|(fg, _)| *fg == Color::White).count();
     assert!(
-        cyan_borders > 0,
-        "action bar/breadcrumb borders are not cyan"
+        white_borders > 0,
+        "action bar/breadcrumb borders are not homogeneously white"
     );
 }
 

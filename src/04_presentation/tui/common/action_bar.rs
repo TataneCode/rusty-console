@@ -2,7 +2,7 @@ use super::theme::Theme;
 use ratatui::{
     layout::Rect,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -33,14 +33,8 @@ pub fn action_bar_line(help_text: &str) -> Line<'static> {
     Line::from(spans)
 }
 
-fn action_bar_block() -> Block<'static> {
-    Block::default()
-        .borders(Borders::TOP)
-        .border_style(Theme::breadcrumb_border_style())
-}
-
 pub fn render_action_bar(frame: &mut Frame, area: Rect, help_text: &str) {
-    let bar = Paragraph::new(action_bar_line(help_text)).block(action_bar_block());
+    let bar = Paragraph::new(action_bar_line(help_text)).block(Theme::section_block(None));
     frame.render_widget(bar, area);
 }
 
@@ -49,7 +43,7 @@ pub fn render_loading_bar(frame: &mut Frame, area: Rect, spinner_char: &str) {
         Span::styled(format!(" {spinner_char} "), Theme::action_key_style()),
         Span::styled("Loading...", Theme::action_label_style()),
     ]);
-    let bar = Paragraph::new(loading).block(action_bar_block());
+    let bar = Paragraph::new(loading).block(Theme::section_block(None));
     frame.render_widget(bar, area);
 }
 

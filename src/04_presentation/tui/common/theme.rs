@@ -1,4 +1,8 @@
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::{
+    style::{Color, Modifier, Style},
+    text::Line,
+    widgets::{Block, BorderType, Padding},
+};
 
 pub struct Theme;
 
@@ -70,10 +74,6 @@ impl Theme {
         Style::default().fg(Color::Cyan)
     }
 
-    pub fn breadcrumb_border_style() -> Style {
-        Style::default().fg(Color::Cyan)
-    }
-
     pub fn action_key_style() -> Style {
         Style::default()
             .fg(Color::Yellow)
@@ -82,6 +82,19 @@ impl Theme {
 
     pub fn action_label_style() -> Style {
         Style::default().fg(Color::White)
+    }
+
+    /// Shared rounded box for the three layout sections (breadcrumb, main
+    /// content, action bar) so borders stay homogeneous across screens.
+    pub fn section_block(title: Option<&str>) -> Block<'static> {
+        let mut block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(Self::border_style())
+            .padding(Padding::horizontal(1));
+        if let Some(title) = title {
+            block = block.title(Line::from(title.to_string()).style(Self::title_style()));
+        }
+        block
     }
 }
 
@@ -96,8 +109,36 @@ mod tests {
         assert_eq!(Theme::border_style().fg, Some(Color::White));
         let selected_border = Theme::selected_border_style();
         assert_eq!(selected_border.fg, Some(Color::Cyan));
-        assert_eq!(Theme::breadcrumb_border_style().fg, Some(Color::Cyan));
         assert_eq!(Theme::help_style().fg, Some(Color::DarkGray));
+    }
+
+    #[test]
+    fn test_section_block_renders_rounded_border_and_optional_title() {
+        use ratatui::{backend::TestBackend, widgets::Paragraph, Terminal};
+
+        fn render_to_string(block: ratatui::widgets::Block<'static>) -> String {
+            let backend = TestBackend::new(20, 4);
+            let mut terminal = Terminal::new(backend).unwrap();
+            terminal
+                .draw(|frame| frame.render_widget(Paragraph::new("").block(block), frame.area()))
+                .unwrap();
+            terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect()
+        }
+
+        let untitled = render_to_string(Theme::section_block(None));
+        assert!(untitled.contains('╭'));
+        assert!(untitled.contains('╰'));
+        assert!(!untitled.contains("Containers"));
+
+        let titled = render_to_string(Theme::section_block(Some("Containers")));
+        assert!(titled.contains('╭'));
+        assert!(titled.contains("Containers"));
     }
 
     #[test]

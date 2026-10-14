@@ -1,9 +1,5 @@
 use super::{resources, theme::Theme};
-use ratatui::{
-    layout::Rect,
-    widgets::{Block, Borders, Paragraph},
-    Frame,
-};
+use ratatui::{layout::Rect, widgets::Paragraph, Frame};
 
 pub const BREADCRUMB_BAR_HEIGHT: u16 = 3;
 const BREADCRUMB_HORIZONTAL_CHROME: u16 = 4;
@@ -49,11 +45,9 @@ pub fn render_breadcrumb(frame: &mut Frame, area: Rect, segments: &[&str]) {
         .saturating_sub(1) as usize;
     let text = fit_breadcrumb_text(segments, max_chars);
 
-    let breadcrumb = Paragraph::new(text).style(Theme::title_style()).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Theme::breadcrumb_border_style()),
-    );
+    let breadcrumb = Paragraph::new(text)
+        .style(Theme::title_style())
+        .block(Theme::section_block(None));
     frame.render_widget(breadcrumb, area);
 }
 

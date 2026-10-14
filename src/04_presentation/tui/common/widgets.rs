@@ -1,8 +1,6 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{
-        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Row, Table, TableState, Wrap,
-    },
+    widgets::{Clear, List, ListItem, ListState, Paragraph, Row, Table, TableState, Wrap},
     Frame,
 };
 
@@ -22,14 +20,14 @@ impl PopupMessage {
     }
 }
 
-pub const HELP_BAR_HEIGHT: u16 = 2;
+pub const HELP_BAR_HEIGHT: u16 = 3;
 pub const MAIN_MENU_TITLE_HEIGHT: u16 = 3;
 pub const CONFIRM_DIALOG_WIDTH_PERCENT: u16 = 50;
 pub const CONFIRM_DIALOG_HEIGHT_PERCENT: u16 = 20;
 pub const ERROR_DIALOG_WIDTH_PERCENT: u16 = 60;
 pub const ERROR_DIALOG_HEIGHT_PERCENT: u16 = 20;
-pub const SELECTION_DIALOG_WIDTH_PERCENT: u16 = 40;
-pub const SELECTION_DIALOG_HEIGHT_PERCENT: u16 = 30;
+pub const SELECTION_DIALOG_WIDTH_PERCENT: u16 = 50;
+pub const SELECTION_DIALOG_HEIGHT_PERCENT: u16 = 40;
 
 pub struct TableSelection {
     pub state: TableState,
@@ -128,13 +126,7 @@ pub fn render_table<'a>(
 
     let table = Table::new(rows, widths)
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .title_style(Theme::title_style())
-                .border_style(Theme::border_style()),
-        )
+        .block(Theme::section_block(Some(title)))
         .row_highlight_style(Theme::highlight_style());
 
     frame.render_stateful_widget(table, area, state);
@@ -170,10 +162,7 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
 
     let dialog = Paragraph::new(text)
         .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(resources::CONFIRM_TITLE)
-                .title_style(Theme::title_style())
+            Theme::section_block(Some(resources::CONFIRM_TITLE))
                 .border_style(Theme::selected_border_style()),
         )
         .wrap(Wrap { trim: true });
@@ -220,10 +209,7 @@ pub fn render_expanded_log_line(frame: &mut Frame, timestamp: &str, message: &st
     };
     let dialog = Paragraph::new(text)
         .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(resources::EXPANDED_LOG_LINE_TITLE)
-                .title_style(Theme::title_style())
+            Theme::section_block(Some(resources::EXPANDED_LOG_LINE_TITLE))
                 .border_style(Theme::selected_border_style()),
         )
         .wrap(Wrap { trim: false });
@@ -247,11 +233,9 @@ pub fn render_popup_message(frame: &mut Frame, message: &PopupMessage) {
     let popup_widget = Paragraph::new(message.as_str())
         .style(style)
         .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .title_style(style)
-                .border_style(style),
+            Theme::section_block(Some(title))
+                .border_style(style)
+                .title_style(style),
         )
         .wrap(Wrap { trim: true });
 
@@ -279,13 +263,7 @@ pub fn render_selection_dialog(
 
     let items: Vec<ListItem> = options.iter().copied().map(ListItem::new).collect();
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .title_style(Theme::title_style())
-                .border_style(Theme::selected_border_style()),
-        )
+        .block(Theme::section_block(Some(title)).border_style(Theme::selected_border_style()))
         .highlight_style(Theme::highlight_style())
         .highlight_symbol(resources::MAIN_MENU_HIGHLIGHT_SYMBOL);
 

@@ -1,9 +1,4 @@
-use ratatui::{
-    layout::Rect,
-    style::Style,
-    widgets::{Block, Borders, Paragraph},
-    Frame,
-};
+use ratatui::{layout::Rect, widgets::Paragraph, Frame};
 use std::time::{Duration, Instant};
 
 /// ASCII spinner frames for loading animation
@@ -65,11 +60,7 @@ impl Default for Spinner {
 /// Uses ASCII spinner character | / - \
 pub fn render_loading_spinner(frame: &mut Frame, area: Rect, spinner_char: &str) {
     let loading_text = format!(" {} Loading...", spinner_char);
-    let spinner = Paragraph::new(loading_text).block(
-        Block::default()
-            .borders(Borders::TOP)
-            .border_style(Style::default()),
-    );
+    let spinner = Paragraph::new(loading_text).block(super::theme::Theme::section_block(None));
 
     frame.render_widget(spinner, area);
 }

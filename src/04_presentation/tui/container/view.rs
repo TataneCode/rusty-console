@@ -7,7 +7,7 @@ use crate::presentation::tui::common::{
 use ratatui::{
     layout::{Constraint, Rect},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, TableState, Wrap},
+    widgets::{Cell, List, ListItem, ListState, Paragraph, Row, TableState, Wrap},
     Frame,
 };
 
@@ -126,13 +126,7 @@ pub fn render_container_logs(
         .collect();
 
     let log_list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .title_style(Theme::title_style())
-                .border_style(Theme::border_style()),
-        )
+        .block(Theme::section_block(Some(&title)))
         .highlight_symbol("> ");
 
     frame.render_stateful_widget(log_list, content_area, logs_state);
@@ -140,7 +134,7 @@ pub fn render_container_logs(
     if search.active {
         let prompt = Paragraph::new(format!("/{}{}", search.value, resources::FILTER_CURSOR))
             .style(Theme::title_style())
-            .block(Block::default().borders(Borders::TOP));
+            .block(Theme::section_block(None));
         frame.render_widget(prompt, help_area);
     } else {
         render_action_bar(frame, help_area, resources::CONTAINER_LOGS_HELP);
@@ -201,13 +195,9 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
     );
 
     let details_widget = Paragraph::new(details)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(resources::CONTAINER_DETAILS_TITLE)
-                .title_style(Theme::title_style())
-                .border_style(Theme::border_style()),
-        )
+        .block(Theme::section_block(Some(
+            resources::CONTAINER_DETAILS_TITLE,
+        )))
         .wrap(Wrap { trim: false });
 
     frame.render_widget(details_widget, content_area);

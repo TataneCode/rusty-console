@@ -37,7 +37,8 @@ cargo build --release
 Prebuilt installers are attached to every [GitHub Release](https://github.com/TataneCode/rusty-console/releases):
 
 - **Windows** — `rusty_console-windows-x86_64.msi`: per-user installer (no admin rights), installs to `%LOCALAPPDATA%\rusty_console` and adds it to the user `PATH`
-- **Linux (RPM)** — `rusty_console-linux-x86_64.rpm`: installs to `/usr/bin/rusty_console` with executable permissions (`755`)
+- **Linux (Debian/Ubuntu)** — `rusty_console-linux-x86_64-amd64.deb`: installs to `/usr/bin/rusty_console` with executable permissions
+- **Linux (RHEL/Fedora)** — `rusty_console-linux-x86_64.rpm`: installs to `/usr/bin/rusty_console` with executable permissions (`755`)
 - Plain binaries are also published for both platforms
 
 ## Learning Path

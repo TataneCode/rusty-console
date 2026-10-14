@@ -44,6 +44,12 @@ jobs:
           cargo install cargo-generate-rpm --locked
           cargo generate-rpm --target ${{ matrix.target }} -o target/${{ matrix.target }}/release/rusty_console-linux-x86_64.rpm
 
+      - name: Build DEB (Linux)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb --target ${{ matrix.target }} --no-build -o target/${{ matrix.target }}/release/rusty_console-linux-x86_64-amd64.deb
+
       - name: Build MSI (Windows)
         if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: pwsh
@@ -64,6 +70,13 @@ jobs:
         with:
           name: rusty_console-linux-x86_64.rpm
           path: target/${{ matrix.target }}/release/rusty_console-linux-x86_64.rpm
+
+      - name: Upload DEB installer artifact
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusty_console-linux-x86_64-amd64.deb
+          path: target/${{ matrix.target }}/release/rusty_console-linux-x86_64-amd64.deb
 
       - name: Upload MSI installer artifact
         if: matrix.target == 'x86_64-pc-windows-msvc'

@@ -16,15 +16,45 @@ An installer automates all of this: it puts the binary in the right directory an
 
 ## The three requirements
 
-| Requirement | MSI (Windows) | RPM (Linux) |
-|---|---|---|
-| Install into the user's directory | `%LOCALAPPDATA%\rusty_console` (per-user, no admin rights) | `/usr/bin/rusty_console` (standard system location) |
-| Add to `PATH` | `HKCU\Environment` → user `PATH` variable | `/usr/bin` is already on `PATH` |
-| Executable bit | Not applicable on Windows | `mode = "755"` (`rwxr-xr-x`) in the RPM metadata |
+| Requirement | MSI (Windows) | DEB (Debian/Ubuntu) | RPM (RHEL/Fedora) |
+|---|---|---|---|
+| Install into the user's directory | `%LOCALAPPDATA%\rusty_console` (per-user, no admin rights) | `/usr/bin/rusty_console` | `/usr/bin/rusty_console` |
+| Add to `PATH` | `HKCU\Environment` → user `PATH` variable | `/usr/bin` is already on `PATH` | `/usr/bin` is already on `PATH` |
+| Executable bit | Not applicable on Windows | inherited from the built binary | `mode = "755"` in metadata |
 
-> **Note on APK (Android):** an Android installer was considered and deliberately excluded. `rusty_console` is a terminal UI (crossterm/ratatui) that talks to the Docker daemon over a Unix socket. Android provides neither a standard terminal nor an accessible Docker daemon, so an APK would ship a binary that cannot run. Packaging only formats where the application is actually usable is part of good release engineering.
+> **Note on APK:** the `.apk` extension is ambiguous. On **Alpine Linux** it is the native package format (`apk add`); on **Android** it is the app format. The Android variant was considered and deliberately excluded: `rusty_console` is a terminal UI (crossterm/ratatui) that talks to the Docker daemon over a Unix socket, and Android provides neither a standard terminal nor an accessible Docker daemon, so an APK would ship a binary that cannot run. Alpine packaging would be a separate effort (via `abuild`/APKBUILD, or simply extracting the release binary inside an Alpine container).
+
+## The three formats and who they serve
+
+| Format | Tool | Distributions | Executable bit |
+|---|---|---|---|
+| `.deb` | `cargo-deb` | **Debian, Ubuntu**, Mint, Pop!_OS | preserved from the built binary (`755`) |
+| `.rpm` | `cargo-generate-rpm` | **RHEL, Fedora**, Rocky, Alma, openSUSE | `mode = "755"` in metadata |
+| `.msi` | `cargo-wix` (WiX v4) | **Windows** | N/A (Windows has no executable bit) |
+
+A common point of confusion: `.apk` is the package format of **Alpine Linux** (the `apk` command, ubiquitous in Docker images), not Debian/Ubuntu. Debian-family systems use `.deb`, and RedHat-family systems use `.rpm`. Android also uses `.apk`, which is why the Android option was evaluated and excluded: `rusty_console` is a terminal UI that talks to the Docker daemon over a Unix socket, and Android provides neither a standard terminal nor an accessible Docker daemon.
 
 ## Where the packaging configuration lives
+
+### DEB — no configuration needed
+
+`cargo-deb` works out of the box from `Cargo.toml` metadata: it installs the binary to `/usr/bin/rusty_console` (already on every user's `PATH`), preserves the executable permissions from the build, packages `README.md` and the license as docs under `/usr/share/doc/rusty-console/`, and generates the `dpkg` metadata. The `description` and `license` fields in `Cargo.toml` are the same fields used by the RPM and MSI tools.
+
+Build locally:
+
+```sh
+cargo build --release --target x86_64-unknown-linux-gnu
+cargo install cargo-deb --locked
+cargo deb --target x86_64-unknown-linux-gnu --no-build -o rusty_console.deb
+```
+
+Install and verify:
+
+```sh
+sudo dpkg -i rusty_console.deb
+which rusty_console        # → /usr/bin/rusty_console
+rusty_console              # PATH resolution works, executable bit already set
+```
 
 ### RPM — `Cargo.toml`
 
@@ -109,18 +139,19 @@ rusty_console
 
 ## The release pipeline — `.github/workflows/release.yml`
 
-The workflow runs only on `v*` tags. Each matrix entry builds its target, then packages the native installer before upload:
+The workflow runs only on `v*` tags. Each matrix entry builds its target, then packages the native installers before upload:
 
-- **Linux job**: `cargo install cargo-generate-rpm` → `cargo generate-rpm` → uploads both the plain binary and the `.rpm`.
+- **Linux job**: `cargo install cargo-generate-rpm` → `cargo generate-rpm`, and `cargo install cargo-deb` → `cargo deb --no-build` → uploads the plain binary, the `.rpm`, and the `.deb`.
 - **Windows job**: `dotnet tool install --global wix` (WiX v4 toolchain) → `cargo install cargo-wix` → `cargo wix --toolset modern --no-build` → uploads the binary and the `.msi`.
 
 The `release` job downloads every artifact and attaches them all to the GitHub Release (`softprops/action-gh-release`), so a tag like `v0.1.0` publishes:
 
 ```
-rusty_console-linux-x86_64        (binary, chmod +x applied)
-rusty_console-linux-x86_64.rpm    (RPM installer)
-rusty_console-windows-x86_64.exe  (binary)
-rusty_console-windows-x86_64.msi  (MSI installer, per-user + PATH)
+rusty_console-linux-x86_64            (binary, chmod +x applied)
+rusty_console-linux-x86_64.rpm        (RPM installer — RHEL/Fedora)
+rusty_console-linux-x86_64-amd64.deb  (DEB installer — Debian/Ubuntu)
+rusty_console-windows-x86_64.exe      (binary)
+rusty_console-windows-x86_64.msi      (MSI installer, per-user + PATH)
 ```
 
 ## Releasing a new version
@@ -136,8 +167,8 @@ git push origin main --tags
 ## Key takeaways
 
 - A packaging tool reads metadata (`Cargo.toml` table or `.wxs` template) and turns a raw binary into a system-managed installation.
-- "Inscription au PATH" means different things per OS: the MSI writes the user's `PATH` environment value in the registry; the RPM simply relies on `/usr/bin` being on `PATH` by default.
-- "chmod +x" is expressed declaratively in RPM metadata as `mode = "755"` — no shell step needed at install time.
+- "Inscription au PATH" means different things per OS: the MSI writes the user's `PATH` environment value in the registry; the DEB/RPM simply rely on `/usr/bin` being on `PATH` by default.
+- "chmod +x" is inherited from the built binary for DEB, and expressed declaratively in RPM metadata as `mode = "755"` — no shell step needed at install time.
 - Per-user installs (`Scope="perUser"`, `%LOCALAPPDATA%`) avoid UAC elevation and let the tool install on locked-down machines.
 - Excluding an unviable format (APK) is a packaging decision too: installers exist to make software *usable*, and a terminal Docker client cannot run on Android.
 
@@ -146,3 +177,4 @@ git push origin main --tags
 - [`Cargo.toml`](../Cargo.toml) — `[package.metadata.generate-rpm]` section
 - [`wix/main.wxs`](../wix/main.wxs) — the full WiX source for the per-user MSI
 - [`.github/workflows/release.yml`](../.github/workflows/release.yml) — the tag-driven build/package/publish pipeline
+- The `cargo-deb` and `cargo-generate-rpm` upstream READMEs for advanced options (maintainer scripts, dependencies, desktop files)

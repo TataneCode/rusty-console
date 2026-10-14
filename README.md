@@ -32,6 +32,14 @@ cargo build --release
 ./target/release/rusty_console
 ```
 
+## Installation
+
+Prebuilt installers are attached to every [GitHub Release](https://github.com/TataneCode/rusty-console/releases):
+
+- **Windows** — `rusty_console-windows-x86_64.msi`: per-user installer (no admin rights), installs to `%LOCALAPPDATA%\rusty_console` and adds it to the user `PATH`
+- **Linux (RPM)** — `rusty_console-linux-x86_64.rpm`: installs to `/usr/bin/rusty_console` with executable permissions (`755`)
+- Plain binaries are also published for both platforms
+
 ## Learning Path
 
 This repository now includes a project-based Rust learning path under [`xx_learning/`](./xx_learning/).

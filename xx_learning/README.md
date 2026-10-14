@@ -12,6 +12,7 @@ The order matters:
 6. [Terminal UI with Crossterm and Ratatui](./06_terminal_ui_with_crossterm_and_ratatui.md)
 7. [Testing in this project](./07_testing_in_this_project.md)
 8. [How the full project fits together](./08_from_rust_basics_to_project_architecture.md)
+9. [Packaging: generating installers (MSI, RPM)](./09_packaging_and_installers.md)
 
 ## How to use these notes
 

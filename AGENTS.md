@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents when working with the rusty-console codebase. Agent roles and reusable procedures live in [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) (`agents/`, `.agents/skills/`), project context in [CONTEXT.md](CONTEXT.md), per-layer rules in [rules/](rules/).
+This file provides guidance to AI coding agents when working with the rusty-console codebase. Agent roles and reusable procedures live in [AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) (`agents/`, `.agents/skills/`), project context in [CONTEXT.md](.legacy/CONTEXT.md), per-layer rules in [rules/](rules/).
 
 ## Project Overview
 
@@ -280,11 +280,11 @@ src/
 
 ## Additional Resources
 
-- [PLAN.md](PLAN.md) - Project roadmap
-- [EVOLUTION.md](EVOLUTION.md) - Feature evolution history
+- [PLAN.md](.legacy/PLAN.md) - Project roadmap
+- [EVOLUTION.md](.legacy/EVOLUTION.md) - Feature evolution history
 - [README.md](README.md) - User documentation
-- [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
-- [CONTEXT.md](CONTEXT.md) - General project context (pitch, stack, current state, resource map)
+- [AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
+- [CONTEXT.md](.legacy/CONTEXT.md) - General project context (pitch, stack, current state, resource map)
 - [rules/](rules/) - Per-layer DDD rules shared by agents and skills (domain, application, infrastructure, presentation, quality)
 - [.agents/skills/](.agents/skills/) - Reusable procedure skills (Agent Skills standard, one folder per skill, `SKILL.md` format; auto-discovered by Vibe Code and Vibe CLI)
 - [agents/](agents/) - Independent agent definitions invoking the skills

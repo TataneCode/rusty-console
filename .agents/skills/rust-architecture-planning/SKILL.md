@@ -13,7 +13,7 @@ rusty-console : TUI Rust (ratatui, crossterm, bollard, tokio) pour Docker. Archi
 04_presentation → 02_application → 01_domain ← 03_infrastructure
 ```
 
-Répertoires réels : `src/01_domain/`, `src/02_application/`, `src/03_infrastructure/docker/`, `src/04_presentation/tui/`. Références de conception : `docs/refactoring/`, `architecture_logs_26042026.md`, `PLAN.md`, `EVOLUTION.md`.
+Répertoires réels : `src/01_domain/`, `src/02_application/`, `src/03_infrastructure/docker/`, `src/04_presentation/tui/`. Références de conception : `docs/refactoring/`, `.legacy/architecture_logs_26042026.md`, `.legacy/PLAN.md`, `.legacy/EVOLUTION.md`.
 
 ## Procédure systématique — 6 étapes
 

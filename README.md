@@ -1,315 +1,38 @@
 # Rusty Console
 
-A terminal user interface (TUI) for managing Docker containers, volumes, images, networks, and stacks — written in Rust. This is a port of [FancyContainerConsole](https://github.com) (originally in C#/.NET) to Rust.
+A terminal user interface (TUI) for managing Docker containers, volumes, images, networks, and stacks — written in Rust. This is a port of FancyContainerConsole (originally in C#/.NET) to Rust.
 
 ## Features
 
-- **Containers** — list all containers regardless of state, with live CPU and memory usage in the list; start/stop, pause/unpause, restart, open an interactive exec shell (`sh` or `bash`), view real-time logs, inspect details (incl. env vars and live network I/O), delete (with force option for running containers), prune stopped containers, filter by name
-- **Volumes** — list all volumes, detect which ones are in use, delete unused volumes, prune unused volumes, filter by name
-- **Networks** — list all networks (name, driver, scope, subnet, connected container count), inspect details (internal/attachable flags, subnet, gateway, connected containers with their IPs), disconnect a container from a network, delete user-defined networks (predefined `bridge`/`host`/`none` are protected), prune unused networks, filter by name
-- **Images** — list all images with usage status, inspect details, delete (with force option for in-use images), prune dangling images, filter by name
-- **Stacks** — detect Docker Compose stacks from container labels, list stacks with running/total counts, drill down into a stack's containers, start/stop/remove all containers in a stack at once
-- Confirmation dialogs for all destructive actions
-- Error popups with dismiss-on-keypress behaviour
-- Loading spinner with ASCII animation (`|/-\`) for async operations (start/stop/delete containers, pull images, etc.) - provides visual feedback during long operations
-- Breadcrumb navigation bar showing the current location (e.g. `Rusty - docker manager > Containers > web logs`), truncating leading segments first when space runs out
-- Homogeneous section design: breadcrumb, main content, and action bar all share the same rounded bordered box (`Theme::section_block`) with horizontal padding and a consistent colour theme; cyan borders are reserved for focused/overlay widgets
+- **Containers** — list all containers regardless of state, with live CPU and memory usage; start/stop, pause/unpause, restart, interactive exec shell, real-time logs, inspect details, delete, prune, filter by name
+- **Volumes** — list, detect in-use volumes, delete, prune, filter by name
+- **Networks** — list with subnet and connected container count, inspect details, disconnect containers, delete, prune, filter by name
+- **Images** — list with usage status, inspect details, delete, prune dangling, filter by name
+- **Stacks** — detect Docker Compose stacks, drill down into stack containers, start/stop/remove all containers at once
+- Confirmation dialogs for all destructive actions, error popups, loading spinner for async operations
+- Breadcrumb navigation bar and homogeneous section design across the whole UI
 
-## Prerequisites
-
-- Rust toolchain (`rustup` recommended)
-- A running Docker daemon (accessible via the default socket)
-- Docker CLI installed and available on `PATH` (`docker`) for interactive exec/shell access
-
-## Build & Run
+## Quick start
 
 ```bash
-# Run in development mode
 cargo run
-
-# Build an optimized binary
-cargo build --release
-./target/release/rusty_console
 ```
 
-## Installation
+Requires a Rust toolchain and a running Docker daemon. See the [installation guide](./INSTALL.md) for details and prebuilt installers.
 
-Prebuilt installers are attached to every [GitHub Release](https://github.com/TataneCode/rusty-console/releases):
+## Documentation
 
-- **Windows** — `rusty_console-windows-x86_64.msi`: per-user installer (no admin rights), installs to `%LOCALAPPDATA%\rusty_console` and adds it to the user `PATH`
-- **Linux (Debian/Ubuntu)** — `rusty_console-linux-x86_64-amd64.deb`: installs to `/usr/bin/rusty_console` with executable permissions
-- **Linux (RHEL/Fedora)** — `rusty_console-linux-x86_64.rpm`: installs to `/usr/bin/rusty_console` with executable permissions (`755`)
-- Plain binaries are also published for both platforms
+| Document | Content |
+|----------|---------|
+| [TECHNOLOGIES.md](./TECHNOLOGIES.md) | Crates used in the project and why they were chosen |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | DDD layered architecture, graphs, data flow, and the architecture decision log |
+| [INSTALL.md](./INSTALL.md) | Installation guide (prebuilt installers, building from source) |
+| [MANUAL.md](./MANUAL.md) | User manual and key bindings for every screen |
 
-## Learning Path
+Additional resources:
 
-This repository now includes a project-based Rust learning path under [`xx_learning/`](./xx_learning/).
-
-Start with the index at [`xx_learning/README.md`](./xx_learning/README.md), then follow the numbered lessons from basic ownership and control flow through traits, async, terminal rendering, testing, and the full architecture used in this application.
-
-## Key Bindings
-
-### Global
-
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move selection down |
-| `k` / `↑` | Move selection up |
-| `Enter` | Select / confirm |
-| `Esc` / `q` | Go back / quit |
-| `r` | Refresh list |
-| `/` | Activate filter (type to search, `Esc` to clear) |
-
-### Containers
-
-| Key | Action |
-|-----|--------|
-| `s` | Start or stop the selected container (shows loading spinner during operation) |
-| `p` | Pause or unpause the selected container |
-| `R` | Restart the selected container (shows loading spinner during operation) |
-| `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` (clears loading before spawn) |
-| `l` | View container logs |
-| `c` | View container details (including live network I/O) |
-| `d` | Delete (opens confirmation dialog, shows loading spinner during operation) |
-| `X` | Prune all stopped containers (shows loading spinner during operation) |
-| `Ctrl+U` | Scroll up (in log view) |
-| `Ctrl+D` | Scroll down (in log view) |
-
-## Realtime container stats
-
-- The **container list** shows live **CPU** and **Memory** values for active containers.
-- **Network I/O** is shown only in **container details**.
-- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh.
-
-### Stacks
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Drill down into stack's containers |
-| `s` | Start All containers in the selected stack (shows loading spinner during operation) |
-| `S` | Stop All containers in the selected stack (shows loading spinner during operation) |
-
-### Stack Containers (drill-down)
-
-| Key | Action |
-|-----|--------|
-| `s` | Start or stop the selected container (shows loading spinner during operation) |
-| `e` | Open the exec shell picker for the selected container (clears loading before spawn) |
-| `d` | Delete the selected container (shows loading spinner during operation) |
-| `Ctrl+S` | Start All containers in the stack (shows loading spinner during operation) |
-| `S` | Stop All containers in the stack (shows loading spinner during operation) |
-| `D` | Remove All containers in the stack (force, with confirmation, shows loading spinner during operation) |
-
-### Volumes & Images
-
-| Key | Action |
-|-----|--------|
-| `d` | Delete (opens confirmation dialog, shows loading spinner during operation) |
-| `c` | View image details |
-| `X` | Prune unused volumes / dangling images (shows loading spinner during operation) |
-| `P` | Pull images for selected stack (shows loading spinner during operation) |
-
-### Networks
-
-| Key | Action |
-|-----|--------|
-| `Enter` / `c` | View network details (driver, scope, subnet, gateway, connected containers) |
-| `d` | Delete the selected network (opens confirmation dialog; predefined networks and networks with connected containers are refused) |
-| `X` | Prune unused networks (shows loading spinner during operation) |
-| `/` | Filter networks by name |
-| `r` | Refresh |
-
-### Network Details
-
-| Key | Action |
-|-----|--------|
-| `j` / `k` | Select a connected container |
-| `d` | Disconnect the selected container from the network (opens confirmation dialog) |
-| `r` | Refresh |
-| `Esc` / `q` | Back to the network list |
-
----
-
-## Architecture
-
-The project follows **Domain-Driven Design (DDD)** with a clean, strictly inward dependency graph:
-
-```
-04_presentation  →  02_application  →  01_domain  ←  03_infrastructure
-```
-
-No outer layer may be imported by an inner one. The `domain` layer remains the business core, but it currently uses a small number of external crates for timestamps and typed errors (`chrono` and `thiserror`).
-
-### Layer-first structure
-
-The codebase now uses a **numbered, layer-first** layout to make the architecture easier to read:
-
-```text
-src/
-  01_domain/
-  02_application/
-  03_infrastructure/
-  04_presentation/
-```
-
-Rust module names remain valid identifiers (`domain`, `application`, `infrastructure`, `presentation`) and are mapped onto these numbered directories with `#[path = "..."]`.
-
-The numbered layer modules are now the **primary navigation and import surface**. The older feature-first directory trees and temporary remap files have been removed. The dependency rules for the target structure are:
-
-1. `01_domain` contains business concepts and invariants only.
-2. `02_application` orchestrates use cases and defines ports/DTOs.
-3. `03_infrastructure` contains Docker/Bollard and adapter code.
-4. `04_presentation` owns TUI rendering, presenters, actions, and app flow.
-5. Dependencies always point inward; outer layers may depend on inner ones, never the reverse.
-
-The shared Docker client wrapper now lives under `03_infrastructure/docker/client.rs`, and the layer error types live under:
-
-- `01_domain/error.rs`
-- `02_application/error.rs`
-- `03_infrastructure/error.rs`
-
-### Folder layout
-
-The primary structure is now **layer-first**, with business modules inside each layer:
-
-```text
-src/
-  01_domain/
-    container/
-    image/
-    volume/
-    stack/
-  02_application/
-    container/
-    image/
-    volume/
-    stack/
-  03_infrastructure/
-    docker/
-      client.rs
-      container/
-      image/
-      volume/
-      stack/
-  04_presentation/
-    tui/
-      container/
-      image/
-      volume/
-      stack/
-```
-
-At the root, `shared.rs` remains as the small shared value module used across layers.
-
-### Layers
-
-#### `01_domain/*`
-The core of the application. Contains the business logic and domain concepts. It is still isolated from application, infrastructure, and presentation code, but it currently depends on a small number of external crates for timestamps and typed errors.
-
-- **Entities** — `Container`, `Volume`, `Image`, `Network`, `Stack`. Each entity encapsulates its own business rules (e.g. `Container::can_be_started()`, `Network::can_be_deleted()`).
-- **Value Objects** — `ContainerId`, `PortMapping`, `NetworkInfo`, `MountInfo`, `VolumeId`, `ImageId`, `NetworkId`, `NetworkScope`. Immutable, identity-free wrappers.
-- **Domain state** — `ContainerState` enum (`Running`, `Paused`, `Exited`, `Dead`, …) with derived predicates used to drive UI affordances.
-- **Errors** — `01_domain/error.rs`, re-wrapped at each outer layer.
-
-#### `02_application/*`
-Orchestration layer. Defines the contracts the rest of the system depends on and provides use-case implementations.
-
-- **Repository traits** — `ContainerRepository`, `VolumeRepository`, `ImageRepository`, `StackRepository`, `NetworkRepository` (in each feature's `traits.rs`). These are the inversion-of-control boundaries: the application layer calls them; the infrastructure layer implements them.
-- **Services** — `ContainerService`, `VolumeService`, `ImageService`, `StackService`, `NetworkService`. Thin use-case coordinators that call a repository and return DTOs.
-- **DTOs** — `ContainerDto`, `VolumeDto`, `ImageDto`, `ContainerLogsDto`, `StackDto`, `StackContainerDto`, `NetworkDto`, `NetworkContainerDto`. Plain data structs crossing the application→UI boundary.
-- **Mappers** — `ContainerMapper`, etc. Convert domain entities into DTOs.
-
-#### `03_infrastructure/*`
-Adapts the Docker daemon API to the application's repository traits using [bollard](https://crates.io/crates/bollard).
-
-- **Adapters** — `ContainerAdapter`, `VolumeAdapter`, `ImageAdapter`, `NetworkAdapter`. Each implements the corresponding repository trait. Log streaming uses `futures_util::StreamExt` to consume bollard's async stream. The network adapter enriches each listed network with an `inspect_network` call to fill IPAM and connected-container data.
-- **Mappers** — `ContainerInfraMapper`, etc. Convert raw bollard API types into domain entities.
-- **`docker/client.rs`** — `DockerClient`, a thin newtype wrapper around `bollard::Docker`, shared via `Arc<T>` across all adapters.
-
-#### `04_presentation/tui/*`
-Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
-
-- **`tui/app`** — `App` struct owns a `Screen` state-machine enum and runs the main event loop. Overlay states (`confirm_dialog`, `popup_message`, exec shell picker) are evaluated before any screen-specific handler.
-- **Screens** — `MainMenu`, `ContainerList`, `ContainerLogs`, `ContainerDetails`, `VolumeList`, `ImageList`, `ImageDetails`, `NetworkList`, `NetworkDetails`, `StackList`, `StackContainers`.
-- **Per-feature triad** (e.g. `04_presentation/tui/container/`):
-  - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
-  - `view.rs` — pure ratatui widget composition functions
-  - `actions.rs` — async wrappers around application services; called from `app.rs` event handlers
-- **`tui/common/`** — shared widgets, colour theme, and `keys.rs` which maps raw `KeyEvent`s to `AppAction` variants. The `Theme::section_block` helper centralizes the homogeneous section design (rounded full borders, white borders, horizontal padding) used by the breadcrumb bar, every content block, and the action bar.
-
-### Data Flow
-
-```
-Docker daemon
-    │
-    ▼  bollard async API
-Infrastructure Mapper  →  Domain Entity
-                               │
-                               ▼  Application Mapper
-                             DTO
-                               │
-                               ▼  Presenter
-                          Display state  →  View (ratatui widgets)
-```
-
-### Loading Spinner for Async Operations
-
-The application provides visual feedback during long-running async operations (container start/stop/delete, image pull, volume prune, etc.) through a loading spinner:
-
-- **Spinner Widget**: ASCII animation (`|/-\`) with 200ms frame duration
-- **Display**: Replaces help text in the bottom bar with "Loading... <spinner>" during operations
-- **Behavior**: 
-  - Automatically shown when async operations start
-  - Cleared when operations complete or fail
-  - Special handling for exec shell: loading cleared before spawning external process
-  - Image pull uses spinner instead of popup for consistent behavior
-- **Implementation**: `ui/common/spinner.rs` with integration in all presenters and views
-
-### Dependency Injection
-
-`main.rs` manually wires every layer at startup:
-
-```
-DockerClient
-  └─► Arc<ContainerAdapter>  →  ContainerService  →  ContainerActions
-  └─► Arc<VolumeAdapter>     →  VolumeService     →  VolumeActions
-  └─► Arc<ImageAdapter>      →  ImageService      →  ImageActions
-  └─► Arc<StackAdapter>      →  StackService      →  StackActions
-  └─► Arc<NetworkAdapter>    →  NetworkService    →  NetworkActions
-                                                         │
-                                                         ▼
-                                                       App::new(…)
-```
-
----
-
-## Crates
-
-| Crate | Version | Role |
-|-------|---------|------|
-| [ratatui](https://crates.io/crates/ratatui) | 0.30 | Terminal UI framework (widgets, layout, rendering) |
-| [crossterm](https://crates.io/crates/crossterm) | 0.29 | Cross-platform terminal backend for ratatui |
-| [bollard](https://crates.io/crates/bollard) | 0.21 | Async Docker Engine API client |
-| [tokio](https://crates.io/crates/tokio) | 1.43 | Async runtime (rt-multi-thread, macros, sync, time, process) |
-| [async-trait](https://crates.io/crates/async-trait) | 0.1 | Enables `async fn` in trait definitions |
-| [futures-util](https://crates.io/crates/futures-util) | 0.3 | `StreamExt` for consuming bollard log streams |
-| [anyhow](https://crates.io/crates/anyhow) | 1.0 | Ergonomic error propagation in `main` |
-| [thiserror](https://crates.io/crates/thiserror) | 2.0 | Derive-macro for typed error enums across layers |
-| [chrono](https://crates.io/crates/chrono) | 0.4 | `DateTime<Utc>` timestamps on domain entities |
-| [serde](https://crates.io/crates/serde) / [serde_json](https://crates.io/crates/serde_json) | 1.0 | Serialization support |
-| [mockall](https://crates.io/crates/mockall) *(dev)* | 0.14 | Auto-mock repository traits in unit tests |
-| [tokio-test](https://crates.io/crates/tokio-test) *(dev)* | 0.4 | Async test helpers |
-
----
-
-## Testing
-
-Unit tests live alongside production code in `#[cfg(test)]` modules. Repository traits are mocked with `mockall` so services can be tested in isolation without a Docker daemon.
-
-```bash
-cargo test              # run all tests
-cargo test <name>       # run a specific test by name
-```
+- [xx_learning/](./xx_learning/) — a project-based Rust learning path built around this codebase, from ownership basics to the full application architecture
+- [.legacy/](./.legacy/) — historical documents (roadmap, evolution history, agent architecture, project context)
 
 ## License
 

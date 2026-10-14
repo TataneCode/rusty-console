@@ -31,6 +31,8 @@ It contains:
 - async I/O with Tokio, Bollard, and `async_trait`
 - async streams and `tokio::sync::mpsc` for live container stats
 - a real terminal UI built with Crossterm and Ratatui
+- a full feature slice (networks: domain rules, repository trait, Bollard adapter, service, TUI screens) added end-to-end through every layer
+- breadcrumb navigation and a centralized design system for the three layout sections (see lesson 6)
 - unit tests, async tests, mocks, and Ratatui rendering tests
 - custom widgets like the loading spinner for async operations
 
@@ -38,8 +40,9 @@ The lessons start with core language ideas, then move outward into async and arc
 
 ## Recent Additions
 
-The project now includes a **loading spinner** feature (June 2026) that demonstrates:
-- Custom widget creation in Ratatui
-- State management for animations
-- Integration across multiple screens
-- Testing of timing-based behavior
+Recent features that make good study material beyond the numbered lessons:
+
+- **Networks management** (Phase 4) — a complete vertical slice through the four layers: domain entity + `NetworkScope` value object + `can_be_deleted()` invariant, `NetworkRepository` trait, Bollard adapter (with per-network `inspect_network` enrichment), `NetworkService`, and the `NetworkList`/`NetworkDetails` screens including the disconnect-container flow
+- **Breadcrumb navigation** — a top bar rendered on every non-menu screen with a graceful truncation strategy (leading segments dropped first; current segment cut from the left)
+- **Homogeneous section design** — `Theme::section_block` centralizes the rounded bordered box + horizontal padding shared by the breadcrumb, main content, and action bar; cyan borders are reserved for focused/overlay widgets. Covered in [lesson 6](./06_terminal_ui_with_crossterm_and_ratatui.md)
+- **Loading spinner** (June 2026) — custom widget creation in Ratatui, state management for animations, integration across multiple screens, and testing of timing-based behavior

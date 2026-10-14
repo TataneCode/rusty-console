@@ -12,6 +12,8 @@ A terminal user interface (TUI) for managing Docker containers, volumes, images,
 - Confirmation dialogs for all destructive actions
 - Error popups with dismiss-on-keypress behaviour
 - Loading spinner with ASCII animation (`|/-\`) for async operations (start/stop/delete containers, pull images, etc.) - provides visual feedback during long operations
+- Breadcrumb navigation bar showing the current location (e.g. `Rusty - docker manager > Containers > web logs`), truncating leading segments first when space runs out
+- Homogeneous section design: breadcrumb, main content, and action bar all share the same rounded bordered box (`Theme::section_block`) with horizontal padding and a consistent colour theme; cyan borders are reserved for focused/overlay widgets
 
 ## Prerequisites
 
@@ -224,7 +226,7 @@ Presentation layer built on [ratatui](https://crates.io/crates/ratatui).
   - `presenter.rs` — holds display state (selected item, scroll offset, loaded data)
   - `view.rs` — pure ratatui widget composition functions
   - `actions.rs` — async wrappers around application services; called from `app.rs` event handlers
-- **`tui/common/`** — shared widgets, colour theme, and `keys.rs` which maps raw `KeyEvent`s to `AppAction` variants.
+- **`tui/common/`** — shared widgets, colour theme, and `keys.rs` which maps raw `KeyEvent`s to `AppAction` variants. The `Theme::section_block` helper centralizes the homogeneous section design (rounded full borders, white borders, horizontal padding) used by the breadcrumb bar, every content block, and the action bar.
 
 ### Data Flow
 
@@ -276,9 +278,9 @@ DockerClient
 
 | Crate | Version | Role |
 |-------|---------|------|
-| [ratatui](https://crates.io/crates/ratatui) | 0.29 | Terminal UI framework (widgets, layout, rendering) |
-| [crossterm](https://crates.io/crates/crossterm) | 0.28 | Cross-platform terminal backend for ratatui |
-| [bollard](https://crates.io/crates/bollard) | 0.18 | Async Docker Engine API client |
+| [ratatui](https://crates.io/crates/ratatui) | 0.30 | Terminal UI framework (widgets, layout, rendering) |
+| [crossterm](https://crates.io/crates/crossterm) | 0.29 | Cross-platform terminal backend for ratatui |
+| [bollard](https://crates.io/crates/bollard) | 0.21 | Async Docker Engine API client |
 | [tokio](https://crates.io/crates/tokio) | 1.43 | Async runtime (rt-multi-thread, macros, sync, time, process) |
 | [async-trait](https://crates.io/crates/async-trait) | 0.1 | Enables `async fn` in trait definitions |
 | [futures-util](https://crates.io/crates/futures-util) | 0.3 | `StreamExt` for consuming bollard log streams |
@@ -286,7 +288,7 @@ DockerClient
 | [thiserror](https://crates.io/crates/thiserror) | 2.0 | Derive-macro for typed error enums across layers |
 | [chrono](https://crates.io/crates/chrono) | 0.4 | `DateTime<Utc>` timestamps on domain entities |
 | [serde](https://crates.io/crates/serde) / [serde_json](https://crates.io/crates/serde_json) | 1.0 | Serialization support |
-| [mockall](https://crates.io/crates/mockall) *(dev)* | 0.13 | Auto-mock repository traits in unit tests |
+| [mockall](https://crates.io/crates/mockall) *(dev)* | 0.14 | Auto-mock repository traits in unit tests |
 | [tokio-test](https://crates.io/crates/tokio-test) *(dev)* | 0.4 | Async test helpers |
 
 ---

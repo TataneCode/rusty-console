@@ -108,6 +108,47 @@ Most visible strings live here:
 
 That makes the rendering code easier to read and keeps labels/help text in one place.
 
+## Breadcrumb navigation
+
+Every non-menu screen renders a breadcrumb bar at the top showing the current location, e.g. `Rusty - docker manager > Containers > web logs`.
+
+**File:** `src/04_presentation/tui/common/breadcrumb.rs`
+
+The interesting part is how it adapts to narrow terminals (`fit_breadcrumb_text`):
+
+- if the full path fits, it is rendered as-is
+- otherwise, **leading segments are dropped first** (`Rusty - docker manager > Containers` disappears before the current segment)
+- only when the current segment alone overflows is it cut **from the left**, prefixed with `...`, so the right end (usually the container name's distinctive suffix) stays readable
+
+That is a small but real lesson in graceful degradation: the UI degrades the least important information first.
+
+## Homogeneous section design
+
+The breadcrumb, the main content, and the action bar all share one visual style: a rounded bordered box with horizontal padding.
+
+**File:** `src/04_presentation/tui/common/theme.rs`
+
+```rust
+pub fn section_block(title: Option<&str>) -> Block<'static> {
+    let mut block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Self::border_style())
+        .padding(Padding::horizontal(1));
+    if let Some(title) = title {
+        block = block.title(Line::from(title.to_string()).style(Self::title_style()));
+    }
+    block
+}
+```
+
+Before this helper existed, each view built its own `Block` with slightly different borders (the action bar had only a top border, the breadcrumb used a different colour). Now:
+
+- **one factory** (`Theme::section_block`) defines the look of every section: `Borders::ALL`, `BorderType::Rounded` (rounded corners), and `Padding::horizontal(1)` to keep content off the borders
+- **colour hierarchy is uniform**: white borders for the three chrome sections; cyan (`selected_border_style`) is reserved for focused/overlay widgets (dialogs, selection lists)
+- **layout heights are symmetric**: the action bar box (`HELP_BAR_HEIGHT = 3`) matches the breadcrumb bar height, so the top and bottom chrome mirror each other
+
+The lesson: centralizing widget styling in the theme turns "design consistency" from a convention into a type-checked guarantee. A view cannot accidentally drift from the design system, because it does not build its own `Block` anymore.
+
 ## Loading Spinner Widget
 
 The project includes a custom spinner widget for async operations:
@@ -164,6 +205,8 @@ Key lessons from the spinner implementation:
 - `src/04_presentation/tui/app.rs` for setup and the main render loop
 - `src/04_presentation/tui/event.rs` for terminal events
 - `src/04_presentation/tui/common/resources.rs` for UI text
+- `src/04_presentation/tui/common/breadcrumb.rs` for the breadcrumb bar and its truncation strategy
+- `src/04_presentation/tui/common/theme.rs` for the shared section design (`section_block`)
 - `src/04_presentation/tui/common/spinner.rs` for the loading spinner widget
 - `src/04_presentation/tui/container/presenter.rs` for list/detail state enriched with live stats
 - `src/04_presentation/tui/*/view.rs` for Ratatui widget composition

@@ -1,7 +1,7 @@
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Block, BorderType},
+    widgets::{Block, BorderType, Padding},
 };
 
 pub struct Theme;
@@ -89,7 +89,8 @@ impl Theme {
     pub fn section_block(title: Option<&str>) -> Block<'static> {
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .border_style(Self::border_style());
+            .border_style(Self::border_style())
+            .padding(Padding::horizontal(1));
         if let Some(title) = title {
             block = block.title(Line::from(title.to_string()).style(Self::title_style()));
         }

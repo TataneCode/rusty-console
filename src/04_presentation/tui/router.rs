@@ -1,13 +1,12 @@
 //! Screen routing: maps user actions to screen-specific handlers.
 
 use crate::application::container::ContainerStatsEvent;
-use crate::presentation::tui::app::{format_bytes, App, PullOutcome, Screen};
+use crate::presentation::tui::app::{format_bytes, App, PendingImagePull, Screen};
 use crate::presentation::tui::common::{resources, AppAction, PopupMessage};
 use crate::presentation::tui::confirm::ConfirmAction;
 use crossterm::event::KeyCode;
 use std::collections::BTreeSet;
 use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::oneshot;
 
 impl App {
     pub(crate) async fn handle_action(&mut self, action: AppAction) {
@@ -870,20 +869,21 @@ impl App {
         // Set loading state - spinner will be shown
         self.stack_presenter.set_loading(true);
 
-        let (tx, rx) = oneshot::channel();
-        let actions = self.stack_actions.clone();
-
-        tokio::spawn(async move {
-            let result = actions.pull_images(&images).await;
-            let _ = tx.send(PullOutcome {
-                stack_name,
-                image_count: images.len(),
-                refresh_containers: refresh_stack_containers,
-                result,
-            });
-        });
-
-        self.pending_image_pull = Some(rx);
+        match self.stack_actions.pull_images(&images).await {
+            Ok(subscription) => {
+                self.stack_presenter.clear_pull_progress();
+                self.pending_image_pull = Some(PendingImagePull {
+                    subscription,
+                    stack_name,
+                    image_count: images.len(),
+                    refresh_containers: refresh_stack_containers,
+                });
+            }
+            Err(e) => {
+                self.stack_presenter.set_loading(false);
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+            }
+        }
     }
 
     pub(crate) fn has_modal_overlay(&self) -> bool {

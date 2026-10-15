@@ -1,5 +1,5 @@
 use crate::application::error::AppError;
-use crate::application::stack::{StackDto, StackService};
+use crate::application::stack::{ImagePullSubscription, StackDto, StackService};
 
 #[derive(Clone)]
 pub struct StackActions {
@@ -27,7 +27,10 @@ impl StackActions {
         self.service.remove_all(container_ids).await
     }
 
-    pub async fn pull_images(&self, image_refs: &[String]) -> Result<(), AppError> {
+    pub async fn pull_images(
+        &self,
+        image_refs: &[String],
+    ) -> Result<ImagePullSubscription, AppError> {
         self.service.pull_images(image_refs).await
     }
 }
@@ -36,6 +39,7 @@ impl StackActions {
 mod tests {
     use super::StackActions;
     use crate::application::stack::traits::MockStackRepository;
+    use crate::application::stack::ImagePullSubscription;
     use crate::application::stack::StackService;
     use crate::domain::stack::{Stack, StackName};
     use std::sync::Arc;
@@ -51,7 +55,8 @@ mod tests {
         mock.expect_start_all().returning(|_| Ok(()));
         mock.expect_stop_all().returning(|_| Ok(()));
         mock.expect_remove_all().returning(|_| Ok(()));
-        mock.expect_pull_images().returning(|_| Ok(()));
+        mock.expect_pull_images()
+            .returning(|_| Ok(ImagePullSubscription::completed(Ok(()))));
 
         let actions = StackActions::new(StackService::new(Arc::new(mock)));
         let ids = vec!["1".to_string(), "2".to_string()];

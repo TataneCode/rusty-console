@@ -1,5 +1,5 @@
 use crate::application::error::AppError;
-use crate::application::stack::dto::StackDto;
+use crate::application::stack::dto::{ImagePullSubscription, StackDto};
 use crate::application::stack::mapper::StackMapper;
 use crate::application::stack::traits::StackRepository;
 use std::sync::Arc;
@@ -30,7 +30,10 @@ impl StackService {
         self.repository.remove_all(container_ids).await
     }
 
-    pub async fn pull_images(&self, image_refs: &[String]) -> Result<(), AppError> {
+    pub async fn pull_images(
+        &self,
+        image_refs: &[String],
+    ) -> Result<ImagePullSubscription, AppError> {
         self.repository.pull_images(image_refs).await
     }
 }
@@ -38,6 +41,7 @@ impl StackService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::stack::dto::ImagePullSubscription;
     use crate::application::stack::traits::MockStackRepository;
     use crate::domain::stack::{Stack, StackName};
     use mockall::predicate::eq;
@@ -113,7 +117,7 @@ mod tests {
         let mut mock = MockStackRepository::new();
         mock.expect_pull_images()
             .withf(move |image_refs| image_refs == expected.as_slice())
-            .returning(|_| Ok(()));
+            .returning(|_| Ok(ImagePullSubscription::completed(Ok(()))));
 
         let service = StackService::new(Arc::new(mock));
         assert!(service.pull_images(&images).await.is_ok());

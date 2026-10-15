@@ -150,7 +150,7 @@ The application provides visual feedback during long-running async operations (c
   - Automatically shown when async operations start
   - Cleared when operations complete or fail
   - Special handling for exec shell: loading cleared before spawning the external process
-  - Image pull uses the spinner instead of a popup for consistent behaviour
+  - Image pull streams layer progress (`progressDetail.current/total` from the Docker image creation API via Bollard) and renders a `docker pull`-style progress bar with downloaded/total bytes and percentage; the spinner only shows before the first progress event
 - **Implementation**: `ui/common/spinner.rs`, integrated in all presenters and views
 
 ---

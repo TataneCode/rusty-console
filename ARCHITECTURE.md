@@ -151,6 +151,10 @@ The application provides visual feedback during long-running async operations (c
   - Cleared when operations complete or fail
   - Special handling for exec shell: loading cleared before spawning the external process
   - Image pull streams layer progress (`progressDetail.current/total` from the Docker image creation API via Bollard) and renders a `docker pull`-style progress bar with downloaded/total bytes and percentage; the spinner only shows before the first progress event
+  - Image pull is triggered from the **image details screen** only (`P` key) and targets exactly the image being viewed; pull events are drained before each frame draw so the screen refreshes as soon as the download completes
+  - Registry credentials are resolved from `~/.docker/config.json` (`auths` entries) in the infrastructure layer — same behavior as the Docker CLI, no in-app login; `credsStore`/`credHelpers` are left to the daemon
+  - Before pulling, the local `RepoDigests` are compared with the registry digest (`/distribution/.../json`); images already up to date are skipped and reported as such
+  - Dangling images (`<none>` repository) are refused with an explicit error before any network call
 - **Implementation**: `ui/common/spinner.rs`, integrated in all presenters and views
 
 ---

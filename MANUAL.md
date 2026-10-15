@@ -89,7 +89,21 @@ The image list shows all images with their usage status.
 | `c` | View image details |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune dangling images |
-| `P` | Pull images for the selected stack (shows a `docker pull`-style progress bar with downloaded/total bytes) |
+
+### Image details
+
+| Key | Action |
+|-----|--------|
+| `P` | Pull the latest version of this image (shows a `docker pull`-style progress bar with downloaded/total bytes) |
+| `r` | Refresh the image list and details |
+| `Esc` / `q` | Back to the image list |
+
+Notes on pulling:
+
+- Only the image currently displayed is pulled; already-up-to-date images (matching registry digest) are skipped and reported as such.
+- Registry credentials are read from `~/.docker/config.json`, like the Docker CLI — no in-app `docker login` is required.
+- Dangling images (`<none>` repository) cannot be pulled and show an explicit error.
+- When the pull completes, the details screen refreshes in place; if the image no longer exists locally, you are returned to the image list.
 
 ## Networks
 

@@ -56,7 +56,12 @@ jobs:
         run: |
           dotnet tool install --global wix
           cargo install cargo-wix --locked
-          cargo wix --toolset modern --target ${{ matrix.target }} --no-build --output target/${{ matrix.target }}/release/rusty_console-windows-x86_64.msi
+          # --migrate global is a no-op on already-v4 wxs files but restores
+          # missing WiX extension packages (WixToolset.UI.wixext is required by
+          # wix/main.wxs). Without it, `wix build` fails with "Could not build
+          # installer" and the whole release ends up with no assets.
+          cargo wix --toolset modern --migrate global --target ${{ matrix.target }} --no-build --output target/${{ matrix.target }}/release/rusty_console-windows-x86_64.msi
+          if (-Not (Test-Path "target/${{ matrix.target }}/release/rusty_console-windows-x86_64.msi")) { throw "MSI was not produced" }
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4

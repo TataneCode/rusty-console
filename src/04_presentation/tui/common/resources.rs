@@ -178,10 +178,6 @@ pub fn image_pull_result_message(pulled: &[String], up_to_date: &[String]) -> St
     format!("Image pull complete: {}", parts.join(", "))
 }
 
-pub fn image_pull_empty_message() -> String {
-    "No pullable images found".to_string()
-}
-
 pub fn image_pull_dangling_message() -> String {
     "Cannot pull a dangling image: it has no repository to pull from".to_string()
 }

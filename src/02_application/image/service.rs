@@ -313,6 +313,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_pull_images_pulls_when_image_missing_locally() {
+        let mut mock = MockImageRepository::new();
+        mock.expect_local_digest().returning(|_| Ok(None));
+        mock.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let service = ImageService::new(Arc::new(mock));
+        let mut subscription = service
+            .pull_images(&["nginx:latest".to_string()])
+            .await
+            .unwrap();
+        match subscription.try_recv().unwrap() {
+            ImagePullEvent::Completed(result) => {
+                assert_eq!(result.unwrap().pulled, vec!["nginx:latest".to_string()]);
+            }
+            _ => panic!("expected completed event"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_prune_images_returns_result() {
         let mut mock = MockImageRepository::new();
         mock.expect_prune().returning(|| {

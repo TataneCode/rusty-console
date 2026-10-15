@@ -150,13 +150,16 @@ impl ImageRepository for ImageAdapter {
     }
 
     async fn local_digest(&self, image_ref: &str) -> Result<Option<String>, AppError> {
-        let inspect = self
-            .docker
-            .inner()
-            .inspect_image(image_ref)
-            .await
-            .map_err(InfraError::from)
-            .map_err(AppError::from)?;
+        let inspect = match self.docker.inner().inspect_image(image_ref).await {
+            Ok(inspect) => inspect,
+            Err(error) => {
+                let message = error.to_string();
+                if message.contains("No such image") || message.contains("not found") {
+                    return Ok(None);
+                }
+                return Err(AppError::from(InfraError::from(error)));
+            }
+        };
         Ok(inspect
             .repo_digests
             .as_deref()

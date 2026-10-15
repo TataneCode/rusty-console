@@ -10,7 +10,7 @@
 
 Prebuilt installers are attached to every [GitHub Release](https://github.com/TataneCode/rusty-console/releases):
 
-- **Windows** — `rusty_console-windows-x86_64.msi`: per-user installer (no admin rights), installs to `%LOCALAPPDATA%\rusty_console` and adds it to the user `PATH`
+- **Windows** — `rusty_console-windows-x86_64.zip`: portable archive containing `rusty_console.exe`; extract it anywhere and add its folder to your `PATH` (or run it directly). The MSI installer was dropped in favor of this simpler, more reliable cross-compiled zip
 - **Linux (Debian/Ubuntu)** — `rusty_console-linux-x86_64-amd64.deb`: installs to `/usr/bin/rusty_console` with executable permissions
 - **Linux (RHEL/Fedora)** — `rusty_console-linux-x86_64.rpm`: installs to `/usr/bin/rusty_console` with executable permissions (`755`)
 - Plain binaries are also published for both platforms

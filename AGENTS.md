@@ -2,6 +2,16 @@
 
 This file provides guidance to AI coding agents when working with the rusty-console codebase. Agent roles and reusable procedures live in [AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) (`agents/`, `.agents/skills/`), project context in [CONTEXT.md](.legacy/CONTEXT.md), per-layer rules in [rules/](rules/).
 
+## Confirmation Gate (mandatory)
+
+Before performing ANY write action on this repository — creating or modifying files, creating a branch, committing, pushing, opening/updating a PR or merge request, merging — the agent MUST:
+
+1. Present a concise plan (target files, commands, intended Git actions).
+2. Ask the user for explicit confirmation.
+3. Wait for the answer before proceeding.
+
+This applies to every entry point: Vibe Code, Vibe CLI, and the Mistral CLI. Only pure read-only operations (reading, searching, running tests/lint/build checks) are exempt. Silence or an ambiguous answer means "do not proceed". Full procedure: [.agents/skills/confirmation-gate/SKILL.md](.agents/skills/confirmation-gate/SKILL.md).
+
 ## Project Overview
 
 A Rust TUI application for managing Docker containers, volumes, images, and stacks. Port of FancyContainerConsole (C#/.NET) to Rust.
@@ -286,7 +296,7 @@ src/
 - [AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
 - [CONTEXT.md](.legacy/CONTEXT.md) - General project context (pitch, stack, current state, resource map)
 - [rules/](rules/) - Per-layer DDD rules shared by agents and skills (domain, application, infrastructure, presentation, quality)
-- [.agents/skills/](.agents/skills/) - Reusable procedure skills (Agent Skills standard, one folder per skill, `SKILL.md` format; auto-discovered by Vibe Code and Vibe CLI)
+- [.agents/skills/](.agents/skills/) - Reusable procedure skills (Agent Skills standard, one folder per skill, `SKILL.md` format; auto-discovered by Vibe Code and Vibe CLI), including the mandatory [confirmation-gate](.agents/skills/confirmation-gate/SKILL.md)
 - [agents/](agents/) - Independent agent definitions invoking the skills
 
 ## Agent Routing

@@ -1,8 +1,8 @@
-use crate::application::stack::{StackContainerDto, StackDto};
+use crate::application::stack::{ImagePullProgress, StackContainerDto, StackDto};
 use crate::domain::stack::StackContainerState;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
-    split_content_area, truncate_text, Theme,
+    filter_prompt_title, render_action_bar, render_loading_bar, render_pull_progress_bar,
+    render_table, resources, split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -10,14 +10,19 @@ use ratatui::{
     Frame,
 };
 
+pub struct StackHelpBarState<'a> {
+    pub is_loading: bool,
+    pub spinner_char: &'a str,
+    pub pull_progress: Option<&'a ImagePullProgress>,
+}
+
 pub fn render_stack_list(
     frame: &mut Frame,
     area: Rect,
     stacks: &[&StackDto],
     state: &mut TableState,
     active_filter: Option<&str>,
-    is_loading: bool,
-    spinner_char: &str,
+    help_bar: StackHelpBarState<'_>,
 ) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -57,10 +62,21 @@ pub fn render_stack_list(
         state,
     );
 
-    if is_loading {
-        render_loading_bar(frame, help_area, spinner_char);
+    render_help_bar(frame, help_area, help_bar, resources::STACK_LIST_HELP);
+}
+
+fn render_help_bar(
+    frame: &mut Frame,
+    area: Rect,
+    help_bar: StackHelpBarState<'_>,
+    help_text: &str,
+) {
+    if let Some(progress) = help_bar.pull_progress {
+        render_pull_progress_bar(frame, area, progress);
+    } else if help_bar.is_loading {
+        render_loading_bar(frame, area, help_bar.spinner_char);
     } else {
-        render_action_bar(frame, help_area, resources::STACK_LIST_HELP);
+        render_action_bar(frame, area, help_text);
     }
 }
 
@@ -70,8 +86,7 @@ pub fn render_stack_containers(
     stack_name: &str,
     containers: &[StackContainerDto],
     state: &mut TableState,
-    is_loading: bool,
-    spinner_char: &str,
+    help_bar: StackHelpBarState<'_>,
 ) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -115,16 +130,12 @@ pub fn render_stack_containers(
         state,
     );
 
-    if is_loading {
-        render_loading_bar(frame, help_area, spinner_char);
-    } else {
-        render_action_bar(frame, help_area, resources::STACK_CONTAINERS_HELP);
-    }
+    render_help_bar(frame, help_area, help_bar, resources::STACK_CONTAINERS_HELP);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{render_stack_containers, render_stack_list};
+    use super::{render_stack_containers, render_stack_list, StackHelpBarState};
     use crate::application::stack::{StackContainerDto, StackDto};
     use crate::domain::stack::StackContainerState;
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
@@ -171,8 +182,11 @@ mod tests {
                     &items,
                     &mut state,
                     Some("app"),
-                    false,
-                    "|",
+                    StackHelpBarState {
+                        is_loading: false,
+                        spinner_char: "|",
+                        pull_progress: None,
+                    },
                 )
             })
             .unwrap();
@@ -199,8 +213,11 @@ mod tests {
                     "compose-app",
                     &containers,
                     &mut state,
-                    false,
-                    "|",
+                    StackHelpBarState {
+                        is_loading: false,
+                        spinner_char: "|",
+                        pull_progress: None,
+                    },
                 )
             })
             .unwrap();

@@ -139,7 +139,7 @@ Provides visual feedback during async operations (start/stop/delete containers, 
    - Spinner replaces entire help text during loading (not appended)
    - 200ms frame duration for smooth animation
    - Exec shell clears loading state before spawning (external process)
-   - Image pull uses spinner instead of popup for consistency
+   - Image pull streams layer progress from the Docker API and renders a `docker pull`-style progress bar in the help bar (spinner only before the first progress event)
    - Error state: loading cleared and error popup shown
 
 ### Usage Pattern in Async Handlers

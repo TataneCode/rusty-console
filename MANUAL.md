@@ -89,7 +89,7 @@ The image list shows all images with their usage status.
 | `c` | View image details |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune dangling images |
-| `P` | Pull images for the selected stack |
+| `P` | Pull images for the selected stack (shows a `docker pull`-style progress bar with downloaded/total bytes) |
 
 ## Networks
 

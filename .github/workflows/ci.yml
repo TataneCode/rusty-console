@@ -82,3 +82,49 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
+
+  package-linux:
+    name: Package (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Build RPM
+        run: |
+          cargo install cargo-generate-rpm --locked
+          cargo generate-rpm --target x86_64-unknown-linux-gnu -o target/x86_64-unknown-linux-gnu/release/rusty_console-linux-x86_64.rpm
+          test -f target/x86_64-unknown-linux-gnu/release/rusty_console-linux-x86_64.rpm
+      - name: Build DEB
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb --target x86_64-unknown-linux-gnu --no-build -o target/x86_64-unknown-linux-gnu/release/rusty_console-linux-x86_64-amd64.deb
+          test -f target/x86_64-unknown-linux-gnu/release/rusty_console-linux-x86_64-amd64.deb
+
+  package-windows:
+    name: Package (Windows MSI)
+    runs-on: windows-2025-vs2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release --target x86_64-pc-windows-msvc
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix
+          $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
+          wix build -arch x64 `
+            -ext WixToolset.UI.wixext `
+            -d Version=0.0.0 `
+            -d CargoTargetBinDir=target/x86_64-pc-windows-msvc/release/ `
+            -o target/x86_64-pc-windows-msvc/release/rusty_console-windows-x86_64.msi `
+            wix/main.wxs
+          if (-Not (Test-Path "target/x86_64-pc-windows-msvc/release/rusty_console-windows-x86_64.msi")) { throw "MSI was not produced" }

@@ -124,7 +124,7 @@ Build locally (Windows):
 cargo build --release --target x86_64-pc-windows-msvc
 dotnet tool install --global wix
 cargo install cargo-wix --locked
-cargo wix --toolset modern --no-build -o rusty_console.msi
+cargo wix --toolset modern --migrate global --no-build -o rusty_console.msi
 ```
 
 `--no-build` reuses the binary already compiled — in CI the workflow builds once and packages once.
@@ -142,7 +142,7 @@ rusty_console
 The workflow runs only on `v*` tags. Each matrix entry builds its target, then packages the native installers before upload:
 
 - **Linux job**: `cargo install cargo-generate-rpm` → `cargo generate-rpm`, and `cargo install cargo-deb` → `cargo deb --no-build` → uploads the plain binary, the `.rpm`, and the `.deb`.
-- **Windows job**: `dotnet tool install --global wix` (WiX v4 toolchain) → `cargo install cargo-wix` → `cargo wix --toolset modern --no-build` → uploads the binary and the `.msi`.
+- **Windows job**: `dotnet tool install --global wix` (WiX v4 toolchain) → `cargo install cargo-wix` → `cargo wix --toolset modern --migrate global --no-build` → uploads the binary and the `.msi`. `--migrate global` is a no-op on already-v4 `.wxs` files, but it restores the missing WiX extension packages (e.g. `WixToolset.UI.wixext` required by `ui:WixUI`) — without it `wix build` fails and the release ships without assets.
 
 The `release` job downloads every artifact and attaches them all to the GitHub Release (`softprops/action-gh-release`), so a tag like `v0.1.0` publishes:
 

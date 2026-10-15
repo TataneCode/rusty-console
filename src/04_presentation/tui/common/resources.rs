@@ -60,9 +60,9 @@ pub const NETWORK_DETAILS_HELP: &str =
 pub const IMAGE_TITLE: &str = "Images";
 pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use", "Created"];
 pub const IMAGE_LIST_HELP: &str =
-    " q: Quit | /: Filter | j/k: Navigate | d: Delete | c: Details | P: Pull Images | r: Refresh | X: Prune | Esc: Back ";
+    " q: Quit | /: Filter | j/k: Navigate | d: Delete | c: Details | r: Refresh | X: Prune | Esc: Back ";
 pub const IMAGE_DETAILS_TITLE: &str = " Image Details ";
-pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back ";
+pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back | P: Pull Image | r: Refresh ";
 
 pub const STACK_TITLE: &str = "Stacks";
 pub const STACK_HEADERS: [&str; 3] = ["Stack", "Containers", "Running"];
@@ -180,6 +180,10 @@ pub fn image_pull_result_message(pulled: &[String], up_to_date: &[String]) -> St
 
 pub fn image_pull_empty_message() -> String {
     "No pullable images found".to_string()
+}
+
+pub fn image_pull_dangling_message() -> String {
+    "Cannot pull a dangling image: it has no repository to pull from".to_string()
 }
 
 #[cfg(test)]

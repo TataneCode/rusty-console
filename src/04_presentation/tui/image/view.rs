@@ -89,7 +89,12 @@ pub fn render_image_list(
     }
 }
 
-pub fn render_image_details(frame: &mut Frame, area: Rect, image: &ImageDto) {
+pub fn render_image_details(
+    frame: &mut Frame,
+    area: Rect,
+    image: &ImageDto,
+    help_bar: ImageHelpBarState<'_>,
+) {
     let [content_area, help_area] = split_content_area(area);
 
     let details = format!(
@@ -133,7 +138,13 @@ pub fn render_image_details(frame: &mut Frame, area: Rect, image: &ImageDto) {
 
     frame.render_widget(details_widget, content_area);
 
-    render_action_bar(frame, help_area, resources::IMAGE_DETAILS_HELP);
+    if let Some(progress) = help_bar.pull_progress {
+        render_pull_progress_bar(frame, help_area, progress);
+    } else if help_bar.is_loading {
+        render_loading_bar(frame, help_area, help_bar.spinner_char);
+    } else {
+        render_action_bar(frame, help_area, resources::IMAGE_DETAILS_HELP);
+    }
 }
 
 #[cfg(test)]
@@ -204,7 +215,18 @@ mod tests {
         let image = make_image();
 
         terminal
-            .draw(|frame| render_image_details(frame, frame.area(), &image))
+            .draw(|frame| {
+                render_image_details(
+                    frame,
+                    frame.area(),
+                    &image,
+                    ImageHelpBarState {
+                        is_loading: false,
+                        spinner_char: "|",
+                        pull_progress: None,
+                    },
+                )
+            })
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());

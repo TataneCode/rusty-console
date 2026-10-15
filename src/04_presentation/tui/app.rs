@@ -324,7 +324,16 @@ impl App {
             }
             Screen::ImageDetails => {
                 if let Some(image) = &self.image_presenter.selected_image {
-                    render_image_details(frame, content_area, image);
+                    render_image_details(
+                        frame,
+                        content_area,
+                        image,
+                        ImageHelpBarState {
+                            is_loading: self.image_presenter.is_loading(),
+                            spinner_char,
+                            pull_progress: self.image_presenter.pull_progress.as_ref(),
+                        },
+                    );
                 }
             }
             Screen::NetworkList => {
@@ -723,6 +732,9 @@ impl App {
         match result {
             Ok(outcome) => {
                 self.load_images().await;
+                if self.screen == Screen::ImageDetails {
+                    self.restore_selected_image_details();
+                }
                 self.popup_message = Some(PopupMessage::Info(
                     resources::image_pull_result_message(&outcome.pulled, &outcome.up_to_date),
                 ));
@@ -1614,7 +1626,7 @@ mod tests {
 
         app.screen = Screen::ImageDetails;
         app.image_presenter.set_details(make_image_dto(true));
-        app.handle_details_action(AppAction::Back);
+        app.handle_image_details_action(AppAction::Back).await;
         assert_eq!(app.screen, Screen::ImageList);
 
         app.screen = Screen::VolumeDetails;
@@ -2252,7 +2264,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_image_list_pull_images_shows_progress_and_result() {
+    async fn test_image_details_pull_images_shows_progress_and_result() {
         let mut image_repo = MockImageRepository::new();
         image_repo
             .expect_get_all()
@@ -2277,7 +2289,9 @@ mod tests {
         );
         app.screen = Screen::ImageList;
         app.load_images().await;
-        app.handle_image_list_action(AppAction::PullImages).await;
+        app.handle_image_list_action(AppAction::ViewDetails).await;
+        assert_eq!(app.screen, Screen::ImageDetails);
+        app.handle_image_details_action(AppAction::PullImages).await;
         assert!(app.image_presenter.is_loading());
         app.drain_image_pull().await;
         assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
@@ -2285,10 +2299,13 @@ mod tests {
         assert!(message.contains("pulled 1 image(s)"), "{message}");
         assert!(!app.image_presenter.is_loading());
         assert!(app.image_presenter.pull_progress.is_none());
+        assert_eq!(app.screen, Screen::ImageDetails);
+        let details = app.image_presenter.selected_image.as_ref().unwrap();
+        assert_eq!(details.full_name, "nginx:latest");
     }
 
     #[tokio::test]
-    async fn test_image_list_pull_images_up_to_date_reports_no_download() {
+    async fn test_image_details_pull_images_up_to_date_reports_no_download() {
         let mut image_repo = MockImageRepository::new();
         image_repo
             .expect_get_all()
@@ -2308,10 +2325,41 @@ mod tests {
         );
         app.screen = Screen::ImageList;
         app.load_images().await;
-        app.handle_image_list_action(AppAction::PullImages).await;
+        app.handle_image_list_action(AppAction::ViewDetails).await;
+        app.handle_image_details_action(AppAction::PullImages).await;
         app.drain_image_pull().await;
         let message = app.popup_message.as_ref().unwrap().as_str();
         assert!(message.contains("1 already up to date"), "{message}");
+    }
+
+    #[tokio::test]
+    async fn test_image_details_pull_dangling_image_shows_error_without_network_call() {
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_get_all().returning(|| {
+            Ok(vec![Image::new(
+                ImageId::new("sha256:abc").unwrap(),
+                "<none>",
+                "latest",
+                ImageSize::new(1_000_000),
+                Utc::now(),
+            )])
+        });
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.load_images().await;
+        app.handle_image_list_action(AppAction::ViewDetails).await;
+        app.handle_image_details_action(AppAction::PullImages).await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
+        let message = app.popup_message.as_ref().unwrap().as_str();
+        assert!(message.contains("dangling"), "{message}");
+        assert!(!app.image_presenter.is_loading());
+        assert!(app.pending_image_pull.is_none());
     }
 
     #[tokio::test]

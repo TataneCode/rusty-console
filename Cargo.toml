@@ -8,6 +8,8 @@ description = "A Docker TUI console built with Rust, Ratatui and Bollard"
 repository = "https://github.com/TataneCode/rusty-console"
 
 [dependencies]
+# Docker registry auth decoding (already in Cargo.lock via bollard)
+base64 = "0.22"
 # TUI Framework
 ratatui = "0.30"
 crossterm = "0.29"

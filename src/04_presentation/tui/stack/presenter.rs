@@ -1,4 +1,4 @@
-use crate::application::stack::{ImagePullProgress, StackContainerDto, StackDto};
+use crate::application::stack::{StackContainerDto, StackDto};
 use crate::presentation::tui::common::{FilterState, TableSelection};
 
 pub struct StackPresenter {
@@ -9,7 +9,6 @@ pub struct StackPresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
-    pub pull_progress: Option<ImagePullProgress>,
 }
 
 pub fn filter_stacks<'a>(stacks: &'a [StackDto], filter: &str) -> Vec<&'a StackDto> {
@@ -34,7 +33,6 @@ impl StackPresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
-            pull_progress: None,
         }
     }
 
@@ -54,21 +52,11 @@ impl StackPresenter {
 
     pub fn set_loading(&mut self, loading: bool) {
         self.loading = loading;
-        if !loading {
-            self.pull_progress = None;
-        }
+        if !loading {}
     }
 
     pub fn is_loading(&self) -> bool {
         self.loading
-    }
-
-    pub fn set_pull_progress(&mut self, progress: ImagePullProgress) {
-        self.pull_progress = Some(progress);
-    }
-
-    pub fn clear_pull_progress(&mut self) {
-        self.pull_progress = None;
     }
 
     pub fn filtered_stacks(&self) -> Vec<&StackDto> {
@@ -185,14 +173,6 @@ mod tests {
         ]
     }
 
-    fn make_progress() -> ImagePullProgress {
-        ImagePullProgress {
-            image: "nginx:latest".to_string(),
-            downloaded_bytes: 350,
-            total_bytes: 500,
-        }
-    }
-
     #[test]
     fn test_new_empty() {
         let p = StackPresenter::new();
@@ -204,7 +184,6 @@ mod tests {
         assert!(p.error.is_none());
         assert!(p.filter.value().is_empty());
         assert!(!p.filter.is_active());
-        assert!(p.pull_progress.is_none());
     }
 
     #[test]
@@ -398,29 +377,5 @@ mod tests {
         let p = StackPresenter::new();
         assert!(!p.is_loading());
         assert!(!p.loading);
-    }
-
-    #[test]
-    fn test_set_loading_false_clears_pull_progress() {
-        let mut p = StackPresenter::new();
-        p.set_loading(true);
-        p.set_pull_progress(make_progress());
-        assert!(p.pull_progress.is_some());
-
-        p.set_loading(false);
-        assert!(p.pull_progress.is_none());
-    }
-
-    #[test]
-    fn test_set_pull_progress_stores_latest_snapshot() {
-        let mut p = StackPresenter::new();
-        p.set_pull_progress(make_progress());
-        let updated = ImagePullProgress {
-            image: "postgres:16".to_string(),
-            downloaded_bytes: 100,
-            total_bytes: 400,
-        };
-        p.set_pull_progress(updated.clone());
-        assert_eq!(p.pull_progress, Some(updated));
     }
 }

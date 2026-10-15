@@ -62,15 +62,15 @@ pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use
 pub const IMAGE_LIST_HELP: &str =
     " q: Quit | /: Filter | j/k: Navigate | d: Delete | c: Details | r: Refresh | X: Prune | Esc: Back ";
 pub const IMAGE_DETAILS_TITLE: &str = " Image Details ";
-pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back ";
+pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back | P: Pull Image | r: Refresh ";
 
 pub const STACK_TITLE: &str = "Stacks";
 pub const STACK_HEADERS: [&str; 3] = ["Stack", "Containers", "Running"];
 pub const STACK_LIST_HELP: &str =
-    " q: Quit | /: Filter | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | P: Pull Images | r: Refresh | Esc: Back ";
+    " q: Quit | /: Filter | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | r: Refresh | Esc: Back ";
 pub const STACK_CONTAINER_HEADERS: [&str; 5] = ["Name", "Image", "State", "Status", "Ports"];
 pub const STACK_CONTAINERS_HELP: &str =
-    " Esc/q: Back | j/k: Navigate | e: Exec | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | P: Pull Images | d: Delete | r: Refresh ";
+    " Esc/q: Back | j/k: Navigate | e: Exec | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | d: Delete | r: Refresh ";
 
 pub const LABEL_ID: &str = "ID:";
 pub const LABEL_NAME: &str = "Name:";
@@ -164,16 +164,22 @@ pub fn prune_networks_result_message(deleted_count: u32) -> String {
     format!("Pruned {deleted_count} network(s)")
 }
 
-pub fn stack_pull_pending_message(stack_name: &str) -> String {
-    format!("Pulling images for stack {stack_name}…")
+pub fn image_pull_result_message(pulled: &[String], up_to_date: &[String]) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !pulled.is_empty() {
+        parts.push(format!("pulled {} image(s)", pulled.len()));
+    }
+    if !up_to_date.is_empty() {
+        parts.push(format!("{} already up to date", up_to_date.len()));
+    }
+    if parts.is_empty() {
+        return "No images to pull".to_string();
+    }
+    format!("Image pull complete: {}", parts.join(", "))
 }
 
-pub fn stack_pull_result_message(stack_name: &str, image_count: usize) -> String {
-    format!("Pulled {image_count} image(s) for stack {stack_name}")
-}
-
-pub fn stack_pull_empty_message(stack_name: &str) -> String {
-    format!("No pullable images found for stack {stack_name}")
+pub fn image_pull_dangling_message() -> String {
+    "Cannot pull a dangling image: it has no repository to pull from".to_string()
 }
 
 #[cfg(test)]
@@ -217,17 +223,5 @@ mod tests {
     #[test]
     fn test_prune_networks_result_message_omits_freed_space() {
         assert_eq!(prune_networks_result_message(2), "Pruned 2 network(s)");
-    }
-
-    #[test]
-    fn test_stack_pull_messages_format_result() {
-        assert_eq!(
-            stack_pull_result_message("compose-app", 2),
-            "Pulled 2 image(s) for stack compose-app"
-        );
-        assert_eq!(
-            stack_pull_empty_message("compose-app"),
-            "No pullable images found for stack compose-app"
-        );
     }
 }

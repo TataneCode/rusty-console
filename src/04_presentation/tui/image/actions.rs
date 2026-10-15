@@ -1,5 +1,5 @@
 use crate::application::error::AppError;
-use crate::application::image::{ImageDto, ImageService};
+use crate::application::image::{ImageDto, ImagePullSubscription, ImageService};
 use crate::application::shared::PruneResultDto;
 
 pub struct ImageActions {
@@ -21,6 +21,13 @@ impl ImageActions {
 
     pub async fn prune_images(&self) -> Result<PruneResultDto, AppError> {
         self.service.prune_images().await
+    }
+
+    pub async fn pull_images(
+        &self,
+        image_refs: &[String],
+    ) -> Result<ImagePullSubscription, AppError> {
+        self.service.pull_images(image_refs).await
     }
 }
 

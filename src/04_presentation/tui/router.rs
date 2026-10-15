@@ -5,7 +5,7 @@ use crate::presentation::tui::app::{format_bytes, App, PendingImagePull, Screen}
 use crate::presentation::tui::common::{resources, AppAction, PopupMessage};
 use crate::presentation::tui::confirm::ConfirmAction;
 use crossterm::event::KeyCode;
-use std::collections::BTreeSet;
+
 use tokio::sync::mpsc::error::TryRecvError;
 
 impl App {
@@ -66,7 +66,7 @@ impl App {
             Screen::VolumeList => self.handle_volume_list_action(action).await,
             Screen::VolumeDetails => self.handle_details_action(action),
             Screen::ImageList => self.handle_image_list_action(action).await,
-            Screen::ImageDetails => self.handle_details_action(action),
+            Screen::ImageDetails => self.handle_image_details_action(action).await,
             Screen::NetworkList => self.handle_network_list_action(action).await,
             Screen::NetworkDetails => self.handle_network_details_action(action).await,
             Screen::StackList => self.handle_stack_list_action(action).await,
@@ -251,13 +251,53 @@ impl App {
                     self.volume_presenter.clear_details();
                     self.screen = Screen::VolumeList;
                 }
-                Screen::ImageDetails => {
-                    self.image_presenter.clear_details();
-                    self.screen = Screen::ImageList;
-                }
                 _ => {}
             },
             _ => {}
+        }
+    }
+
+    pub(crate) async fn handle_image_details_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::Quit | AppAction::Back => {
+                self.image_presenter.clear_details();
+                self.image_presenter.clear_pull_progress();
+                self.screen = Screen::ImageList;
+            }
+            AppAction::Refresh => {
+                self.load_images().await;
+                self.restore_selected_image_details();
+            }
+            AppAction::PullImages => self.pull_selected_image().await,
+            _ => {}
+        }
+    }
+
+    pub(crate) fn restore_selected_image_details(&mut self) {
+        let full_name = self
+            .image_presenter
+            .selected_image
+            .as_ref()
+            .map(|image| image.full_name.clone());
+        match full_name {
+            Some(full_name) => {
+                let updated = self
+                    .image_presenter
+                    .images
+                    .iter()
+                    .find(|image| image.full_name == full_name)
+                    .cloned();
+                if let Some(updated) = updated {
+                    self.image_presenter.set_details(updated);
+                } else {
+                    self.image_presenter.clear_details();
+                    self.screen = Screen::ImageList;
+                }
+            }
+            None => {
+                self.image_presenter.clear_details();
+                self.screen = Screen::ImageList;
+            }
         }
     }
 
@@ -321,6 +361,33 @@ impl App {
                 self.image_presenter.activate_filter();
             }
             _ => {}
+        }
+    }
+
+    async fn pull_selected_image(&mut self) {
+        if self.pending_image_pull.is_some() {
+            return;
+        }
+        let Some(image) = self.image_presenter.selected_image().cloned() else {
+            return;
+        };
+        if image.is_dangling || image.repository == "<none>" {
+            self.popup_message = Some(PopupMessage::Error(
+                resources::image_pull_dangling_message().to_string(),
+            ));
+            return;
+        }
+        let image_refs = vec![image.full_name.clone()];
+        self.image_presenter.set_loading(true);
+        match self.image_actions.pull_images(&image_refs).await {
+            Ok(subscription) => {
+                self.image_presenter.clear_pull_progress();
+                self.pending_image_pull = Some(PendingImagePull { subscription });
+            }
+            Err(e) => {
+                self.image_presenter.set_loading(false);
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+            }
         }
     }
 
@@ -733,7 +800,6 @@ impl App {
                     self.stack_presenter.set_loading(false);
                 }
             }
-            AppAction::PullImages => self.pull_selected_stack_images(false).await,
             AppAction::Refresh => self.load_stacks().await,
             AppAction::ActivateFilter => {
                 self.stack_presenter.activate_filter();
@@ -829,60 +895,9 @@ impl App {
             AppAction::RemoveAll if !self.stack_presenter.stack_containers.is_empty() => {
                 self.confirm_dialog = Some((ConfirmAction::StackContainersRemoveAll, true));
             }
-            AppAction::PullImages => self.pull_selected_stack_images(true).await,
             AppAction::Refresh => self.refresh_stack_containers().await,
             AppAction::Exec => self.open_exec_shell_dialog(),
             _ => {}
-        }
-    }
-
-    fn selected_stack_pull_data(&self) -> Option<(String, Vec<String>)> {
-        let stack = self.stack_presenter.selected_stack()?;
-        let images = stack
-            .containers
-            .iter()
-            .map(|container| container.image.clone())
-            .filter(|image| !image.trim().is_empty() && image.as_str() != "unknown")
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-
-        Some((stack.name.clone(), images))
-    }
-
-    async fn pull_selected_stack_images(&mut self, refresh_stack_containers: bool) {
-        if self.pending_image_pull.is_some() {
-            return;
-        }
-
-        let Some((stack_name, images)) = self.selected_stack_pull_data() else {
-            return;
-        };
-
-        if images.is_empty() {
-            self.popup_message = Some(PopupMessage::Info(resources::stack_pull_empty_message(
-                &stack_name,
-            )));
-            return;
-        }
-
-        // Set loading state - spinner will be shown
-        self.stack_presenter.set_loading(true);
-
-        match self.stack_actions.pull_images(&images).await {
-            Ok(subscription) => {
-                self.stack_presenter.clear_pull_progress();
-                self.pending_image_pull = Some(PendingImagePull {
-                    subscription,
-                    stack_name,
-                    image_count: images.len(),
-                    refresh_containers: refresh_stack_containers,
-                });
-            }
-            Err(e) => {
-                self.stack_presenter.set_loading(false);
-                self.popup_message = Some(PopupMessage::Error(e.to_string()));
-            }
         }
     }
 

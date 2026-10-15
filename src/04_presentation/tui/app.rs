@@ -1,5 +1,5 @@
 use crate::application::container::{ContainerDto, ContainerStatsSubscription};
-use crate::application::stack::{ImagePullEvent, ImagePullSubscription};
+use crate::application::image::{ImagePullEvent, ImagePullOutcome, ImagePullSubscription};
 use crate::presentation::tui::common::{
     map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
     render_expanded_log_line, render_main_menu, render_popup_message, render_selection_dialog,
@@ -16,7 +16,8 @@ use crate::presentation::tui::exec::{
     ExecCommandResult, ExecRefreshTarget, ExecShellDialog, PendingExec, EXEC_SHELL_OPTIONS,
 };
 use crate::presentation::tui::image::{
-    filter_images, render_image_details, render_image_list, ImageActions, ImagePresenter,
+    filter_images, render_image_details, render_image_list, ImageActions, ImageHelpBarState,
+    ImagePresenter,
 };
 use crate::presentation::tui::network::{
     filter_networks, render_network_details, render_network_list, NetworkActions, NetworkPresenter,
@@ -81,15 +82,6 @@ pub struct App {
 
 pub(crate) struct PendingImagePull {
     pub(crate) subscription: ImagePullSubscription,
-    pub(crate) stack_name: String,
-    pub(crate) image_count: usize,
-    pub(crate) refresh_containers: bool,
-}
-
-pub(crate) struct PullFinality {
-    pub(crate) stack_name: String,
-    pub(crate) image_count: usize,
-    pub(crate) refresh_containers: bool,
 }
 
 fn record_cleanup_error(cleanup_error: &mut Option<io::Error>, result: io::Result<()>) {
@@ -315,6 +307,7 @@ impl App {
                 let filter = presenter.filter.value().to_string();
                 let images = &presenter.images;
                 let selection_state = &mut presenter.selection.state;
+                let pull_progress = presenter.pull_progress.as_ref();
                 let filtered = filter_images(images, &filter);
                 render_image_list(
                     frame,
@@ -322,8 +315,11 @@ impl App {
                     &filtered,
                     selection_state,
                     active_filter.as_deref(),
-                    is_loading,
-                    spinner_char,
+                    ImageHelpBarState {
+                        is_loading,
+                        spinner_char,
+                        pull_progress,
+                    },
                 );
             }
             Screen::ImageDetails => {
@@ -377,7 +373,6 @@ impl App {
                     StackHelpBarState {
                         is_loading,
                         spinner_char,
-                        pull_progress: presenter.pull_progress.as_ref(),
                     },
                 );
             }
@@ -398,7 +393,6 @@ impl App {
                     StackHelpBarState {
                         is_loading,
                         spinner_char,
-                        pull_progress: self.stack_presenter.pull_progress.as_ref(),
                     },
                 );
             }
@@ -702,12 +696,12 @@ impl App {
         let Some(pending) = self.pending_image_pull.as_mut() else {
             return;
         };
-
-        let mut outcome: Option<Result<(), crate::application::error::AppError>> = None;
+        let mut outcome: Option<Result<ImagePullOutcome, crate::application::error::AppError>> =
+            None;
         loop {
             match pending.subscription.try_recv() {
                 Ok(ImagePullEvent::Progress(progress)) => {
-                    self.stack_presenter.set_pull_progress(progress);
+                    self.image_presenter.set_pull_progress(progress);
                 }
                 Ok(ImagePullEvent::Completed(result)) => {
                     outcome = Some(result);
@@ -722,26 +716,15 @@ impl App {
                 }
             }
         }
-
         let Some(result) = outcome else {
             return;
         };
-
-        let PullFinality {
-            stack_name,
-            image_count,
-            refresh_containers,
-        } = self.take_pending_image_pull();
-
+        self.take_pending_image_pull();
         match result {
-            Ok(()) => {
-                if refresh_containers {
-                    self.refresh_stack_containers().await;
-                } else {
-                    self.load_stacks().await;
-                }
+            Ok(outcome) => {
+                self.load_images().await;
                 self.popup_message = Some(PopupMessage::Info(
-                    resources::stack_pull_result_message(&stack_name, image_count),
+                    resources::image_pull_result_message(&outcome.pulled, &outcome.up_to_date),
                 ));
             }
             Err(e) => {
@@ -750,17 +733,10 @@ impl App {
         }
     }
 
-    fn take_pending_image_pull(&mut self) -> PullFinality {
-        let pending = self.pending_image_pull.take();
-        self.stack_presenter.set_loading(false);
-        let (stack_name, image_count, refresh_containers) = pending
-            .map(|p| (p.stack_name, p.image_count, p.refresh_containers))
-            .unwrap_or_default();
-        PullFinality {
-            stack_name,
-            image_count,
-            refresh_containers,
-        }
+    fn take_pending_image_pull(&mut self) {
+        self.pending_image_pull.take();
+        self.image_presenter.clear_pull_progress();
+        self.image_presenter.set_loading(false);
     }
 
     fn selected_exec_target(&self) -> Option<(String, ExecRefreshTarget)> {
@@ -921,14 +897,14 @@ mod tests {
         ContainerStatsSubscription, ContainerStatsUpdate,
     };
     use crate::application::image::traits::MockImageRepository;
-    use crate::application::image::{ImageDto, ImageService};
+    use crate::application::image::{
+        ImageDto, ImagePullOutcome, ImagePullSubscription, ImageService,
+    };
     use crate::application::network::traits::MockNetworkRepository;
     use crate::application::network::{NetworkContainerDto, NetworkDto, NetworkService};
     use crate::application::shared::PruneResultDto;
     use crate::application::stack::traits::MockStackRepository;
-    use crate::application::stack::{
-        ImagePullSubscription, StackContainerDto, StackDto, StackService,
-    };
+    use crate::application::stack::{StackContainerDto, StackDto, StackService};
     use crate::application::volume::traits::MockVolumeRepository;
     use crate::application::volume::{VolumeDto, VolumeService};
     use crate::domain::container::ContainerState;
@@ -2276,6 +2252,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_image_list_pull_images_shows_progress_and_result() {
+        let mut image_repo = MockImageRepository::new();
+        image_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_image()]));
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_registry_digest().returning(|_| Ok(None));
+        image_repo
+            .expect_pull_images()
+            .withf(|image_refs| *image_refs == ["nginx:latest".to_string()])
+            .returning(|_| {
+                Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                    pulled: vec!["nginx:latest".to_string()],
+                    up_to_date: vec![],
+                })))
+            });
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.load_images().await;
+        app.handle_image_list_action(AppAction::PullImages).await;
+        assert!(app.image_presenter.is_loading());
+        app.drain_image_pull().await;
+        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
+        let message = app.popup_message.as_ref().unwrap().as_str();
+        assert!(message.contains("pulled 1 image(s)"), "{message}");
+        assert!(!app.image_presenter.is_loading());
+        assert!(app.image_presenter.pull_progress.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_image_list_pull_images_up_to_date_reports_no_download() {
+        let mut image_repo = MockImageRepository::new();
+        image_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_image()]));
+        image_repo
+            .expect_local_digest()
+            .returning(|_| Ok(Some("sha256:aaa".to_string())));
+        image_repo
+            .expect_registry_digest()
+            .returning(|_| Ok(Some("sha256:aaa".to_string())));
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.load_images().await;
+        app.handle_image_list_action(AppAction::PullImages).await;
+        app.drain_image_pull().await;
+        let message = app.popup_message.as_ref().unwrap().as_str();
+        assert!(message.contains("1 already up to date"), "{message}");
+    }
+
+    #[tokio::test]
     async fn test_toggle_pause_restart_and_stack_actions() {
         let mut container_repo = MockContainerRepository::new();
         container_repo.expect_start().returning(|_| Ok(()));
@@ -2287,20 +2326,17 @@ mod tests {
         let mut stack_repo = MockStackRepository::new();
         stack_repo
             .expect_get_all()
-            .times(5)
+            .times(4)
             .returning(|| Ok(vec![make_stack(1)]));
         stack_repo.expect_stop_all().times(2).returning(|_| Ok(()));
-        let expected_images = vec!["nginx:latest".to_string(), "postgres:16".to_string()];
-        stack_repo
-            .expect_pull_images()
-            .times(2)
-            .withf(move |images| images == expected_images.as_slice())
-            .returning(|_| Ok(ImagePullSubscription::completed(Ok(()))));
+        stack_repo.expect_start_all().returning(|_| Ok(()));
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_get_all().returning(|| Ok(vec![]));
 
         let mut app = build_app(
             container_repo,
             MockVolumeRepository::new(),
-            MockImageRepository::new(),
+            image_repo,
             stack_repo,
             MockNetworkRepository::new(),
         );
@@ -2324,19 +2360,6 @@ mod tests {
         assert_eq!(app.screen, Screen::StackContainers);
 
         app.screen = Screen::StackList;
-        app.handle_stack_list_action(AppAction::PullImages).await;
-        // Loading spinner is shown instead of popup
-        assert!(app.stack_presenter.is_loading());
-        tokio::task::yield_now().await;
-        app.drain_image_pull().await;
-        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
-        assert!(app
-            .popup_message
-            .as_ref()
-            .unwrap()
-            .as_str()
-            .contains("Pulled 2 image(s) for stack compose-app"));
-        app.popup_message = None;
         app.handle_stack_list_action(AppAction::StartStop).await;
         app.handle_stack_list_action(AppAction::StopAll).await;
         app.handle_stack_list_action(AppAction::ActivateFilter)
@@ -2348,14 +2371,6 @@ mod tests {
         app.stack_presenter
             .set_stack_containers(stack.containers.clone());
         app.screen = Screen::StackContainers;
-        app.handle_stack_containers_action(AppAction::PullImages)
-            .await;
-        // Loading spinner is shown instead of popup
-        assert!(app.stack_presenter.is_loading());
-        tokio::task::yield_now().await;
-        app.drain_image_pull().await;
-        assert!(matches!(app.popup_message, Some(PopupMessage::Info(_))));
-        app.popup_message = None;
         app.handle_stack_containers_action(AppAction::StartStop)
             .await;
         app.handle_stack_containers_action(AppAction::Delete).await;

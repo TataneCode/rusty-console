@@ -1,5 +1,6 @@
 use crate::application::error::AppError;
-use crate::application::image::dto::ImageDto;
+use crate::application::image::dto::ImagePullEvent;
+use crate::application::image::dto::{ImageDto, ImagePullOutcome, ImagePullSubscription};
 use crate::application::image::mapper::ImageMapper;
 use crate::application::image::traits::ImageRepository;
 use crate::application::shared::PruneResultDto;
@@ -31,11 +32,99 @@ impl ImageService {
     pub async fn prune_images(&self) -> Result<PruneResultDto, AppError> {
         self.repository.prune().await
     }
+
+    pub async fn pull_images(
+        &self,
+        image_refs: &[String],
+    ) -> Result<ImagePullSubscription, AppError> {
+        let mut to_pull: Vec<String> = Vec::new();
+        let mut up_to_date: Vec<String> = Vec::new();
+        for image_ref in image_refs {
+            if self.is_up_to_date(image_ref).await? {
+                up_to_date.push(image_ref.clone());
+            } else {
+                to_pull.push(image_ref.clone());
+            }
+        }
+        if to_pull.is_empty() {
+            return Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: Vec::new(),
+                up_to_date,
+            })));
+        }
+        let subscription = self.repository.pull_images(&to_pull).await?;
+        Ok(with_outcome_up_to_date(subscription, up_to_date))
+    }
+
+    async fn is_up_to_date(&self, image_ref: &str) -> Result<bool, AppError> {
+        let Some(local) = self.repository.local_digest(image_ref).await? else {
+            return Ok(false);
+        };
+        let Some(remote) = self.repository.registry_digest(image_ref).await? else {
+            return Ok(false);
+        };
+        Ok(local == remote)
+    }
+}
+
+fn with_outcome_up_to_date(
+    mut subscription: ImagePullSubscription,
+    up_to_date: Vec<String>,
+) -> ImagePullSubscription {
+    if up_to_date.is_empty() {
+        return subscription;
+    }
+    let (sender, receiver) = tokio::sync::mpsc::channel(128);
+    let relay = tokio::spawn(async move {
+        loop {
+            match subscription.try_recv() {
+                Ok(ImagePullEvent::Progress(progress)) => {
+                    if sender
+                        .send(ImagePullEvent::Progress(progress))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                Ok(ImagePullEvent::Completed(Ok(mut outcome))) => {
+                    let mut merged = up_to_date;
+                    merged.append(&mut outcome.up_to_date);
+                    let _ = sender
+                        .send(ImagePullEvent::Completed(Ok(ImagePullOutcome {
+                            pulled: outcome.pulled,
+                            up_to_date: merged,
+                        })))
+                        .await;
+                    return;
+                }
+                Ok(ImagePullEvent::Completed(Err(error))) => {
+                    let _ = sender.send(ImagePullEvent::Completed(Err(error))).await;
+                    return;
+                }
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                    let _ = sender
+                        .send(ImagePullEvent::Completed(Err(
+                            crate::application::error::AppError::operation_failed(
+                                "Image pull stream ended unexpectedly".to_string(),
+                            ),
+                        )))
+                        .await;
+                    return;
+                }
+            }
+        }
+    });
+    ImagePullSubscription::new(receiver, vec![relay])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::image::dto::{ImagePullEvent, ImagePullOutcome, ImagePullSubscription};
     use crate::application::image::traits::MockImageRepository;
     use crate::domain::image::{Image, ImageId, ImageSize};
     use chrono::Utc;
@@ -106,6 +195,121 @@ mod tests {
 
         let service = ImageService::new(Arc::new(mock));
         assert!(service.delete_image("sha256:aaa", true).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_pull_images_skips_up_to_date_images() {
+        let mut mock = MockImageRepository::new();
+        mock.expect_local_digest().times(2).returning(|image_ref| {
+            if image_ref == "nginx:latest" {
+                Ok(Some("sha256:aaa".to_string()))
+            } else {
+                Ok(None)
+            }
+        });
+        mock.expect_registry_digest().returning(|image_ref| {
+            if image_ref == "nginx:latest" {
+                Ok(Some("sha256:aaa".to_string()))
+            } else {
+                Ok(None)
+            }
+        });
+        mock.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["redis:7".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let service = ImageService::new(Arc::new(mock));
+        let mut subscription = service
+            .pull_images(&["nginx:latest".to_string(), "redis:7".to_string()])
+            .await
+            .unwrap();
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                match subscription.try_recv() {
+                    Ok(ImagePullEvent::Completed(result)) => break result.unwrap(),
+                    Ok(ImagePullEvent::Progress(_)) => {}
+                    Err(_) => tokio::time::sleep(std::time::Duration::from_millis(10)).await,
+                }
+            }
+        })
+        .await
+        .expect("pull completion timed out");
+        assert_eq!(outcome.pulled, vec!["redis:7".to_string()]);
+        assert_eq!(outcome.up_to_date, vec!["nginx:latest".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_pull_images_all_up_to_date_completes_without_repository_pull() {
+        let mut mock = MockImageRepository::new();
+        mock.expect_local_digest()
+            .returning(|_| Ok(Some("sha256:bbb".to_string())));
+        mock.expect_registry_digest()
+            .returning(|_| Ok(Some("sha256:bbb".to_string())));
+        let service = ImageService::new(Arc::new(mock));
+        let mut subscription = service
+            .pull_images(&["nginx:latest".to_string()])
+            .await
+            .unwrap();
+        match subscription.try_recv().unwrap() {
+            ImagePullEvent::Completed(result) => {
+                let outcome = result.unwrap();
+                assert!(outcome.pulled.is_empty());
+                assert_eq!(outcome.up_to_date, vec!["nginx:latest".to_string()]);
+            }
+            _ => panic!("expected completed event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pull_images_pulls_when_digests_differ() {
+        let mut mock = MockImageRepository::new();
+        mock.expect_local_digest()
+            .returning(|_| Ok(Some("sha256:old".to_string())));
+        mock.expect_registry_digest()
+            .returning(|_| Ok(Some("sha256:new".to_string())));
+        mock.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let service = ImageService::new(Arc::new(mock));
+        let mut subscription = service
+            .pull_images(&["nginx:latest".to_string()])
+            .await
+            .unwrap();
+        match subscription.try_recv().unwrap() {
+            ImagePullEvent::Completed(result) => {
+                assert_eq!(result.unwrap().pulled, vec!["nginx:latest".to_string()]);
+            }
+            _ => panic!("expected completed event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pull_images_pulls_when_digests_unknown() {
+        let mut mock = MockImageRepository::new();
+        mock.expect_local_digest().returning(|_| Ok(None));
+        mock.expect_registry_digest().returning(|_| Ok(None));
+        mock.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let service = ImageService::new(Arc::new(mock));
+        let mut subscription = service
+            .pull_images(&["nginx:latest".to_string()])
+            .await
+            .unwrap();
+        match subscription.try_recv().unwrap() {
+            ImagePullEvent::Completed(result) => {
+                assert_eq!(result.unwrap().pulled, vec!["nginx:latest".to_string()]);
+            }
+            _ => panic!("expected completed event"),
+        }
     }
 
     #[tokio::test]

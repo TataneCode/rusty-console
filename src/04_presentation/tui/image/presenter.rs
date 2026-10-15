@@ -1,4 +1,4 @@
-use crate::application::image::ImageDto;
+use crate::application::image::{ImageDto, ImagePullProgress};
 use crate::presentation::tui::common::{FilterState, TableSelection};
 
 pub struct ImagePresenter {
@@ -8,6 +8,7 @@ pub struct ImagePresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
+    pub pull_progress: Option<ImagePullProgress>,
 }
 
 pub fn filter_images<'a>(images: &'a [ImageDto], filter: &str) -> Vec<&'a ImageDto> {
@@ -34,6 +35,7 @@ impl ImagePresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
+            pull_progress: None,
         }
     }
 
@@ -49,6 +51,14 @@ impl ImagePresenter {
 
     pub fn clear_error(&mut self) {
         self.error = None;
+    }
+
+    pub fn set_pull_progress(&mut self, progress: ImagePullProgress) {
+        self.pull_progress = Some(progress);
+    }
+
+    pub fn clear_pull_progress(&mut self) {
+        self.pull_progress = None;
     }
 
     pub fn set_loading(&mut self, loading: bool) {

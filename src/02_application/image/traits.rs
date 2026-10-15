@@ -1,5 +1,6 @@
 #![allow(clippy::double_must_use)]
 use crate::application::error::AppError;
+use crate::application::image::dto::ImagePullSubscription;
 use crate::application::shared::PruneResultDto;
 use crate::domain::image::Image;
 use async_trait::async_trait;
@@ -11,4 +12,7 @@ pub trait ImageRepository: Send + Sync {
     async fn get_by_id(&self, id: &str) -> Result<Option<Image>, AppError>;
     async fn delete(&self, id: &str, force: bool) -> Result<(), AppError>;
     async fn prune(&self) -> Result<PruneResultDto, AppError>;
+    async fn local_digest(&self, image_ref: &str) -> Result<Option<String>, AppError>;
+    async fn registry_digest(&self, image_ref: &str) -> Result<Option<String>, AppError>;
+    async fn pull_images(&self, image_refs: &[String]) -> Result<ImagePullSubscription, AppError>;
 }

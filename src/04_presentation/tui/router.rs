@@ -320,7 +320,40 @@ impl App {
             AppAction::ActivateFilter => {
                 self.image_presenter.activate_filter();
             }
+            AppAction::PullImages => self.pull_images_for_list().await,
             _ => {}
+        }
+    }
+
+    async fn pull_images_for_list(&mut self) {
+        if self.pending_image_pull.is_some() {
+            return;
+        }
+        let image_refs: Vec<String> = self
+            .image_presenter
+            .images
+            .iter()
+            .map(|image| image.full_name.clone())
+            .filter(|name| !name.starts_with("<none>"))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        if image_refs.is_empty() {
+            self.popup_message = Some(PopupMessage::Info(
+                resources::image_pull_empty_message().to_string(),
+            ));
+            return;
+        }
+        self.image_presenter.set_loading(true);
+        match self.image_actions.pull_images(&image_refs).await {
+            Ok(subscription) => {
+                self.image_presenter.clear_pull_progress();
+                self.pending_image_pull = Some(PendingImagePull { subscription });
+            }
+            Err(e) => {
+                self.image_presenter.set_loading(false);
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+            }
         }
     }
 
@@ -733,7 +766,6 @@ impl App {
                     self.stack_presenter.set_loading(false);
                 }
             }
-            AppAction::PullImages => self.pull_selected_stack_images(false).await,
             AppAction::Refresh => self.load_stacks().await,
             AppAction::ActivateFilter => {
                 self.stack_presenter.activate_filter();
@@ -829,60 +861,9 @@ impl App {
             AppAction::RemoveAll if !self.stack_presenter.stack_containers.is_empty() => {
                 self.confirm_dialog = Some((ConfirmAction::StackContainersRemoveAll, true));
             }
-            AppAction::PullImages => self.pull_selected_stack_images(true).await,
             AppAction::Refresh => self.refresh_stack_containers().await,
             AppAction::Exec => self.open_exec_shell_dialog(),
             _ => {}
-        }
-    }
-
-    fn selected_stack_pull_data(&self) -> Option<(String, Vec<String>)> {
-        let stack = self.stack_presenter.selected_stack()?;
-        let images = stack
-            .containers
-            .iter()
-            .map(|container| container.image.clone())
-            .filter(|image| !image.trim().is_empty() && image.as_str() != "unknown")
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-
-        Some((stack.name.clone(), images))
-    }
-
-    async fn pull_selected_stack_images(&mut self, refresh_stack_containers: bool) {
-        if self.pending_image_pull.is_some() {
-            return;
-        }
-
-        let Some((stack_name, images)) = self.selected_stack_pull_data() else {
-            return;
-        };
-
-        if images.is_empty() {
-            self.popup_message = Some(PopupMessage::Info(resources::stack_pull_empty_message(
-                &stack_name,
-            )));
-            return;
-        }
-
-        // Set loading state - spinner will be shown
-        self.stack_presenter.set_loading(true);
-
-        match self.stack_actions.pull_images(&images).await {
-            Ok(subscription) => {
-                self.stack_presenter.clear_pull_progress();
-                self.pending_image_pull = Some(PendingImagePull {
-                    subscription,
-                    stack_name,
-                    image_count: images.len(),
-                    refresh_containers: refresh_stack_containers,
-                });
-            }
-            Err(e) => {
-                self.stack_presenter.set_loading(false);
-                self.popup_message = Some(PopupMessage::Error(e.to_string()));
-            }
         }
     }
 

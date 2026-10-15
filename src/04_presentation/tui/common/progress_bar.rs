@@ -1,5 +1,5 @@
 use super::theme::Theme;
-use crate::application::stack::ImagePullProgress;
+use crate::application::image::ImagePullProgress;
 use ratatui::{
     layout::Rect,
     text::{Line, Span},

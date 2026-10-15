@@ -1,7 +1,8 @@
 use crate::application::image::ImageDto;
+use crate::application::image::ImagePullProgress;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
-    split_content_area, truncate_text, Theme,
+    filter_prompt_title, render_action_bar, render_loading_bar, render_pull_progress_bar,
+    render_table, resources, split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -9,14 +10,19 @@ use ratatui::{
     Frame,
 };
 
+pub struct ImageHelpBarState<'a> {
+    pub is_loading: bool,
+    pub spinner_char: &'a str,
+    pub pull_progress: Option<&'a ImagePullProgress>,
+}
+
 pub fn render_image_list(
     frame: &mut Frame,
     area: Rect,
     images: &[&ImageDto],
     state: &mut TableState,
     active_filter: Option<&str>,
-    is_loading: bool,
-    spinner_char: &str,
+    help_bar: ImageHelpBarState<'_>,
 ) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -74,8 +80,10 @@ pub fn render_image_list(
         state,
     );
 
-    if is_loading {
-        render_loading_bar(frame, help_area, spinner_char);
+    if let Some(progress) = help_bar.pull_progress {
+        render_pull_progress_bar(frame, help_area, progress);
+    } else if help_bar.is_loading {
+        render_loading_bar(frame, help_area, help_bar.spinner_char);
     } else {
         render_action_bar(frame, help_area, resources::IMAGE_LIST_HELP);
     }
@@ -130,7 +138,7 @@ pub fn render_image_details(frame: &mut Frame, area: Rect, image: &ImageDto) {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_image_details, render_image_list};
+    use super::{render_image_details, render_image_list, ImageHelpBarState};
     use crate::application::image::ImageDto;
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
 
@@ -173,8 +181,11 @@ mod tests {
                     &items,
                     &mut state,
                     Some("ng"),
-                    false,
-                    "|",
+                    ImageHelpBarState {
+                        is_loading: false,
+                        spinner_char: "|",
+                        pull_progress: None,
+                    },
                 )
             })
             .unwrap();

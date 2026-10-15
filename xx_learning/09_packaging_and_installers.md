@@ -142,7 +142,7 @@ rusty_console
 The workflow runs only on `v*` tags. Each matrix entry builds its target, then packages the native installers before upload:
 
 - **Linux job**: `cargo install cargo-generate-rpm` → `cargo generate-rpm`, and `cargo install cargo-deb` → `cargo deb --no-build` → uploads the plain binary, the `.rpm`, and the `.deb`.
-- **Windows job**: the MSI pipeline was replaced by a simpler, more reliable approach (same as [oxker](https://github.com/mrjackwills/oxker)): the `x86_64-pc-windows-gnu` target is cross-compiled on a Linux runner with [`cross`](https://github.com/cross-rs/cross), then zipped → uploads the binary and the `.zip`. The WiX/`cargo-wix` MSI path was dropped after repeated release failures (`WixToolset.UI.wixext` extension resolution and `--toolset` support).
+- **Windows job**: the MSI pipeline was replaced by a simpler, more reliable approach (inspired by [oxker](https://github.com/mrjackwills/oxker)): the `x86_64-pc-windows-gnu` target is cross-compiled on a Linux runner with [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) (zig's bundled mingw-w64 links cleanly with current Rust std; the `cross` Docker image failed with `undefined reference to GetHostNameW`), then zipped → uploads the binary and the `.zip`. The WiX/`cargo-wix` MSI path was dropped after repeated release failures (`WixToolset.UI.wixext` extension resolution and `--toolset` support).
 
 The `release` job downloads every artifact and attaches them all to the GitHub Release (`softprops/action-gh-release`), so a tag like `v0.1.0` publishes:
 

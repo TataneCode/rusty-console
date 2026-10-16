@@ -1,5 +1,6 @@
 use crate::application::container::{
     ContainerDto, ContainerLogsDto, ContainerService, ContainerStatsSubscription,
+    CreateContainerRequest,
 };
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
@@ -66,6 +67,13 @@ impl ContainerActions {
 
     pub async fn prune_containers(&self) -> Result<PruneResultDto, AppError> {
         self.service.prune_containers().await
+    }
+
+    pub async fn create_container(
+        &self,
+        request: &CreateContainerRequest,
+    ) -> Result<String, AppError> {
+        self.service.create_container(request).await
     }
 
     pub async fn subscribe_stats(

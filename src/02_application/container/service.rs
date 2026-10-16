@@ -1,5 +1,5 @@
 use crate::application::container::dto::{
-    ContainerDto, ContainerLogsDto, ContainerStatsSubscription,
+    ContainerDto, ContainerLogsDto, ContainerStatsSubscription, CreateContainerRequest,
 };
 use crate::application::container::log_parser;
 use crate::application::container::mapper::ContainerMapper;
@@ -91,6 +91,12 @@ impl ContainerService {
         self.repository.unpause(id).await
     }
 
+    pub async fn create_container(
+        &self,
+        request: &CreateContainerRequest,
+    ) -> Result<String, AppError> {
+        self.repository.create(request).await
+    }
     pub async fn prune_containers(&self) -> Result<PruneResultDto, AppError> {
         self.repository.prune().await
     }
@@ -316,6 +322,29 @@ mod tests {
             .returning(|_| Err(AppError::repository("docker down")));
         let service = ContainerService::new(Arc::new(mock));
         let err = service.export_logs("abc123", "web").await.unwrap_err();
+        assert!(err.to_string().contains("docker down"));
+    }
+
+    #[tokio::test]
+    async fn test_create_container_delegates_and_returns_id() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_create()
+            .withf(|request| request.name == "web" && request.image == "nginx:latest")
+            .returning(|_| Ok("abc123".to_string()));
+        let service = ContainerService::new(Arc::new(mock));
+        let request = CreateContainerRequest::new("web", "nginx:latest", &[]);
+        let id = service.create_container(&request).await.unwrap();
+        assert_eq!(id, "abc123");
+    }
+
+    #[tokio::test]
+    async fn test_create_container_propagates_repository_error() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_create()
+            .returning(|_| Err(AppError::repository("docker down")));
+        let service = ContainerService::new(Arc::new(mock));
+        let request = CreateContainerRequest::new("web", "nginx:latest", &[]);
+        let err = service.create_container(&request).await.unwrap_err();
         assert!(err.to_string().contains("docker down"));
     }
 

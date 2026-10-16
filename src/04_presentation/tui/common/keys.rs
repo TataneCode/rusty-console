@@ -25,6 +25,7 @@ pub enum AppAction {
     StartAll,
     RemoveAll,
     PullImages,
+    Add,
     ActivateLogSearch,
     NextLogMatch,
     PreviousLogMatch,
@@ -66,6 +67,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('S') => Some(AppAction::StopAll),
         KeyCode::Char('D') => Some(AppAction::RemoveAll),
         KeyCode::Char('P') => Some(AppAction::PullImages),
+        KeyCode::Char('A') => Some(AppAction::Add),
         _ => None,
     }
 }
@@ -317,6 +319,14 @@ mod tests {
         assert_eq!(
             map_key_to_action(key_event(KeyCode::Char('P'))),
             Some(AppAction::PullImages)
+        );
+    }
+
+    #[test]
+    fn test_add_key() {
+        assert_eq!(
+            map_key_to_action(key_event(KeyCode::Char('A'))),
+            Some(AppAction::Add)
         );
     }
 

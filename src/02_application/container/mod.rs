@@ -5,8 +5,9 @@ pub mod service;
 pub mod traits;
 
 pub use dto::{
-    ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto, ContainerStatsEvent,
-    ContainerStatsSubscription, ContainerStatsUpdate, LogLineDto,
+    parse_port_mappings, ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto,
+    ContainerStatsEvent, ContainerStatsSubscription, ContainerStatsUpdate, CreateContainerRequest,
+    LogLineDto, PortMappingSpec,
 };
 pub use service::ContainerService;
 pub use traits::ContainerRepository;

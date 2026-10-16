@@ -1,5 +1,5 @@
 #![allow(clippy::double_must_use)]
-use crate::application::container::dto::ContainerStatsSubscription;
+use crate::application::container::dto::{ContainerStatsSubscription, CreateContainerRequest};
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
 use crate::domain::container::Container;
@@ -13,6 +13,7 @@ pub trait ContainerRepository: Send + Sync {
     async fn get_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError>;
     async fn export_logs(&self, id: &str) -> Result<String, AppError>;
     async fn start(&self, id: &str) -> Result<(), AppError>;
+    async fn create(&self, request: &CreateContainerRequest) -> Result<String, AppError>;
     async fn stop(&self, id: &str) -> Result<(), AppError>;
     async fn delete(&self, id: &str, force: bool) -> Result<(), AppError>;
     async fn restart(&self, id: &str) -> Result<(), AppError>;

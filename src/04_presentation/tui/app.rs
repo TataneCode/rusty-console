@@ -1,9 +1,12 @@
-use crate::application::container::{ContainerDto, ContainerStatsSubscription};
+use crate::application::container::{
+    ContainerDto, ContainerStatsSubscription, CreateContainerRequest,
+};
 use crate::application::image::{ImagePullEvent, ImagePullOutcome, ImagePullSubscription};
 use crate::presentation::tui::common::{
-    map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
-    render_expanded_log_line, render_main_menu, render_popup_message, render_selection_dialog,
-    resources, split_app_area, AppAction, KeyContext, PopupMessage, Spinner,
+    dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
+    render_expanded_log_line, render_input_dialog, render_main_menu, render_popup_message,
+    render_selection_dialog, resources, split_app_area, AppAction, InputDialogState, InputField,
+    KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -54,6 +57,16 @@ pub enum Screen {
     StackContainers,
 }
 
+pub enum AddDialogKind {
+    Image,
+    Container,
+}
+
+pub(crate) struct AddDialog {
+    pub(crate) kind: AddDialogKind,
+    pub(crate) state: InputDialogState,
+}
+
 pub struct App {
     pub screen: Screen,
     pub previous_screen: Option<Screen>,
@@ -78,6 +91,8 @@ pub struct App {
     pending_exec: Option<PendingExec>,
     pub(crate) container_stats_subscription: Option<ContainerStatsSubscription>,
     pub(crate) pending_image_pull: Option<PendingImagePull>,
+    pub(crate) add_dialog: Option<AddDialog>,
+    pub(crate) pending_create_after_pull: Option<CreateContainerRequest>,
 }
 
 pub(crate) struct PendingImagePull {
@@ -140,6 +155,8 @@ impl App {
             pending_exec: None,
             container_stats_subscription: None,
             pending_image_pull: None,
+            add_dialog: None,
+            pending_create_after_pull: None,
         }
     }
 
@@ -179,7 +196,9 @@ impl App {
 
             match event_handler.next()? {
                 AppEvent::Key(key) => {
-                    if !self.has_modal_overlay()
+                    if self.add_dialog.is_some() && self.handle_add_dialog_key(key.code) {
+                        // Key consumed by add dialog input
+                    } else if !self.has_modal_overlay()
                         && self.is_filter_active()
                         && self.handle_filter_key(key.code)
                     {
@@ -407,6 +426,14 @@ impl App {
             }
         }
 
+        let has_overlay = self.expanded_log_line.is_some()
+            || self.confirm_dialog.is_some()
+            || self.popup_message.is_some()
+            || self.exec_shell_dialog.is_some()
+            || self.add_dialog.is_some();
+        if has_overlay {
+            dim_background(frame);
+        }
         if let Some(line) = self.container_presenter.logs.as_ref().and_then(|logs| {
             self.expanded_log_line
                 .and_then(|index| logs.lines.get(index))
@@ -428,6 +455,52 @@ impl App {
                 &EXEC_SHELL_OPTIONS,
                 dialog.state_mut(),
                 resources::EXEC_SHELL_DIALOG_HELP,
+            );
+        }
+        if let Some(dialog) = self.add_dialog.as_ref() {
+            let focused = dialog.state.focused_index();
+            let values = dialog.state.values();
+            let mut fields: Vec<InputField<'_>> = Vec::new();
+            match dialog.kind {
+                AddDialogKind::Image => fields.push(InputField {
+                    label: resources::ADD_IMAGE_FIELD_LABEL,
+                    value: values[0],
+                    focused: focused == 0,
+                }),
+                AddDialogKind::Container => {
+                    fields.push(InputField {
+                        label: resources::ADD_CONTAINER_NAME_LABEL,
+                        value: values[0],
+                        focused: focused == 0,
+                    });
+                    fields.push(InputField {
+                        label: resources::ADD_CONTAINER_IMAGE_LABEL,
+                        value: values[1],
+                        focused: focused == 1,
+                    });
+                    fields.push(InputField {
+                        label: resources::ADD_CONTAINER_PORTS_LABEL,
+                        value: values[2],
+                        focused: focused == 2,
+                    });
+                }
+            }
+            let (title, help) = match dialog.kind {
+                AddDialogKind::Image => (
+                    resources::ADD_IMAGE_DIALOG_TITLE,
+                    resources::ADD_IMAGE_DIALOG_HELP,
+                ),
+                AddDialogKind::Container => (
+                    resources::ADD_CONTAINER_DIALOG_TITLE,
+                    resources::ADD_CONTAINER_DIALOG_HELP,
+                ),
+            };
+            render_input_dialog(
+                frame,
+                title,
+                &fields,
+                help,
+                resources::INPUT_DIALOG_WIDTH_PERCENT,
             );
         }
     }
@@ -729,6 +802,13 @@ impl App {
             return;
         };
         self.take_pending_image_pull();
+        if self.pending_create_after_pull.is_some() {
+            self.finish_pending_container_create(result.is_ok()).await;
+            if let Err(e) = result {
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+            }
+            return;
+        }
         match result {
             Ok(outcome) => {
                 self.load_images().await;
@@ -738,6 +818,32 @@ impl App {
                 self.popup_message = Some(PopupMessage::Info(
                     resources::image_pull_result_message(&outcome.pulled, &outcome.up_to_date),
                 ));
+            }
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+            }
+        }
+    }
+
+    async fn finish_pending_container_create(&mut self, pull_ok: bool) {
+        self.container_presenter.set_loading(false);
+        let Some(request) = self.pending_create_after_pull.take() else {
+            return;
+        };
+        if !pull_ok {
+            return;
+        }
+        match self.container_actions.create_container(&request).await {
+            Ok(id) => {
+                if let Err(e) = self.container_actions.start_container(&id).await {
+                    self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                }
+                self.load_containers().await;
+                if self.popup_message.is_none() {
+                    self.popup_message = Some(PopupMessage::Info(
+                        resources::container_created_message(&request.name),
+                    ));
+                }
             }
             Err(e) => {
                 self.popup_message = Some(PopupMessage::Error(e.to_string()));
@@ -2585,6 +2691,277 @@ mod tests {
         app.handle_action(AppAction::ExportLogs).await;
         match &app.popup_message {
             Some(PopupMessage::Error(msg)) => assert!(msg.contains("docker down")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
+    }
+
+    fn fill_add_dialog(app: &mut App, values: &[&str]) {
+        for (index, value) in values.iter().enumerate() {
+            while app.add_dialog.as_ref().unwrap().state.focused_index() < index {
+                app.add_dialog.as_mut().unwrap().state.focus_next();
+            }
+            for c in value.chars() {
+                app.add_dialog
+                    .as_mut()
+                    .unwrap()
+                    .state
+                    .focused_mut()
+                    .push_char(c);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_key_opens_image_dialog_on_image_list() {
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.handle_image_list_action(AppAction::Add).await;
+        assert!(app.add_dialog.is_some());
+        assert_eq!(app.add_dialog.as_ref().unwrap().state.values().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_add_key_opens_container_dialog_on_container_list() {
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::Add).await;
+        assert!(app.add_dialog.is_some());
+        assert_eq!(app.add_dialog.as_ref().unwrap().state.values().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_add_dialog_key_input_and_cancel() {
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.handle_image_list_action(AppAction::Add).await;
+        assert!(app.handle_add_dialog_key(crossterm::event::KeyCode::Char('n')));
+        assert!(app.handle_add_dialog_key(crossterm::event::KeyCode::Char('g')));
+        assert!(app.handle_add_dialog_key(crossterm::event::KeyCode::Backspace));
+        assert_eq!(app.add_dialog.as_ref().unwrap().state.values(), vec!["n"]);
+        assert!(!app.handle_add_dialog_key(crossterm::event::KeyCode::Enter));
+        app.handle_add_dialog_action(AppAction::Back).await;
+        assert!(app.add_dialog.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_add_dialog_container_tab_navigation_between_fields() {
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::Add).await;
+        assert!(app.handle_add_dialog_key(crossterm::event::KeyCode::Char('w')));
+        assert!(app.handle_add_dialog_key(crossterm::event::KeyCode::Tab));
+        assert!(app.handle_add_dialog_key(crossterm::event::KeyCode::Char('x')));
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["w", "x", ""]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_add_image_dialog_validates_empty_input() {
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.handle_image_list_action(AppAction::Add).await;
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("enter an image")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
+        assert!(app.pending_image_pull.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_add_image_dialog_pulls_image_with_latest_default_tag() {
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_get_all().returning(|| Ok(vec![]));
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_pull_images().returning(|refs| {
+            assert_eq!(refs, vec!["nginx:latest".to_string()]);
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.handle_image_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["nginx"]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.pending_image_pull.is_some());
+        app.drain_image_pull().await;
+        match &app.popup_message {
+            Some(PopupMessage::Info(msg)) => assert!(msg.contains("pulled 1 image(s)")),
+            other => panic!("expected info popup, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_container_dialog_validates_required_fields() {
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["web", ""]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("required")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["web", "", ""]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_add_container_dialog_validates_port_mappings() {
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["web", "nginx", "8080"]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("invalid port mapping")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["web", "nginx", "8080"]
+        );
+        assert!(app.pending_create_after_pull.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_add_container_dialog_creates_and_starts_container_after_pull() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_get_all().returning(|| Ok(vec![]));
+        container_repo
+            .expect_create()
+            .withf(|request| {
+                request.name == "web"
+                    && request.image == "nginx:latest"
+                    && request.port_mappings.len() == 1
+                    && request.port_mappings[0].host_port == 8080
+                    && request.port_mappings[0].container_port == 80
+            })
+            .returning(|_| Ok("abc123".to_string()));
+        container_repo
+            .expect_start()
+            .withf(|id| id == "abc123")
+            .returning(|_| Ok(()));
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_pull_images().returning(|refs| {
+            assert_eq!(refs, vec!["nginx:latest".to_string()]);
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["web", "nginx", "8080:80"]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_none());
+        assert!(app.pending_create_after_pull.is_some());
+        assert!(app.pending_image_pull.is_some());
+        app.drain_image_pull().await;
+        assert!(app.pending_create_after_pull.is_none());
+        assert!(!app.container_presenter.is_loading());
+        match &app.popup_message {
+            Some(PopupMessage::Info(msg)) => assert!(msg.contains("Container web created")),
+            other => panic!("expected info popup, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_container_dialog_reports_create_error() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_get_all().returning(|| Ok(vec![]));
+        container_repo.expect_create().returning(|_| {
+            Err(crate::application::error::AppError::repository(
+                "name taken",
+            ))
+        });
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["web", "nginx", ""]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        app.drain_image_pull().await;
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("name taken")),
             other => panic!("expected error popup, got {other:?}"),
         }
     }

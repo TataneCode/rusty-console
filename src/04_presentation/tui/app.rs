@@ -2793,7 +2793,7 @@ mod tests {
         app.screen = Screen::ImageList;
         app.handle_image_list_action(AppAction::Add).await;
         app.handle_add_dialog_action(AppAction::Select).await;
-        assert!(app.add_dialog.is_none());
+        assert!(app.add_dialog.is_some());
         match &app.popup_message {
             Some(PopupMessage::Error(msg)) => assert!(msg.contains("enter an image")),
             other => panic!("expected error popup, got {other:?}"),
@@ -2845,11 +2845,15 @@ mod tests {
         app.handle_container_list_action(AppAction::Add).await;
         fill_add_dialog(&mut app, &["web", ""]);
         app.handle_add_dialog_action(AppAction::Select).await;
-        assert!(app.add_dialog.is_none());
+        assert!(app.add_dialog.is_some());
         match &app.popup_message {
             Some(PopupMessage::Error(msg)) => assert!(msg.contains("required")),
             other => panic!("expected error popup, got {other:?}"),
         }
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["web", "", ""]
+        );
     }
 
     #[tokio::test]
@@ -2865,10 +2869,15 @@ mod tests {
         app.handle_container_list_action(AppAction::Add).await;
         fill_add_dialog(&mut app, &["web", "nginx", "8080"]);
         app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
         match &app.popup_message {
             Some(PopupMessage::Error(msg)) => assert!(msg.contains("invalid port mapping")),
             other => panic!("expected error popup, got {other:?}"),
         }
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["web", "nginx", "8080"]
+        );
         assert!(app.pending_create_after_pull.is_none());
     }
 
@@ -2910,6 +2919,7 @@ mod tests {
         app.handle_container_list_action(AppAction::Add).await;
         fill_add_dialog(&mut app, &["web", "nginx", "8080:80"]);
         app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_none());
         assert!(app.pending_create_after_pull.is_some());
         assert!(app.pending_image_pull.is_some());
         app.drain_image_pull().await;

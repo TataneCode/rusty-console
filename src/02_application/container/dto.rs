@@ -227,9 +227,16 @@ pub fn parse_port_mappings(input: &str) -> Result<Vec<PortMappingSpec>, AppError
 }
 
 fn parse_port(value: &str, entry: &str) -> Result<u16, AppError> {
-    value
+    let port = value
         .parse::<u16>()
-        .map_err(|_| invalid_port_mapping(entry, "ports must be between 1 and 65535"))
+        .map_err(|_| invalid_port_mapping(entry, "ports must be between 1 and 65535"))?;
+    if port == 0 {
+        return Err(invalid_port_mapping(
+            entry,
+            "ports must be between 1 and 65535",
+        ));
+    }
+    Ok(port)
 }
 
 fn invalid_port_mapping(entry: &str, reason: &str) -> AppError {
@@ -313,7 +320,9 @@ mod tests {
     #[test]
     fn parse_port_mappings_rejects_out_of_range_port() {
         assert!(parse_port_mappings("99999:80").is_err());
-        assert!(parse_port_mappings("0:80").is_ok());
+        assert!(parse_port_mappings("65536:80").is_err());
+        assert!(parse_port_mappings("0:80").is_err());
+        assert!(parse_port_mappings("8080:0").is_err());
     }
 
     #[test]

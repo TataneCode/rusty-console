@@ -951,7 +951,7 @@ impl App {
     }
 
     async fn confirm_add_dialog(&mut self) {
-        let Some(dialog) = self.add_dialog.take() else {
+        let Some(dialog) = self.add_dialog.as_ref() else {
             return;
         };
         match dialog.kind {
@@ -963,6 +963,7 @@ impl App {
                     ));
                     return;
                 }
+                self.add_dialog = None;
                 self.start_image_pull(vec![image_ref]).await;
             }
             AddDialogKind::Container => {
@@ -982,6 +983,7 @@ impl App {
                         return;
                     }
                 };
+                self.add_dialog = None;
                 self.start_container_pull_then_create(CreateContainerRequest::new(
                     &name,
                     &image,

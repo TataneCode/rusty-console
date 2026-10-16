@@ -8,12 +8,12 @@ use crate::infrastructure::docker::client::DockerClient;
 use crate::infrastructure::docker::container::mapper::ContainerInfraMapper;
 use crate::infrastructure::error::InfraError;
 use async_trait::async_trait;
+use bollard::models::{ContainerCreateBody, HostConfig, PortBinding};
 use bollard::query_parameters::{
     CreateContainerOptions, ListContainersOptions, LogsOptions, PruneContainersOptions,
     RemoveContainerOptions, RestartContainerOptions, StartContainerOptions, StatsOptions,
     StopContainerOptions,
 };
-use bollard::models::{ContainerCreateBody, HostConfig, PortBinding};
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::mpsc;

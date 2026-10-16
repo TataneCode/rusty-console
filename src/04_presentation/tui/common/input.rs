@@ -134,10 +134,7 @@ pub fn render_input_dialog(
     }
 
     let dialog = Paragraph::new(lines.join("\n"))
-        .block(
-            Theme::section_block(Some(title))
-                .border_style(Theme::selected_border_style()),
-        )
+        .block(Theme::section_block(Some(title)).border_style(Theme::selected_border_style()))
         .wrap(Wrap { trim: true });
     frame.render_widget(dialog, dialog_area);
     render_action_bar(frame, help_area, help_text);

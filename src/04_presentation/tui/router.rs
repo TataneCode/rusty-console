@@ -1,8 +1,11 @@
 //! Screen routing: maps user actions to screen-specific handlers.
 
 use crate::application::container::ContainerStatsEvent;
-use crate::presentation::tui::app::{format_bytes, App, PendingImagePull, Screen};
-use crate::presentation::tui::common::{resources, AppAction, PopupMessage};
+use crate::application::container::{parse_port_mappings, CreateContainerRequest};
+use crate::presentation::tui::app::{
+    format_bytes, AddDialog, AddDialogKind, App, PendingImagePull, Screen,
+};
+use crate::presentation::tui::common::{resources, AppAction, InputDialogState, PopupMessage};
 use crate::presentation::tui::confirm::ConfirmAction;
 use crossterm::event::KeyCode;
 
@@ -55,6 +58,10 @@ impl App {
         }
         if self.exec_shell_dialog.is_some() {
             self.handle_exec_shell_action(action);
+            return;
+        }
+        if self.add_dialog.is_some() {
+            self.handle_add_dialog_action(action).await;
             return;
         }
 
@@ -186,6 +193,7 @@ impl App {
                 self.container_presenter.activate_filter();
             }
             AppAction::Exec => self.open_exec_shell_dialog(),
+            AppAction::Add => self.open_add_dialog(),
             _ => {}
         }
     }
@@ -360,6 +368,7 @@ impl App {
             AppAction::ActivateFilter => {
                 self.image_presenter.activate_filter();
             }
+            AppAction::Add => self.open_add_dialog(),
             _ => {}
         }
     }
@@ -378,17 +387,7 @@ impl App {
             return;
         }
         let image_refs = vec![image.full_name.clone()];
-        self.image_presenter.set_loading(true);
-        match self.image_actions.pull_images(&image_refs).await {
-            Ok(subscription) => {
-                self.image_presenter.clear_pull_progress();
-                self.pending_image_pull = Some(PendingImagePull { subscription });
-            }
-            Err(e) => {
-                self.image_presenter.set_loading(false);
-                self.popup_message = Some(PopupMessage::Error(e.to_string()));
-            }
-        }
+        self.start_image_pull(image_refs).await;
     }
 
     pub(crate) async fn handle_network_list_action(&mut self, action: AppAction) {
@@ -900,11 +899,162 @@ impl App {
             _ => {}
         }
     }
+}
 
+pub(crate) fn normalize_image_ref(input: &str) -> String {
+    let trimmed = input.trim();
+    if trimmed.is_empty() || trimmed.contains(':') {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}:latest")
+    }
+}
+
+impl App {
     pub(crate) fn has_modal_overlay(&self) -> bool {
         self.popup_message.is_some()
             || self.confirm_dialog.is_some()
             || self.exec_shell_dialog.is_some()
+            || self.add_dialog.is_some()
+    }
+
+    pub(crate) fn handle_add_dialog_key(&mut self, code: KeyCode) -> bool {
+        let Some(dialog) = self.add_dialog.as_mut() else {
+            return false;
+        };
+        match code {
+            KeyCode::Tab => dialog.state.focus_next(),
+            KeyCode::BackTab => dialog.state.focus_previous(),
+            KeyCode::Backspace => dialog.state.focused_mut().pop_char(),
+            KeyCode::Char(c) => dialog.state.focused_mut().push_char(c),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) async fn handle_add_dialog_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::Back | AppAction::Quit => self.add_dialog = None,
+            AppAction::NavigateUp => {
+                if let Some(dialog) = self.add_dialog.as_mut() {
+                    dialog.state.focus_previous();
+                }
+            }
+            AppAction::NavigateDown => {
+                if let Some(dialog) = self.add_dialog.as_mut() {
+                    dialog.state.focus_next();
+                }
+            }
+            AppAction::Select => self.confirm_add_dialog().await,
+            _ => {}
+        }
+    }
+
+    async fn confirm_add_dialog(&mut self) {
+        let Some(dialog) = self.add_dialog.take() else {
+            return;
+        };
+        match dialog.kind {
+            AddDialogKind::Image => {
+                let image_ref = normalize_image_ref(dialog.state.values()[0]);
+                if image_ref.is_empty() {
+                    self.popup_message = Some(PopupMessage::Error(
+                        resources::add_image_missing_message().to_string(),
+                    ));
+                    return;
+                }
+                self.start_image_pull(vec![image_ref]).await;
+            }
+            AddDialogKind::Container => {
+                let values = dialog.state.values();
+                let name = values[0].trim().to_string();
+                let image = normalize_image_ref(values[1]);
+                if name.is_empty() || image.is_empty() {
+                    self.popup_message = Some(PopupMessage::Error(
+                        resources::add_container_missing_fields_message().to_string(),
+                    ));
+                    return;
+                }
+                let port_mappings = match parse_port_mappings(values[2]) {
+                    Ok(mappings) => mappings,
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                        return;
+                    }
+                };
+                self.start_container_pull_then_create(CreateContainerRequest::new(
+                    &name,
+                    &image,
+                    &port_mappings,
+                ))
+                .await;
+            }
+        }
+    }
+
+    pub(crate) fn open_add_dialog(&mut self) {
+        if self.pending_image_pull.is_some() {
+            return;
+        }
+        let kind = match self.screen {
+            Screen::ImageList | Screen::ImageDetails => AddDialogKind::Image,
+            Screen::ContainerList => AddDialogKind::Container,
+            _ => return,
+        };
+        let field_count = match kind {
+            AddDialogKind::Image => 1,
+            AddDialogKind::Container => 3,
+        };
+        self.add_dialog = Some(AddDialog {
+            kind,
+            state: InputDialogState::new(field_count),
+        });
+    }
+
+    async fn start_image_pull(&mut self, image_refs: Vec<String>) {
+        if self.pending_image_pull.is_some() {
+            return;
+        }
+        self.image_presenter.set_loading(true);
+        match self.image_actions.pull_images(&image_refs).await {
+            Ok(subscription) => {
+                self.image_presenter.clear_pull_progress();
+                self.pending_image_pull = Some(PendingImagePull { subscription });
+            }
+            Err(e) => {
+                self.image_presenter.set_loading(false);
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+            }
+        }
+    }
+
+    async fn start_container_pull_then_create(&mut self, request: CreateContainerRequest) {
+        self.pending_create_after_pull = Some(request);
+        self.container_presenter.set_loading(true);
+        self.start_image_pull_for_create().await;
+    }
+
+    async fn start_image_pull_for_create(&mut self) {
+        if self.pending_image_pull.is_some() {
+            return;
+        }
+        let Some(request) = self.pending_create_after_pull.clone() else {
+            return;
+        };
+        let image_ref = normalize_image_ref(&request.image);
+        self.image_presenter.set_loading(true);
+        match self.image_actions.pull_images(&[image_ref]).await {
+            Ok(subscription) => {
+                self.image_presenter.clear_pull_progress();
+                self.pending_image_pull = Some(PendingImagePull { subscription });
+            }
+            Err(e) => {
+                self.pending_create_after_pull = None;
+                self.container_presenter.set_loading(false);
+                self.image_presenter.set_loading(false);
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+            }
+        }
     }
 
     pub(crate) fn drain_container_stats(&mut self) {

@@ -31,7 +31,7 @@ pub const CONTAINER_TITLE: &str = "Containers";
 pub const CONTAINER_HEADERS: [&str; 7] =
     ["Name", "Image", "State", "CPU", "Memory", "Status", "Ports"];
 pub const CONTAINER_LIST_HELP: &str =
-    " q: Quit | /: Filter | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart | X: Prune";
+    " q: Quit | /: Filter | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
 pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back ";
 pub const CONTAINER_LOGS_HELP: &str =
@@ -43,12 +43,10 @@ pub const EXEC_SHELL_DIALOG_TITLE: &str = " Exec Shell ";
 pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc/q: Cancel ";
 pub const INPUT_EMPTY: &str = " ";
 pub const ADD_IMAGE_DIALOG_TITLE: &str = " Download Image ";
-pub const ADD_IMAGE_DIALOG_HELP: &str =
-    " Enter: Download | Tab: Next | Esc/q: Cancel ";
+pub const ADD_IMAGE_DIALOG_HELP: &str = " Enter: Download | Tab: Next | Esc/q: Cancel ";
 pub const ADD_IMAGE_FIELD_LABEL: &str = "Image (<name>:<version>, latest if empty)";
 pub const ADD_CONTAINER_DIALOG_TITLE: &str = " Create Container ";
-pub const ADD_CONTAINER_DIALOG_HELP: &str =
-    " Enter: Create | Tab: Next | Esc/q: Cancel ";
+pub const ADD_CONTAINER_DIALOG_HELP: &str = " Enter: Create | Tab: Next | Esc/q: Cancel ";
 pub const ADD_CONTAINER_NAME_LABEL: &str = "Name";
 pub const ADD_CONTAINER_IMAGE_LABEL: &str = "Image (<name>:<version>, latest if empty)";
 pub const ADD_CONTAINER_PORTS_LABEL: &str = "Ports (<host>:<internal>;...)";
@@ -71,7 +69,7 @@ pub const NETWORK_DETAILS_HELP: &str =
 pub const IMAGE_TITLE: &str = "Images";
 pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use", "Created"];
 pub const IMAGE_LIST_HELP: &str =
-    " q: Quit | /: Filter | j/k: Navigate | d: Delete | c: Details | r: Refresh | X: Prune | Esc: Back ";
+    " q: Quit | /: Filter | j/k: Navigate | d: Delete | c: Details | r: Refresh | X: Prune | A: Add | Esc: Back ";
 pub const IMAGE_DETAILS_TITLE: &str = " Image Details ";
 pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back | P: Pull Image | r: Refresh ";
 
@@ -191,6 +189,15 @@ pub fn image_pull_result_message(pulled: &[String], up_to_date: &[String]) -> St
 
 pub fn image_pull_dangling_message() -> String {
     "Cannot pull a dangling image: it has no repository to pull from".to_string()
+}
+pub fn add_image_missing_message() -> String {
+    "Please enter an image to download".to_string()
+}
+pub fn add_container_missing_fields_message() -> String {
+    "Container name and image are required".to_string()
+}
+pub fn container_created_message(name: &str) -> String {
+    format!("Container {name} created and started")
 }
 
 #[cfg(test)]

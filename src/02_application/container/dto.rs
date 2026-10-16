@@ -1,3 +1,4 @@
+use crate::application::error::AppError;
 use crate::domain::container::ContainerState;
 use crate::domain::shared::ByteSize;
 use chrono::{DateTime, Utc};
@@ -180,6 +181,61 @@ impl Drop for ContainerStatsSubscription {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortMappingSpec {
+    pub host_port: u16,
+    pub container_port: u16,
+}
+
+impl std::fmt::Display for PortMappingSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.host_port, self.container_port)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateContainerRequest {
+    pub name: String,
+    pub image: String,
+    pub port_mappings: Vec<PortMappingSpec>,
+}
+
+impl CreateContainerRequest {
+    pub fn new(name: &str, image: &str, port_mappings: &[PortMappingSpec]) -> Self {
+        CreateContainerRequest {
+            name: name.to_string(),
+            image: image.to_string(),
+            port_mappings: port_mappings.to_vec(),
+        }
+    }
+}
+
+pub fn parse_port_mappings(input: &str) -> Result<Vec<PortMappingSpec>, AppError> {
+    let mut mappings = Vec::new();
+    for entry in input.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+        let (host, container) = entry
+            .split_once(':')
+            .ok_or_else(|| invalid_port_mapping(entry, "expected <host>:<internal>"))?;
+        let host_port = parse_port(host, entry)?;
+        let container_port = parse_port(container, entry)?;
+        mappings.push(PortMappingSpec {
+            host_port,
+            container_port,
+        });
+    }
+    Ok(mappings)
+}
+
+fn parse_port(value: &str, entry: &str) -> Result<u16, AppError> {
+    value
+        .parse::<u16>()
+        .map_err(|_| invalid_port_mapping(entry, "ports must be between 1 and 65535"))
+}
+
+fn invalid_port_mapping(entry: &str, reason: &str) -> AppError {
+    AppError::operation_failed(format!("invalid port mapping \"{entry}\": {reason}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,6 +272,57 @@ mod tests {
 
         assert_eq!(stats.memory_list_display(), "512.00 MB");
         assert_eq!(stats.memory_details_display(), "512.00 MB");
+    }
+
+    #[test]
+    fn parse_port_mappings_parses_semicolon_separated_entries() {
+        let mappings = parse_port_mappings("8080:80; 443:443").unwrap();
+        assert_eq!(
+            mappings,
+            vec![
+                PortMappingSpec {
+                    host_port: 8080,
+                    container_port: 80
+                },
+                PortMappingSpec {
+                    host_port: 443,
+                    container_port: 443
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_port_mappings_ignores_empty_entries() {
+        assert!(parse_port_mappings("").unwrap().is_empty());
+        assert!(parse_port_mappings(";; ;").unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_port_mappings_rejects_missing_colon() {
+        let error = parse_port_mappings("8080").unwrap_err();
+        assert!(error.to_string().contains("invalid port mapping \"8080\""));
+    }
+
+    #[test]
+    fn parse_port_mappings_rejects_non_numeric_port() {
+        assert!(parse_port_mappings("abc:80").is_err());
+        assert!(parse_port_mappings("8080:xyz").is_err());
+    }
+
+    #[test]
+    fn parse_port_mappings_rejects_out_of_range_port() {
+        assert!(parse_port_mappings("99999:80").is_err());
+        assert!(parse_port_mappings("0:80").is_ok());
+    }
+
+    #[test]
+    fn port_mapping_spec_display() {
+        let spec = PortMappingSpec {
+            host_port: 8080,
+            container_port: 80,
+        };
+        assert_eq!(spec.to_string(), "8080:80");
     }
 
     #[test]

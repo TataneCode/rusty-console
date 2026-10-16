@@ -1,5 +1,5 @@
 use crate::application::container::{
-    ContainerRepository, ContainerStatsEvent, ContainerStatsSubscription,
+    ContainerRepository, ContainerStatsEvent, ContainerStatsSubscription, CreateContainerRequest,
 };
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
@@ -9,9 +9,11 @@ use crate::infrastructure::docker::container::mapper::ContainerInfraMapper;
 use crate::infrastructure::error::InfraError;
 use async_trait::async_trait;
 use bollard::query_parameters::{
-    ListContainersOptions, LogsOptions, PruneContainersOptions, RemoveContainerOptions,
-    RestartContainerOptions, StartContainerOptions, StatsOptions, StopContainerOptions,
+    CreateContainerOptions, ListContainersOptions, LogsOptions, PruneContainersOptions,
+    RemoveContainerOptions, RestartContainerOptions, StartContainerOptions, StatsOptions,
+    StopContainerOptions,
 };
+use bollard::models::{ContainerCreateBody, HostConfig, PortBinding};
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -124,6 +126,44 @@ impl ContainerRepository for ContainerAdapter {
 
     async fn get_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {
         self.collect_logs(id, Some(tail.unwrap_or(100))).await
+    }
+
+    async fn create(&self, request: &CreateContainerRequest) -> Result<String, AppError> {
+        let options = CreateContainerOptions {
+            name: Some(request.name.clone()),
+            platform: String::new(),
+        };
+        let mut port_bindings: bollard::models::PortMap = HashMap::new();
+        for mapping in &request.port_mappings {
+            port_bindings.insert(
+                format!("{}/tcp", mapping.container_port),
+                Some(vec![PortBinding {
+                    host_ip: None,
+                    host_port: Some(mapping.host_port.to_string()),
+                }]),
+            );
+        }
+        let host_config = if port_bindings.is_empty() {
+            HostConfig::default()
+        } else {
+            HostConfig {
+                port_bindings: Some(port_bindings),
+                ..Default::default()
+            }
+        };
+        let config = ContainerCreateBody {
+            image: Some(request.image.clone()),
+            host_config: Some(host_config),
+            ..Default::default()
+        };
+        let response = self
+            .docker
+            .inner()
+            .create_container(Some(options), config)
+            .await
+            .map_err(InfraError::from)
+            .map_err(AppError::from)?;
+        Ok(response.id)
     }
 
     async fn start(&self, id: &str) -> Result<(), AppError> {

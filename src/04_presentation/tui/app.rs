@@ -3,10 +3,10 @@ use crate::application::container::{
 };
 use crate::application::image::{ImagePullEvent, ImagePullOutcome, ImagePullSubscription};
 use crate::presentation::tui::common::{
-    map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
+    dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
     render_expanded_log_line, render_input_dialog, render_main_menu, render_popup_message,
-    render_selection_dialog, resources, split_app_area, AppAction, InputDialogSize,
-    InputDialogState, InputField, KeyContext, PopupMessage, Spinner,
+    render_selection_dialog, resources, split_app_area, AppAction, InputDialogState, InputField,
+    KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -426,6 +426,14 @@ impl App {
             }
         }
 
+        let has_overlay = self.expanded_log_line.is_some()
+            || self.confirm_dialog.is_some()
+            || self.popup_message.is_some()
+            || self.exec_shell_dialog.is_some()
+            || self.add_dialog.is_some();
+        if has_overlay {
+            dim_background(frame);
+        }
         if let Some(line) = self.container_presenter.logs.as_ref().and_then(|logs| {
             self.expanded_log_line
                 .and_then(|index| logs.lines.get(index))
@@ -487,7 +495,13 @@ impl App {
                     resources::ADD_CONTAINER_DIALOG_HELP,
                 ),
             };
-            render_input_dialog(frame, title, &fields, help, InputDialogSize::default());
+            render_input_dialog(
+                frame,
+                title,
+                &fields,
+                help,
+                resources::INPUT_DIALOG_WIDTH_PERCENT,
+            );
         }
     }
 

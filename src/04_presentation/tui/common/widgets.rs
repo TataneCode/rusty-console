@@ -1,5 +1,6 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier},
     widgets::{Clear, List, ListItem, ListState, Paragraph, Row, Table, TableState, Wrap},
     Frame,
 };
@@ -132,6 +133,16 @@ pub fn render_table<'a>(
     frame.render_stateful_widget(table, area, state);
 }
 
+pub fn dim_background(frame: &mut Frame) {
+    for cell in frame.buffer_mut().content.iter_mut() {
+        if cell.fg != Color::Reset {
+            cell.fg = Color::DarkGray;
+        }
+        cell.set_bg(Color::Reset);
+        cell.modifier = Modifier::empty();
+    }
+}
+
 pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: bool) {
     let area = centered_rect(
         CONFIRM_DIALOG_WIDTH_PERCENT,
@@ -161,10 +172,7 @@ pub fn render_confirm_dialog(frame: &mut Frame, message: &str, selected_yes: boo
     );
 
     let dialog = Paragraph::new(text)
-        .block(
-            Theme::section_block(Some(resources::CONFIRM_TITLE))
-                .border_style(Theme::selected_border_style()),
-        )
+        .block(Theme::section_block(Some(resources::CONFIRM_TITLE)))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(dialog, area);
@@ -208,10 +216,9 @@ pub fn render_expanded_log_line(frame: &mut Frame, timestamp: &str, message: &st
         format!("{timestamp}\n\n{message}")
     };
     let dialog = Paragraph::new(text)
-        .block(
-            Theme::section_block(Some(resources::EXPANDED_LOG_LINE_TITLE))
-                .border_style(Theme::selected_border_style()),
-        )
+        .block(Theme::section_block(Some(
+            resources::EXPANDED_LOG_LINE_TITLE,
+        )))
         .wrap(Wrap { trim: false });
     frame.render_widget(dialog, area);
 }
@@ -232,11 +239,7 @@ pub fn render_popup_message(frame: &mut Frame, message: &PopupMessage) {
 
     let popup_widget = Paragraph::new(message.as_str())
         .style(style)
-        .block(
-            Theme::section_block(Some(title))
-                .border_style(style)
-                .title_style(style),
-        )
+        .block(Theme::section_block(Some(title)))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(popup_widget, area);
@@ -263,7 +266,7 @@ pub fn render_selection_dialog(
 
     let items: Vec<ListItem> = options.iter().copied().map(ListItem::new).collect();
     let list = List::new(items)
-        .block(Theme::section_block(Some(title)).border_style(Theme::selected_border_style()))
+        .block(Theme::section_block(Some(title)))
         .highlight_style(Theme::highlight_style())
         .highlight_symbol(resources::MAIN_MENU_HIGHLIGHT_SYMBOL);
 
@@ -349,8 +352,8 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::{
-        render_expanded_log_line, render_selection_dialog, truncate_text, PopupMessage,
-        TableSelection,
+        dim_background, render_expanded_log_line, render_selection_dialog, truncate_text,
+        PopupMessage, TableSelection,
     };
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::ListState, Terminal};
 
@@ -432,6 +435,28 @@ mod tests {
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("Expanded log line"));
         assert!(text.contains("2026-10-26 10:30:00"));
+    }
+
+    #[test]
+    fn test_dim_background_dimens_foreground_and_clears_modifiers() {
+        let backend = TestBackend::new(20, 4);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| {
+                let paragraph = ratatui::widgets::Paragraph::new("bg text").style(
+                    ratatui::style::Style::default()
+                        .fg(ratatui::style::Color::Green)
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                );
+                frame.render_widget(paragraph, frame.area());
+                dim_background(frame);
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        for cell in buffer.content.iter() {
+            assert_eq!(cell.fg, ratatui::style::Color::DarkGray);
+            assert_eq!(cell.modifier, ratatui::style::Modifier::empty());
+        }
     }
 
     #[test]

@@ -42,6 +42,7 @@ pub const CONTAINER_DETAILS_NETWORK_IO_LABEL: &str = "Network I/O";
 pub const EXEC_SHELL_DIALOG_TITLE: &str = " Exec Shell ";
 pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc/q: Cancel ";
 pub const INPUT_EMPTY: &str = " ";
+pub const INPUT_DIALOG_WIDTH_PERCENT: u16 = 60;
 pub const ADD_IMAGE_DIALOG_TITLE: &str = " Download Image ";
 pub const ADD_IMAGE_DIALOG_HELP: &str = " Enter: Download | Tab: Next | Esc/q: Cancel ";
 pub const ADD_IMAGE_FIELD_LABEL: &str = "Image (<name>:<version>, latest if empty)";

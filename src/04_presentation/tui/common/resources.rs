@@ -41,6 +41,17 @@ pub const CONTAINER_DETAILS_ENV_VARS_LABEL: &str = "Environment Variables";
 pub const CONTAINER_DETAILS_NETWORK_IO_LABEL: &str = "Network I/O";
 pub const EXEC_SHELL_DIALOG_TITLE: &str = " Exec Shell ";
 pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc/q: Cancel ";
+pub const INPUT_EMPTY: &str = " ";
+pub const ADD_IMAGE_DIALOG_TITLE: &str = " Download Image ";
+pub const ADD_IMAGE_DIALOG_HELP: &str =
+    " Enter: Download | Tab: Next | Esc/q: Cancel ";
+pub const ADD_IMAGE_FIELD_LABEL: &str = "Image (<name>:<version>, latest if empty)";
+pub const ADD_CONTAINER_DIALOG_TITLE: &str = " Create Container ";
+pub const ADD_CONTAINER_DIALOG_HELP: &str =
+    " Enter: Create | Tab: Next | Esc/q: Cancel ";
+pub const ADD_CONTAINER_NAME_LABEL: &str = "Name";
+pub const ADD_CONTAINER_IMAGE_LABEL: &str = "Image (<name>:<version>, latest if empty)";
+pub const ADD_CONTAINER_PORTS_LABEL: &str = "Ports (<host>:<internal>;...)";
 
 pub const VOLUME_TITLE: &str = "Volumes";
 pub const VOLUME_HEADERS: [&str; 5] = ["Name", "Driver", "Size", "In Use", "Created"];

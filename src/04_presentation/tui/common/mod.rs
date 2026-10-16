@@ -1,6 +1,7 @@
 pub mod action_bar;
 pub mod breadcrumb;
 pub mod filter;
+pub mod input;
 pub mod keys;
 pub mod menu;
 pub mod progress_bar;
@@ -12,6 +13,7 @@ pub mod widgets;
 pub use action_bar::{action_bar_line, render_action_bar, render_loading_bar};
 pub use breadcrumb::{breadcrumb_text, render_breadcrumb, BREADCRUMB_BAR_HEIGHT};
 pub use filter::FilterState;
+pub use input::{InputDialogSize, InputDialogState, InputField, TextInputState};
 pub use keys::{map_key_to_action, map_key_to_action_for_context, AppAction, KeyContext};
 pub use menu::render_main_menu;
 pub use progress_bar::{format_pull_bytes, pull_progress_bar_text, render_pull_progress_bar};

@@ -135,6 +135,7 @@ pub fn build_exec_command(
     command
 }
 
+#[cfg(not(windows))]
 pub const TERMINAL_EMULATOR_CANDIDATES: [&str; 8] = [
     "x-terminal-emulator",
     "gnome-terminal",
@@ -147,12 +148,8 @@ pub const TERMINAL_EMULATOR_CANDIDATES: [&str; 8] = [
 ];
 
 #[cfg(windows)]
-pub const TERMINAL_EMULATOR_CANDIDATES: [&str; 4] = [
-    "wt.exe",
-    "WindowsTerminal.exe",
-    "cmd.exe",
-    "powershell.exe",
-];
+pub const TERMINAL_EMULATOR_CANDIDATES: [&str; 4] =
+    ["wt.exe", "WindowsTerminal.exe", "cmd.exe", "powershell.exe"];
 
 pub fn find_terminal_emulator() -> Option<String> {
     if let Ok(terminal) = std::env::var("RUSTY_CONSOLE_TERMINAL") {
@@ -195,7 +192,6 @@ fn which_binary(program: &str) -> io::Result<std::path::PathBuf> {
 fn is_executable(path: &std::path::Path) -> io::Result<bool> {
     Ok(path.is_file())
 }
-
 
 fn terminal_exec_args(program: &str) -> &'static [&'static str] {
     if cfg!(windows) {
@@ -344,13 +340,15 @@ mod tests {
             refresh_target: ExecRefreshTarget::Containers,
         };
         if !cfg!(windows) {
-            let command =
-                build_external_exec_command(&config, &request, "x-terminal-emulator");
+            let command = build_external_exec_command(&config, &request, "x-terminal-emulator");
             let args = command
                 .get_args()
                 .map(|arg| arg.to_string_lossy().into_owned())
                 .collect::<Vec<_>>();
-            assert_eq!(command.get_program(), std::ffi::OsStr::new("x-terminal-emulator"));
+            assert_eq!(
+                command.get_program(),
+                std::ffi::OsStr::new("x-terminal-emulator")
+            );
             assert_eq!(
                 args,
                 vec![

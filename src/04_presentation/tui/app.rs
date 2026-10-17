@@ -15,8 +15,9 @@ use crate::presentation::tui::container::{
 };
 use crate::presentation::tui::event::{AppEvent, EventHandler};
 use crate::presentation::tui::exec::{
-    build_exec_command, finalize_exec_command_result, format_exec_error, ExecCommandConfig,
-    ExecCommandResult, ExecRefreshTarget, ExecShellDialog, PendingExec, EXEC_SHELL_OPTIONS,
+    build_exec_command, build_external_exec_command, finalize_exec_command_result,
+    find_terminal_emulator, format_exec_error, ExecCommandConfig, ExecCommandResult,
+    ExecRefreshTarget, ExecShellDialog, PendingExec, EXEC_SHELL_OPTIONS,
 };
 use crate::presentation::tui::image::{
     filter_images, render_image_details, render_image_list, ImageActions, ImageHelpBarState,
@@ -907,7 +908,11 @@ impl App {
         self.container_presenter.set_loading(false);
         self.stack_presenter.set_loading(false);
 
-        let result = self.run_exec_command(terminal, &request)?;
+        let result = if let Some(terminal_emulator) = find_terminal_emulator() {
+            self.run_external_exec_command(&terminal_emulator, &request)
+        } else {
+            self.run_exec_command(terminal, &request)
+        }?;
 
         match request.refresh_target {
             ExecRefreshTarget::Containers => self.load_containers().await,
@@ -915,6 +920,7 @@ impl App {
         }
 
         match result {
+            ExecCommandResult::Spawned => {}
             ExecCommandResult::Status(status) if status.success() => {}
             ExecCommandResult::Status(status) => {
                 self.popup_message = Some(PopupMessage::Error(format!(
@@ -927,6 +933,16 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn run_external_exec_command(
+        &mut self,
+        terminal_emulator: &str,
+        request: &PendingExec,
+    ) -> io::Result<ExecCommandResult> {
+        build_external_exec_command(&self.exec_command_config, request, terminal_emulator)
+            .spawn()
+            .map(|_| ExecCommandResult::Spawned)
     }
 
     fn run_exec_command(

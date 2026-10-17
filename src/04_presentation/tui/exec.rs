@@ -57,6 +57,7 @@ pub struct PendingExec {
 
 #[derive(Debug)]
 pub enum ExecCommandResult {
+    Spawned,
     Status(std::process::ExitStatus),
     SpawnError(io::Error),
 }
@@ -132,6 +133,117 @@ pub fn build_exec_command(
         .arg(request.container_id.as_str())
         .arg(request.shell.as_str());
     command
+}
+
+pub const TERMINAL_EMULATOR_CANDIDATES: [&str; 8] = [
+    "x-terminal-emulator",
+    "gnome-terminal",
+    "konsole",
+    "xfce4-terminal",
+    "kitty",
+    "alacritty",
+    "wezterm",
+    "xterm",
+];
+
+#[cfg(windows)]
+pub const TERMINAL_EMULATOR_CANDIDATES: [&str; 4] = [
+    "wt.exe",
+    "WindowsTerminal.exe",
+    "cmd.exe",
+    "powershell.exe",
+];
+
+pub fn find_terminal_emulator() -> Option<String> {
+    if let Ok(terminal) = std::env::var("RUSTY_CONSOLE_TERMINAL") {
+        if !terminal.is_empty() && is_binary_on_path_or_absolute(&terminal) {
+            return Some(terminal);
+        }
+    }
+    TERMINAL_EMULATOR_CANDIDATES
+        .iter()
+        .find(|candidate| which_binary(candidate).is_ok())
+        .map(|candidate| candidate.to_string())
+}
+
+fn is_binary_on_path_or_absolute(program: &str) -> bool {
+    let path = std::path::Path::new(program);
+    if path.components().count() > 1 {
+        return is_executable(path).unwrap_or(false);
+    }
+    which_binary(program).is_ok()
+}
+
+fn which_binary(program: &str) -> io::Result<std::path::PathBuf> {
+    let exe_suffix = if cfg!(windows) { ".exe" } else { "" };
+    let program = if program.ends_with(".exe") || exe_suffix.is_empty() {
+        program.to_string()
+    } else {
+        format!("{program}{exe_suffix}")
+    };
+    let path_var =
+        std::env::var_os("PATH").ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(&program);
+        if is_executable(&candidate)? {
+            return Ok(candidate);
+        }
+    }
+    Err(io::Error::from(io::ErrorKind::NotFound))
+}
+
+fn is_executable(path: &std::path::Path) -> io::Result<bool> {
+    Ok(path.is_file())
+}
+
+
+fn terminal_exec_args(program: &str) -> &'static [&'static str] {
+    if cfg!(windows) {
+        return &[];
+    }
+    if program.contains("gnome-terminal") {
+        &["--"]
+    } else {
+        &["-e"]
+    }
+}
+
+pub fn build_external_exec_command(
+    config: &ExecCommandConfig,
+    request: &PendingExec,
+    terminal: &str,
+) -> std::process::Command {
+    let mut command = std::process::Command::new(terminal);
+    if cfg!(windows) {
+        command.arg("cmd");
+        command.arg("/c");
+        command.arg("start");
+        let script = format!(
+            "docker --host {} exec -it {} {}",
+            shell_quote(config.docker_host()),
+            request.container_id,
+            request.shell.as_str()
+        );
+        command.arg(script);
+    } else {
+        command.args(terminal_exec_args(terminal));
+        command
+            .arg("docker")
+            .args(["--host", config.docker_host()])
+            .arg("exec")
+            .arg("-it")
+            .arg(request.container_id.as_str())
+            .arg(request.shell.as_str());
+    }
+    command
+}
+
+fn shell_quote(value: &str) -> String {
+    if value.contains(' ') {
+        format!("\"{value}\"")
+    } else {
+        value.to_string()
+    }
 }
 
 pub fn format_exec_error(error: &io::Error) -> String {
@@ -221,5 +333,73 @@ mod tests {
         let error = io::Error::from(io::ErrorKind::NotFound);
         let result = finalize_exec_command_result(Err(error), Ok(()));
         assert!(matches!(result, Ok(ExecCommandResult::SpawnError(_))));
+    }
+
+    #[test]
+    fn test_build_external_exec_command_unix_args() {
+        let config = ExecCommandConfig::new("unix:///var/run/docker.sock");
+        let request = PendingExec {
+            container_id: "abc123".to_string(),
+            shell: ExecShell::Bash,
+            refresh_target: ExecRefreshTarget::Containers,
+        };
+        if !cfg!(windows) {
+            let command =
+                build_external_exec_command(&config, &request, "x-terminal-emulator");
+            let args = command
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            assert_eq!(command.get_program(), std::ffi::OsStr::new("x-terminal-emulator"));
+            assert_eq!(
+                args,
+                vec![
+                    "-e",
+                    "docker",
+                    "--host",
+                    "unix:///var/run/docker.sock",
+                    "exec",
+                    "-it",
+                    "abc123",
+                    "bash",
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn test_build_external_exec_command_gnome_terminal_separator() {
+        let config = ExecCommandConfig::new("unix:///var/run/docker.sock");
+        let request = PendingExec {
+            container_id: "abc123".to_string(),
+            shell: ExecShell::Sh,
+            refresh_target: ExecRefreshTarget::Containers,
+        };
+        if !cfg!(windows) {
+            let command = build_external_exec_command(&config, &request, "gnome-terminal");
+            let args = command
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            assert_eq!(args.first(), Some(&"--".to_string()));
+            assert_eq!(args.get(1), Some(&"docker".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_which_binary_finds_sh() {
+        if !cfg!(windows) {
+            assert!(which_binary("sh").is_ok());
+        }
+    }
+
+    #[test]
+    fn test_find_terminal_emulator_env_override_missing_binary() {
+        std::env::set_var("RUSTY_CONSOLE_TERMINAL", "/nonexistent/terminal-xyz");
+        let found = std::env::var("RUSTY_CONSOLE_TERMINAL").ok();
+        assert!(found.is_some());
+        let result = find_terminal_emulator();
+        std::env::remove_var("RUSTY_CONSOLE_TERMINAL");
+        let _ = result;
     }
 }

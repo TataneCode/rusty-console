@@ -4,6 +4,7 @@ use crate::application::container::{
 use crate::application::image::{
     ImageDto, ImagePullEvent, ImagePullOutcome, ImagePullSubscription,
 };
+use crate::application::network::NetworkDto;
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
     dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
@@ -26,7 +27,7 @@ use crate::presentation::tui::image::{
     render_image_details, render_image_list, ImageActions, ImageHelpBarState, ImagePresenter,
 };
 use crate::presentation::tui::network::{
-    filter_networks, render_network_details, render_network_list, NetworkActions, NetworkPresenter,
+    render_network_details, render_network_list, NetworkActions, NetworkPresenter,
 };
 use crate::presentation::tui::stack::{
     filter_stacks, render_stack_containers, render_stack_list, StackActions, StackHelpBarState,
@@ -362,14 +363,13 @@ impl App {
                 let presenter = &mut self.network_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let networks = &presenter.networks;
+                let networks: Vec<NetworkDto> =
+                    presenter.filtered_networks().into_iter().cloned().collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_networks(networks, &filter);
                 render_network_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &networks,
                     selection_state,
                     active_filter.as_deref(),
                     is_loading,
@@ -1500,6 +1500,35 @@ mod tests {
         assert!(
             alpha_pos > zeta_pos,
             "image list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_render_network_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_network_dto(false, 0);
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_network_dto(false, 0);
+        alpha.name = "alpha".to_string();
+        app.network_presenter.set_networks(vec![zeta, alpha]);
+        app.screen = Screen::NetworkList;
+
+        app.network_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "network list should render name-ascending after first toggle"
+        );
+
+        app.network_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "network list should render name-descending after second toggle"
         );
     }
 

@@ -14,7 +14,7 @@ use ratatui::{
 pub fn render_container_list(
     frame: &mut Frame,
     area: Rect,
-    containers: &[&ContainerDto],
+    containers: &[ContainerDto],
     state: &mut TableState,
     active_filter: Option<&str>,
     is_loading: bool,
@@ -24,7 +24,6 @@ pub fn render_container_list(
 
     let rows: Vec<Row> = containers
         .iter()
-        .copied()
         .map(|c| {
             let state_style = match c.state {
                 ContainerState::Running => Theme::running_style(),
@@ -264,7 +263,7 @@ mod tests {
         let backend = TestBackend::new(100, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         let container = make_container();
-        let items = vec![&container];
+        let items = vec![container];
         let mut state = TableState::default();
 
         terminal

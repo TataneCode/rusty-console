@@ -10,8 +10,8 @@ use crate::presentation::tui::common::{
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
-    filter_containers, render_container_details, render_container_list, render_container_logs,
-    ContainerActions, ContainerPresenter, LogSearchView,
+    render_container_details, render_container_list, render_container_logs, ContainerActions,
+    ContainerPresenter, LogSearchView,
 };
 use crate::presentation::tui::event::{AppEvent, EventHandler};
 use crate::presentation::tui::exec::{
@@ -257,14 +257,16 @@ impl App {
                 let presenter = &mut self.container_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let containers = &presenter.containers;
+                let containers: Vec<ContainerDto> = presenter
+                    .filtered_containers()
+                    .into_iter()
+                    .cloned()
+                    .collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_containers(containers, &filter);
                 render_container_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &containers,
                     selection_state,
                     active_filter.as_deref(),
                     is_loading,
@@ -1408,6 +1410,35 @@ mod tests {
         assert!(rendered.contains(resources::EXEC_SHELL_DIALOG_TITLE.trim()));
         assert!(rendered.contains("sh"));
         assert!(rendered.contains("bash"));
+    }
+
+    #[test]
+    fn test_render_container_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_container_dto();
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_container_dto();
+        alpha.name = "alpha".to_string();
+        app.container_presenter.set_containers(vec![zeta, alpha]);
+        app.screen = Screen::ContainerList;
+
+        app.container_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "container list should render name-ascending after first toggle"
+        );
+
+        app.container_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "container list should render name-descending after second toggle"
+        );
     }
 
     #[test]

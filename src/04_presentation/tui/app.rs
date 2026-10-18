@@ -5,6 +5,7 @@ use crate::application::image::{
     ImageDto, ImagePullEvent, ImagePullOutcome, ImagePullSubscription,
 };
 use crate::application::network::NetworkDto;
+use crate::application::stack::StackDto;
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
     dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
@@ -30,8 +31,7 @@ use crate::presentation::tui::network::{
     render_network_details, render_network_list, NetworkActions, NetworkPresenter,
 };
 use crate::presentation::tui::stack::{
-    filter_stacks, render_stack_containers, render_stack_list, StackActions, StackHelpBarState,
-    StackPresenter,
+    render_stack_containers, render_stack_list, StackActions, StackHelpBarState, StackPresenter,
 };
 use crate::presentation::tui::volume::{
     render_volume_details, render_volume_list, VolumeActions, VolumePresenter,
@@ -391,14 +391,13 @@ impl App {
                 let presenter = &mut self.stack_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let stacks = &presenter.stacks;
+                let stacks: Vec<StackDto> =
+                    presenter.filtered_stacks().into_iter().cloned().collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_stacks(stacks, &filter);
                 render_stack_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &stacks,
                     selection_state,
                     active_filter.as_deref(),
                     StackHelpBarState {
@@ -1529,6 +1528,35 @@ mod tests {
         assert!(
             alpha_pos > zeta_pos,
             "network list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_render_stack_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_stack_dto(vec![]);
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_stack_dto(vec![]);
+        alpha.name = "alpha".to_string();
+        app.stack_presenter.set_stacks(vec![zeta, alpha]);
+        app.screen = Screen::StackList;
+
+        app.stack_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "stack list should render name-ascending after first toggle"
+        );
+
+        app.stack_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "stack list should render name-descending after second toggle"
         );
     }
 

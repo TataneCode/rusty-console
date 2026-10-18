@@ -1,5 +1,5 @@
 use crate::application::volume::VolumeDto;
-use crate::presentation::tui::common::{FilterState, TableSelection};
+use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
 
 pub struct VolumePresenter {
     pub volumes: Vec<VolumeDto>,
@@ -8,6 +8,7 @@ pub struct VolumePresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
+    pub sort_order: SortOrder,
 }
 
 pub fn filter_volumes<'a>(volumes: &'a [VolumeDto], filter: &str) -> Vec<&'a VolumeDto> {
@@ -31,6 +32,7 @@ impl VolumePresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
+            sort_order: SortOrder::default(),
         }
     }
 
@@ -57,7 +59,15 @@ impl VolumePresenter {
     }
 
     pub fn filtered_volumes(&self) -> Vec<&VolumeDto> {
-        filter_volumes(&self.volumes, self.filter.value())
+        let mut filtered = filter_volumes(&self.volumes, self.filter.value());
+        apply_name_sort(&mut filtered, self.sort_order, |volume| {
+            volume.name.as_str()
+        });
+        filtered
+    }
+    pub fn toggle_sort(&mut self) {
+        self.sort_order = self.sort_order.next();
+        self.update_filtered_selection();
     }
 
     pub fn selected_volume(&self) -> Option<&VolumeDto> {
@@ -249,6 +259,56 @@ mod tests {
 
         p.set_loading(false);
         assert!(!p.is_loading());
+    }
+
+    #[test]
+    fn test_toggle_sort_cycles_orders() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_volumes()
+            .iter()
+            .map(|v| v.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["app-logs", "pgdata", "redis-cache"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_volumes()
+            .iter()
+            .map(|v| v.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["redis-cache", "pgdata", "app-logs"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_volumes()
+            .iter()
+            .map(|v| v.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["pgdata", "redis-cache", "app-logs"]);
+    }
+
+    #[test]
+    fn test_sort_combines_with_filter() {
+        let mut p = VolumePresenter::new();
+        p.set_volumes(three_volumes());
+        for c in "e".chars() {
+            p.push_filter_char(c);
+        }
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_volumes()
+            .iter()
+            .map(|v| v.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["redis-cache"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_volumes()
+            .iter()
+            .map(|v| v.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["redis-cache"]);
     }
 
     #[test]

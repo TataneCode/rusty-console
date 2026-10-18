@@ -1,5 +1,5 @@
 use crate::application::network::NetworkDto;
-use crate::presentation::tui::common::{FilterState, TableSelection};
+use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
 
 pub struct NetworkPresenter {
     pub networks: Vec<NetworkDto>,
@@ -7,6 +7,7 @@ pub struct NetworkPresenter {
     pub selected_network: Option<NetworkDto>,
     pub loading: bool,
     pub filter: FilterState,
+    pub sort_order: SortOrder,
     pub container_selection: TableSelection,
 }
 
@@ -30,6 +31,7 @@ impl NetworkPresenter {
             selected_network: None,
             loading: false,
             filter: FilterState::new(),
+            sort_order: SortOrder::default(),
             container_selection: TableSelection::new(),
         }
     }
@@ -48,7 +50,15 @@ impl NetworkPresenter {
     }
 
     pub fn filtered_networks(&self) -> Vec<&NetworkDto> {
-        filter_networks(&self.networks, self.filter.value())
+        let mut filtered = filter_networks(&self.networks, self.filter.value());
+        apply_name_sort(&mut filtered, self.sort_order, |network| {
+            network.name.as_str()
+        });
+        filtered
+    }
+    pub fn toggle_sort(&mut self) {
+        self.sort_order = self.sort_order.next();
+        self.update_filtered_selection();
     }
 
     pub fn selected_network(&self) -> Option<&NetworkDto> {
@@ -279,6 +289,33 @@ mod tests {
         assert!(p.filter.value().is_empty());
         // All items visible again
         assert_eq!(p.filtered_networks().len(), 3);
+    }
+
+    #[test]
+    fn test_toggle_sort_cycles_orders() {
+        let mut p = NetworkPresenter::new();
+        p.set_networks(three_networks());
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_networks()
+            .iter()
+            .map(|n| n.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["app-net", "db-net", "web-net"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_networks()
+            .iter()
+            .map(|n| n.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["web-net", "db-net", "app-net"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_networks()
+            .iter()
+            .map(|n| n.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["app-net", "db-net", "web-net"]);
     }
 
     #[test]

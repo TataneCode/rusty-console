@@ -27,7 +27,7 @@ fn container_list_action_bar_shows_help_text_and_highlighted_keys() {
 
     let (text, styles) = render_app_text_and_styles(&mut app);
     assert!(
-        text.contains("q: Quit | /: Filter | j/k: Navigate"),
+        text.contains("q: Quit | /: Filter | o: Sort | j/k: Navigate"),
         "action bar help missing: {text}"
     );
 

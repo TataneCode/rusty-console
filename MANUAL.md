@@ -9,6 +9,8 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 - **Confirmation dialogs** — every destructive action (delete, prune, stop all, …) opens a confirmation dialog first.
 - **Error popups** — errors are shown in a popup, dismissed on any keypress.
 - **Filter mode** — pressing `/` activates a name filter; type to search, press `Esc` to clear.
+- **Sort** — pressing `o` on a list screen cycles the name ordering: A→Z, then Z→A, then back to the default order. The chosen order survives refreshes.
+- **Add dialogs** — pressing `A` on the Images or Containers screen opens a dialog to download an image or create a container (see below).
 - **Refresh** — press `r` to reload the current list.
 
 ## Global keys
@@ -21,6 +23,7 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 | `Esc` / `q` | Go back / quit |
 | `r` | Refresh list |
 | `/` | Activate filter (type to search, `Esc` to clear) |
+| `o` | Cycle list sort: A→Z → Z→A → default |
 
 ## Containers
 
@@ -29,6 +32,8 @@ The container list shows all containers regardless of state, with live CPU and m
 | Key | Action |
 |-----|--------|
 | `s` | Start or stop the selected container |
+| `o` | Cycle list sort by name (A→Z → Z→A → default) |
+| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container) |
 | `p` | Pause or unpause the selected container |
 | `R` | Restart the selected container |
 | `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` in an external terminal window when one is available, otherwise inline (TUI suspended) |
@@ -74,12 +79,15 @@ Stacks are detected from Docker Compose container labels. The stack list shows r
 | `Enter` | Drill down into the stack's containers |
 | `s` | Start all containers in the selected stack |
 | `S` | Stop all containers in the selected stack |
+| `o` | Cycle list sort by name (A→Z → Z→A → default) |
 
 ### Stack containers (drill-down)
 
 | Key | Action |
 |-----|--------|
 | `s` | Start or stop the selected container |
+| `o` | Cycle list sort by name (A→Z → Z→A → default) |
+| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container) |
 | `e` | Open the exec shell picker for the selected container |
 | `d` | Delete the selected container |
 | `Ctrl+S` | Start all containers in the stack |
@@ -94,6 +102,7 @@ The volume list shows all volumes and flags which ones are in use.
 |-----|--------|
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune unused volumes |
+| `o` | Cycle list sort by name (A→Z → Z→A → default) |
 
 ## Images
 
@@ -104,6 +113,8 @@ The image list shows all images with their usage status.
 | `c` | View image details |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune dangling images |
+| `o` | Cycle list sort by name (A→Z → Z→A → default) |
+| `A` | Open the Download Image dialog (single field, e.g. `nginx:1.25`; a name without tag defaults to `:latest`) |
 
 ### Image details
 
@@ -130,6 +141,7 @@ The network list shows name, driver, scope, subnet, and connected container coun
 | `d` | Delete the selected network (opens confirmation dialog; predefined networks and networks with connected containers are refused) |
 | `X` | Prune unused networks |
 | `/` | Filter networks by name |
+| `o` | Cycle list sort by name (A→Z → Z→A → default) |
 | `r` | Refresh |
 
 Predefined networks (`bridge`, `host`, `none`) are protected and cannot be deleted.

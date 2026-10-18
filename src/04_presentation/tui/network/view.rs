@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_render_network_list_shows_network_data_and_help() {
-        let backend = TestBackend::new(100, 20);
+        let backend = TestBackend::new(120, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         let network = make_network_dto();
         let items = vec![&network];

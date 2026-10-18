@@ -1,7 +1,7 @@
 use crate::application::container::{
     ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto, ContainerStatsUpdate,
 };
-use crate::presentation::tui::common::{FilterState, TableSelection};
+use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
 
@@ -14,6 +14,7 @@ pub struct ContainerPresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
+    pub sort_order: SortOrder,
     pub log_search: FilterState,
     pub log_search_results: Vec<usize>,
     pub log_search_position: usize,
@@ -49,6 +50,7 @@ impl ContainerPresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
+            sort_order: SortOrder::default(),
             log_search: FilterState::new(),
             log_search_results: Vec::new(),
             log_search_position: 0,
@@ -80,7 +82,15 @@ impl ContainerPresenter {
     }
 
     pub fn filtered_containers(&self) -> Vec<&ContainerDto> {
-        filter_containers(&self.containers, self.filter.value())
+        let mut filtered = filter_containers(&self.containers, self.filter.value());
+        apply_name_sort(&mut filtered, self.sort_order, |container| {
+            container.name.as_str()
+        });
+        filtered
+    }
+    pub fn toggle_sort(&mut self) {
+        self.sort_order = self.sort_order.next();
+        self.update_filtered_selection();
     }
 
     pub fn selected_container(&self) -> Option<&ContainerDto> {
@@ -703,6 +713,47 @@ mod tests {
 
         p.set_loading(false);
         assert!(!p.is_loading());
+    }
+
+    #[test]
+    fn test_toggle_sort_cycles_orders() {
+        let mut p = ContainerPresenter::new();
+        p.set_containers(three_containers());
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["alpha", "beta", "gamma"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["gamma", "beta", "alpha"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["alpha", "beta", "gamma"]);
+    }
+
+    #[test]
+    fn test_sort_survives_set_containers_refresh() {
+        let mut p = ContainerPresenter::new();
+        p.set_containers(three_containers());
+        p.toggle_sort();
+        p.set_containers(three_containers());
+        let names: Vec<&str> = p
+            .filtered_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["alpha", "beta", "gamma"]);
     }
 
     #[test]

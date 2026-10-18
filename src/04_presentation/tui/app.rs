@@ -2,6 +2,7 @@ use crate::application::container::{
     ContainerDto, ContainerStatsSubscription, CreateContainerRequest,
 };
 use crate::application::image::{ImagePullEvent, ImagePullOutcome, ImagePullSubscription};
+use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
     dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
     render_expanded_log_line, render_input_dialog, render_main_menu, render_popup_message,
@@ -31,7 +32,7 @@ use crate::presentation::tui::stack::{
     StackPresenter,
 };
 use crate::presentation::tui::volume::{
-    filter_volumes, render_volume_details, render_volume_list, VolumeActions, VolumePresenter,
+    render_volume_details, render_volume_list, VolumeActions, VolumePresenter,
 };
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -303,14 +304,13 @@ impl App {
                 let presenter = &mut self.volume_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let volumes = &presenter.volumes;
+                let volumes: Vec<VolumeDto> =
+                    presenter.filtered_volumes().into_iter().cloned().collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_volumes(volumes, &filter);
                 render_volume_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &volumes,
                     selection_state,
                     active_filter.as_deref(),
                     is_loading,
@@ -1438,6 +1438,35 @@ mod tests {
         assert!(
             alpha_pos > zeta_pos,
             "container list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_render_volume_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_volume_dto(false, true);
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_volume_dto(false, true);
+        alpha.name = "alpha".to_string();
+        app.volume_presenter.set_volumes(vec![zeta, alpha]);
+        app.screen = Screen::VolumeList;
+
+        app.volume_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "volume list should render name-ascending after first toggle"
+        );
+
+        app.volume_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "volume list should render name-descending after second toggle"
         );
     }
 

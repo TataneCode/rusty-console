@@ -12,7 +12,7 @@ use ratatui::{
 pub fn render_volume_list(
     frame: &mut Frame,
     area: Rect,
-    volumes: &[&VolumeDto],
+    volumes: &[VolumeDto],
     state: &mut TableState,
     active_filter: Option<&str>,
     is_loading: bool,
@@ -22,7 +22,6 @@ pub fn render_volume_list(
 
     let rows: Vec<Row> = volumes
         .iter()
-        .copied()
         .map(|v| {
             let in_use_style = if v.in_use {
                 Theme::in_use_style()
@@ -155,7 +154,7 @@ mod tests {
             linked_containers: vec!["/web".to_string()],
             can_delete: false,
         };
-        let items = vec![&volume];
+        let items = vec![volume];
         let mut state = TableState::default();
 
         terminal

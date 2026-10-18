@@ -19,7 +19,7 @@ pub struct ImageHelpBarState<'a> {
 pub fn render_image_list(
     frame: &mut Frame,
     area: Rect,
-    images: &[&ImageDto],
+    images: &[ImageDto],
     state: &mut TableState,
     active_filter: Option<&str>,
     help_bar: ImageHelpBarState<'_>,
@@ -28,7 +28,6 @@ pub fn render_image_list(
 
     let rows: Vec<Row> = images
         .iter()
-        .copied()
         .map(|img| {
             let style = if img.is_dangling {
                 Theme::dangling_style()
@@ -181,7 +180,7 @@ mod tests {
         let backend = TestBackend::new(100, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         let image = make_image();
-        let items = vec![&image];
+        let items = vec![image];
         let mut state = TableState::default();
 
         terminal

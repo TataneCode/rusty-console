@@ -26,6 +26,7 @@ pub enum AppAction {
     RemoveAll,
     PullImages,
     Add,
+    ToggleSort,
     ActivateLogSearch,
     NextLogMatch,
     PreviousLogMatch,
@@ -68,6 +69,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('D') => Some(AppAction::RemoveAll),
         KeyCode::Char('P') => Some(AppAction::PullImages),
         KeyCode::Char('A') => Some(AppAction::Add),
+        KeyCode::Char('o') => Some(AppAction::ToggleSort),
         _ => None,
     }
 }
@@ -92,6 +94,7 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
         },
         KeyContext::Global => match action {
             AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
+            AppAction::ToggleSort => None,
             AppAction::ActivateLogSearch => None,
             AppAction::ExportLogs => None,
             AppAction::DisconnectContainer => None,
@@ -327,6 +330,14 @@ mod tests {
         assert_eq!(
             map_key_to_action(key_event(KeyCode::Char('A'))),
             Some(AppAction::Add)
+        );
+    }
+
+    #[test]
+    fn test_toggle_sort_key() {
+        assert_eq!(
+            map_key_to_action(key_event(KeyCode::Char('o'))),
+            Some(AppAction::ToggleSort)
         );
     }
 

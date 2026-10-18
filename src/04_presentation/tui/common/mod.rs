@@ -6,6 +6,7 @@ pub mod keys;
 pub mod menu;
 pub mod progress_bar;
 pub mod resources;
+pub mod sort;
 pub mod spinner;
 pub mod theme;
 pub mod widgets;
@@ -19,6 +20,7 @@ pub use keys::{map_key_to_action, map_key_to_action_for_context, AppAction, KeyC
 pub use menu::render_main_menu;
 pub use progress_bar::{format_pull_bytes, pull_progress_bar_text, render_pull_progress_bar};
 pub use resources::filter_prompt_title;
+pub use sort::{apply_name_sort, SortOrder};
 pub use spinner::Spinner;
 pub use theme::Theme;
 pub use widgets::{

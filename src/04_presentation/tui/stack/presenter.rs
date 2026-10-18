@@ -1,5 +1,5 @@
 use crate::application::stack::{StackContainerDto, StackDto};
-use crate::presentation::tui::common::{FilterState, TableSelection};
+use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
 
 pub struct StackPresenter {
     pub stacks: Vec<StackDto>,
@@ -9,6 +9,7 @@ pub struct StackPresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
+    pub sort_order: SortOrder,
 }
 
 pub fn filter_stacks<'a>(stacks: &'a [StackDto], filter: &str) -> Vec<&'a StackDto> {
@@ -33,6 +34,7 @@ impl StackPresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
+            sort_order: SortOrder::default(),
         }
     }
 
@@ -60,7 +62,13 @@ impl StackPresenter {
     }
 
     pub fn filtered_stacks(&self) -> Vec<&StackDto> {
-        filter_stacks(&self.stacks, self.filter.value())
+        let mut filtered = filter_stacks(&self.stacks, self.filter.value());
+        apply_name_sort(&mut filtered, self.sort_order, |stack| stack.name.as_str());
+        filtered
+    }
+    pub fn toggle_sort(&mut self) {
+        self.sort_order = self.sort_order.next();
+        self.update_filtered_selection();
     }
 
     pub fn selected_stack(&self) -> Option<&StackDto> {
@@ -370,6 +378,33 @@ mod tests {
         assert!(p.is_loading());
         p.set_loading(false);
         assert!(!p.is_loading());
+    }
+
+    #[test]
+    fn test_toggle_sort_cycles_orders() {
+        let mut p = StackPresenter::new();
+        p.set_stacks(three_stacks());
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_stacks()
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["app-backend", "app-frontend", "db-postgres"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_stacks()
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["db-postgres", "app-frontend", "app-backend"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_stacks()
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["app-frontend", "app-backend", "db-postgres"]);
     }
 
     #[test]

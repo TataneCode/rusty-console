@@ -1,5 +1,5 @@
 use crate::application::image::{ImageDto, ImagePullProgress};
-use crate::presentation::tui::common::{FilterState, TableSelection};
+use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
 
 pub struct ImagePresenter {
     pub images: Vec<ImageDto>,
@@ -8,6 +8,7 @@ pub struct ImagePresenter {
     pub loading: bool,
     pub error: Option<String>,
     pub filter: FilterState,
+    pub sort_order: SortOrder,
     pub pull_progress: Option<ImagePullProgress>,
 }
 
@@ -35,6 +36,7 @@ impl ImagePresenter {
             loading: false,
             error: None,
             filter: FilterState::new(),
+            sort_order: SortOrder::default(),
             pull_progress: None,
         }
     }
@@ -70,7 +72,15 @@ impl ImagePresenter {
     }
 
     pub fn filtered_images(&self) -> Vec<&ImageDto> {
-        filter_images(&self.images, self.filter.value())
+        let mut filtered = filter_images(&self.images, self.filter.value());
+        apply_name_sort(&mut filtered, self.sort_order, |image| {
+            image.full_name.as_str()
+        });
+        filtered
+    }
+    pub fn toggle_sort(&mut self) {
+        self.sort_order = self.sort_order.next();
+        self.update_filtered_selection();
     }
 
     pub fn selected_image(&self) -> Option<&ImageDto> {
@@ -253,6 +263,33 @@ mod tests {
 
         p.set_loading(false);
         assert!(!p.is_loading());
+    }
+
+    #[test]
+    fn test_toggle_sort_cycles_orders() {
+        let mut p = ImagePresenter::new();
+        p.set_images(three_images());
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_images()
+            .iter()
+            .map(|i| i.full_name.as_str())
+            .collect();
+        assert_eq!(names, vec!["nginx:latest", "postgres:16", "redis:7-alpine"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_images()
+            .iter()
+            .map(|i| i.full_name.as_str())
+            .collect();
+        assert_eq!(names, vec!["redis:7-alpine", "postgres:16", "nginx:latest"]);
+        p.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_images()
+            .iter()
+            .map(|i| i.full_name.as_str())
+            .collect();
+        assert_eq!(names, vec!["nginx:latest", "redis:7-alpine", "postgres:16"]);
     }
 
     #[test]

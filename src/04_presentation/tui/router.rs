@@ -194,6 +194,7 @@ impl App {
             }
             AppAction::Exec => self.open_exec_shell_dialog(),
             AppAction::Add => self.open_add_dialog(),
+            AppAction::ToggleSort => self.container_presenter.toggle_sort(),
             _ => {}
         }
     }
@@ -339,6 +340,7 @@ impl App {
             AppAction::ActivateFilter => {
                 self.volume_presenter.activate_filter();
             }
+            AppAction::ToggleSort => self.volume_presenter.toggle_sort(),
             _ => {}
         }
     }
@@ -369,6 +371,7 @@ impl App {
                 self.image_presenter.activate_filter();
             }
             AppAction::Add => self.open_add_dialog(),
+            AppAction::ToggleSort => self.image_presenter.toggle_sort(),
             _ => {}
         }
     }
@@ -424,6 +427,7 @@ impl App {
             AppAction::ActivateFilter => {
                 self.network_presenter.activate_filter();
             }
+            AppAction::ToggleSort => self.network_presenter.toggle_sort(),
             _ => {}
         }
     }
@@ -803,6 +807,7 @@ impl App {
             AppAction::ActivateFilter => {
                 self.stack_presenter.activate_filter();
             }
+            AppAction::ToggleSort => self.stack_presenter.toggle_sort(),
             _ => {}
         }
     }

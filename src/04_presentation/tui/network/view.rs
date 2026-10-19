@@ -12,7 +12,7 @@ use ratatui::{
 pub fn render_network_list(
     frame: &mut Frame,
     area: Rect,
-    networks: &[&NetworkDto],
+    networks: &[NetworkDto],
     state: &mut TableState,
     active_filter: Option<&str>,
     is_loading: bool,
@@ -22,7 +22,6 @@ pub fn render_network_list(
 
     let rows: Vec<Row> = networks
         .iter()
-        .copied()
         .map(|n| {
             let builtin_style = if n.builtin {
                 Theme::in_use_style()
@@ -188,7 +187,7 @@ mod tests {
         let backend = TestBackend::new(120, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         let network = make_network_dto();
-        let items = vec![&network];
+        let items = vec![network];
         let mut state = TableState::default();
 
         terminal
@@ -218,7 +217,7 @@ mod tests {
         let backend = TestBackend::new(100, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         let network = make_network_dto();
-        let items = vec![&network];
+        let items = vec![network];
         let mut state = TableState::default();
 
         terminal

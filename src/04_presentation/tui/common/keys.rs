@@ -94,7 +94,6 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
         },
         KeyContext::Global => match action {
             AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
-            AppAction::ToggleSort => None,
             AppAction::ActivateLogSearch => None,
             AppAction::ExportLogs => None,
             AppAction::DisconnectContainer => None,
@@ -337,6 +336,14 @@ mod tests {
     fn test_toggle_sort_key() {
         assert_eq!(
             map_key_to_action(key_event(KeyCode::Char('o'))),
+            Some(AppAction::ToggleSort)
+        );
+    }
+
+    #[test]
+    fn test_toggle_sort_allowed_in_global_context() {
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('o')), KeyContext::Global),
             Some(AppAction::ToggleSort)
         );
     }

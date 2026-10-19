@@ -1,7 +1,12 @@
 use crate::application::container::{
     ContainerDto, ContainerStatsSubscription, CreateContainerRequest,
 };
-use crate::application::image::{ImagePullEvent, ImagePullOutcome, ImagePullSubscription};
+use crate::application::image::{
+    ImageDto, ImagePullEvent, ImagePullOutcome, ImagePullSubscription,
+};
+use crate::application::network::NetworkDto;
+use crate::application::stack::StackDto;
+use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
     dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
     render_expanded_log_line, render_input_dialog, render_main_menu, render_popup_message,
@@ -10,8 +15,8 @@ use crate::presentation::tui::common::{
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
-    filter_containers, render_container_details, render_container_list, render_container_logs,
-    ContainerActions, ContainerPresenter, LogSearchView,
+    render_container_details, render_container_list, render_container_logs, ContainerActions,
+    ContainerPresenter, LogSearchView,
 };
 use crate::presentation::tui::event::{AppEvent, EventHandler};
 use crate::presentation::tui::exec::{
@@ -20,18 +25,16 @@ use crate::presentation::tui::exec::{
     ExecRefreshTarget, ExecShellDialog, PendingExec, EXEC_SHELL_OPTIONS,
 };
 use crate::presentation::tui::image::{
-    filter_images, render_image_details, render_image_list, ImageActions, ImageHelpBarState,
-    ImagePresenter,
+    render_image_details, render_image_list, ImageActions, ImageHelpBarState, ImagePresenter,
 };
 use crate::presentation::tui::network::{
-    filter_networks, render_network_details, render_network_list, NetworkActions, NetworkPresenter,
+    render_network_details, render_network_list, NetworkActions, NetworkPresenter,
 };
 use crate::presentation::tui::stack::{
-    filter_stacks, render_stack_containers, render_stack_list, StackActions, StackHelpBarState,
-    StackPresenter,
+    render_stack_containers, render_stack_list, StackActions, StackHelpBarState, StackPresenter,
 };
 use crate::presentation::tui::volume::{
-    filter_volumes, render_volume_details, render_volume_list, VolumeActions, VolumePresenter,
+    render_volume_details, render_volume_list, VolumeActions, VolumePresenter,
 };
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -257,14 +260,16 @@ impl App {
                 let presenter = &mut self.container_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let containers = &presenter.containers;
+                let containers: Vec<ContainerDto> = presenter
+                    .filtered_containers()
+                    .into_iter()
+                    .cloned()
+                    .collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_containers(containers, &filter);
                 render_container_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &containers,
                     selection_state,
                     active_filter.as_deref(),
                     is_loading,
@@ -301,14 +306,13 @@ impl App {
                 let presenter = &mut self.volume_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let volumes = &presenter.volumes;
+                let volumes: Vec<VolumeDto> =
+                    presenter.filtered_volumes().into_iter().cloned().collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_volumes(volumes, &filter);
                 render_volume_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &volumes,
                     selection_state,
                     active_filter.as_deref(),
                     is_loading,
@@ -324,15 +328,14 @@ impl App {
                 let presenter = &mut self.image_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let images = &presenter.images;
+                let images: Vec<ImageDto> =
+                    presenter.filtered_images().into_iter().cloned().collect();
                 let selection_state = &mut presenter.selection.state;
                 let pull_progress = presenter.pull_progress.as_ref();
-                let filtered = filter_images(images, &filter);
                 render_image_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &images,
                     selection_state,
                     active_filter.as_deref(),
                     ImageHelpBarState {
@@ -360,14 +363,13 @@ impl App {
                 let presenter = &mut self.network_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let networks = &presenter.networks;
+                let networks: Vec<NetworkDto> =
+                    presenter.filtered_networks().into_iter().cloned().collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_networks(networks, &filter);
                 render_network_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &networks,
                     selection_state,
                     active_filter.as_deref(),
                     is_loading,
@@ -389,14 +391,13 @@ impl App {
                 let presenter = &mut self.stack_presenter;
                 let is_loading = presenter.is_loading();
                 let active_filter = presenter.active_filter().map(str::to_string);
-                let filter = presenter.filter.value().to_string();
-                let stacks = &presenter.stacks;
+                let stacks: Vec<StackDto> =
+                    presenter.filtered_stacks().into_iter().cloned().collect();
                 let selection_state = &mut presenter.selection.state;
-                let filtered = filter_stacks(stacks, &filter);
                 render_stack_list(
                     frame,
                     content_area,
-                    &filtered,
+                    &stacks,
                     selection_state,
                     active_filter.as_deref(),
                     StackHelpBarState {
@@ -1411,6 +1412,155 @@ mod tests {
     }
 
     #[test]
+    fn test_render_container_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_container_dto();
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_container_dto();
+        alpha.name = "alpha".to_string();
+        app.container_presenter.set_containers(vec![zeta, alpha]);
+        app.screen = Screen::ContainerList;
+
+        app.container_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "container list should render name-ascending after first toggle"
+        );
+
+        app.container_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "container list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_render_volume_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_volume_dto(false, true);
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_volume_dto(false, true);
+        alpha.name = "alpha".to_string();
+        app.volume_presenter.set_volumes(vec![zeta, alpha]);
+        app.screen = Screen::VolumeList;
+
+        app.volume_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "volume list should render name-ascending after first toggle"
+        );
+
+        app.volume_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "volume list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_render_image_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_image_dto(false);
+        zeta.repository = "zeta".to_string();
+        zeta.tag = "1".to_string();
+        zeta.full_name = "zeta:1".to_string();
+        let mut alpha = make_image_dto(false);
+        alpha.repository = "alpha".to_string();
+        alpha.tag = "1".to_string();
+        alpha.full_name = "alpha:1".to_string();
+        app.image_presenter.set_images(vec![zeta, alpha]);
+        app.screen = Screen::ImageList;
+
+        app.image_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "image list should render name-ascending after first toggle"
+        );
+
+        app.image_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "image list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_render_network_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_network_dto(false, 0);
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_network_dto(false, 0);
+        alpha.name = "alpha".to_string();
+        app.network_presenter.set_networks(vec![zeta, alpha]);
+        app.screen = Screen::NetworkList;
+
+        app.network_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "network list should render name-ascending after first toggle"
+        );
+
+        app.network_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "network list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_render_stack_list_applies_sort_after_toggle() {
+        let mut app = empty_app();
+        let mut zeta = make_stack_dto(vec![]);
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_stack_dto(vec![]);
+        alpha.name = "alpha".to_string();
+        app.stack_presenter.set_stacks(vec![zeta, alpha]);
+        app.screen = Screen::StackList;
+
+        app.stack_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos < zeta_pos,
+            "stack list should render name-ascending after first toggle"
+        );
+
+        app.stack_presenter.toggle_sort();
+        let rendered = render_app(&mut app);
+        let alpha_pos = rendered.find("alpha").expect("alpha rendered");
+        let zeta_pos = rendered.find("zeta").expect("zeta rendered");
+        assert!(
+            alpha_pos > zeta_pos,
+            "stack list should render name-descending after second toggle"
+        );
+    }
+
+    #[test]
     fn test_breadcrumb_on_every_non_menu_screen() {
         let mut app = empty_app();
         let container = make_container_dto();
@@ -1492,6 +1642,35 @@ mod tests {
         app.confirm_dialog = Some((ConfirmAction::VolumeDelete, false));
         app.handle_action(AppAction::Select).await;
         assert!(app.confirm_dialog.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_toggle_sort_key_reaches_presenter_from_container_list() {
+        use crate::presentation::tui::common::{map_key_to_action_for_context, KeyContext};
+        use crossterm::event::{KeyEvent, KeyModifiers};
+
+        let mut app = empty_app();
+        let mut zeta = make_container_dto();
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_container_dto();
+        alpha.name = "alpha".to_string();
+        app.container_presenter.set_containers(vec![zeta, alpha]);
+        app.screen = Screen::ContainerList;
+
+        let action = map_key_to_action_for_context(
+            KeyEvent::new(KeyCode::Char('o'), KeyModifiers::empty()),
+            KeyContext::Global,
+        );
+        assert_eq!(action, Some(AppAction::ToggleSort));
+
+        app.handle_action(action.unwrap()).await;
+        let names: Vec<&str> = app
+            .container_presenter
+            .filtered_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["alpha", "zeta"]);
     }
 
     #[tokio::test]

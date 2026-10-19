@@ -50,9 +50,9 @@ mod tests {
 
     #[test]
     fn test_apply_name_sort_ascending_and_descending() {
-        let mut a = "banana".to_string();
-        let mut b = "apple".to_string();
-        let mut c = "Cherry".to_string();
+        let a = "banana".to_string();
+        let b = "apple".to_string();
+        let c = "Cherry".to_string();
         let mut items = vec![&a, &b, &c];
         apply_name_sort(&mut items, SortOrder::NameAsc, |s| s);
         assert_eq!(
@@ -70,8 +70,8 @@ mod tests {
 
     #[test]
     fn test_apply_name_sort_default_keeps_original_order() {
-        let mut a = "zeta".to_string();
-        let mut b = "alpha".to_string();
+        let a = "zeta".to_string();
+        let b = "alpha".to_string();
         let mut items = vec![&a, &b];
         apply_name_sort(&mut items, SortOrder::Default, |s| s);
         assert_eq!(

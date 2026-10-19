@@ -18,7 +18,7 @@ pub struct StackHelpBarState<'a> {
 pub fn render_stack_list(
     frame: &mut Frame,
     area: Rect,
-    stacks: &[&StackDto],
+    stacks: &[StackDto],
     state: &mut TableState,
     active_filter: Option<&str>,
     help_bar: StackHelpBarState<'_>,
@@ -27,7 +27,6 @@ pub fn render_stack_list(
 
     let rows: Vec<Row> = stacks
         .iter()
-        .copied()
         .map(|s| {
             let running_style = if s.running_count > 0 && s.running_count == s.container_count {
                 Theme::in_use_style()
@@ -168,7 +167,7 @@ mod tests {
             running_count: 1,
             containers: vec![make_stack_container()],
         };
-        let items = vec![&stack];
+        let items = vec![stack];
         let mut state = TableState::default();
 
         terminal

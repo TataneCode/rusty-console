@@ -1,5 +1,31 @@
 agent_type = "agent"
 display_name = "Développeur"
-description = "Implémente et vérifie le code rusty-console en exploitant les plans de l'Architecte. Ne produit jamais de plan."
+description = "Implémente et vérifie le code rusty-console (skill implement) à partir d'un plan approuvé de l'Architecte. Ne produit jamais de plan. Jamais de commit ni de push sans accord utilisateur."
 safety = "neutral"
 system_prompt_id = "developer"
+
+[tools.read_file]
+permission = "always"
+
+[tools.grep]
+permission = "always"
+
+[tools.write_file]
+permission = "always"
+
+[tools.edit]
+permission = "always"
+
+# Auto-approve équivalent pour le shell : allowlist par préfixe exact.
+# Tout le reste — notamment `git commit`, `git push`, `gh pr create` —
+# passe par le prompt utilisateur (accord explicite requis).
+[tools.bash]
+permission = "ask"
+allowlist = [
+  "cd", "echo", "ls", "cat", "head", "tail", "grep", "find", "tree", "whoami",
+  "cargo",
+  "rustup",
+  "git status", "git diff", "git log", "git show", "git branch", "git add", "git stash",
+  "gh pr view", "gh pr diff", "gh pr checks", "gh pr status",
+  "gh run list", "gh run view", "gh run watch",
+]

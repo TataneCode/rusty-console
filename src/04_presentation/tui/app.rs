@@ -1645,6 +1645,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_toggle_sort_key_reaches_presenter_from_container_list() {
+        use crate::presentation::tui::common::{map_key_to_action_for_context, KeyContext};
+        use crossterm::event::{KeyEvent, KeyModifiers};
+
+        let mut app = empty_app();
+        let mut zeta = make_container_dto();
+        zeta.name = "zeta".to_string();
+        let mut alpha = make_container_dto();
+        alpha.name = "alpha".to_string();
+        app.container_presenter.set_containers(vec![zeta, alpha]);
+        app.screen = Screen::ContainerList;
+
+        let action = map_key_to_action_for_context(
+            KeyEvent::new(KeyCode::Char('o'), KeyModifiers::empty()),
+            KeyContext::Global,
+        );
+        assert_eq!(action, Some(AppAction::ToggleSort));
+
+        app.handle_action(action.unwrap()).await;
+        let names: Vec<&str> = app
+            .container_presenter
+            .filtered_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["alpha", "zeta"]);
+    }
+
+    #[tokio::test]
     async fn test_handle_main_menu_navigation_and_quit() {
         let mut app = empty_app();
 

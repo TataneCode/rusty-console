@@ -1,9 +1,8 @@
 agent_type = "agent"
 display_name = "Reviewer"
-description = "Relit les pull requests GitHub du dépôt TataneCode/rusty-console. Ne produit ni plan ni code."
+description = "Relit les développements rusty-console (skill review) : PR GitHub en Vibe Code, diff de branche en CLI. Lecture seule stricte, vérification contre rules/. Ne produit ni plan ni code."
 safety = "safe"
 system_prompt_id = "reviewer"
-disabled_tools = ["search_replace", "write_file"]
 
 [tools.read_file]
 permission = "always"
@@ -12,4 +11,10 @@ permission = "always"
 permission = "always"
 
 [tools.bash]
+permission = "ask"
+
+[tools.write_file]
+permission = "ask"
+
+[tools.edit]
 permission = "ask"

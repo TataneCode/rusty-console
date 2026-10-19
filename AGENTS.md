@@ -296,14 +296,23 @@ src/
 - [AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
 - [CONTEXT.md](.legacy/CONTEXT.md) - General project context (pitch, stack, current state, resource map)
 - [rules/](rules/) - Per-layer DDD rules shared by agents and skills (domain, application, infrastructure, presentation, quality)
-- [.agents/skills/](.agents/skills/) - Reusable procedure skills (Agent Skills standard, one folder per skill, `SKILL.md` format; auto-discovered by Vibe Code and Vibe CLI), including the mandatory [confirmation-gate](.agents/skills/confirmation-gate/SKILL.md)
+- [.agents/skills/](.agents/skills/) - Reusable procedure skills (Agent Skills standard, one folder per skill, `SKILL.md` format; auto-discovered by Vibe Code and Vibe CLI), including the orchestration skills `plan` / `implement` / `review` and the mandatory [confirmation-gate](.agents/skills/confirmation-gate/SKILL.md)
+- [.vibe/](.vibe/) - Vibe CLI wiring: agents (`architect.toml`, `developer.toml`, `reviewer.toml`), their system prompts (`prompts/`), and the mode restriction (`config.toml` — only `ask` plus the project agents)
 - [agents/](agents/) - Independent agent definitions invoking the skills
 
 ## Agent Routing
 
-When the user asks for a review of a pull request (e.g. "lance la review", "review PR #N"), invoke the **Reviewer** agent ([agents/reviewer.md](agents/reviewer.md)) — not an external review service. Follow its mode opératoire exactly:
+Three user-invocable skills orchestrate the project agents ([agents/](agents/), [.vibe/agents/](.vibe/agents/)):
 
-1. Read [agents/reviewer.md](agents/reviewer.md) and the skills it references: [.agents/skills/rust-code-review/SKILL.md](.agents/skills/rust-code-review/SKILL.md) (main procedure), [.agents/skills/rust-quality-gate/SKILL.md](.agents/skills/rust-quality-gate/SKILL.md), [.agents/skills/rust-feature-ddd/SKILL.md](.agents/skills/rust-feature-ddd/SKILL.md), [.agents/skills/rust-testing/SKILL.md](.agents/skills/rust-testing/SKILL.md) (read-only references).
-2. Execute its 6-step procedure without skipping any step (context, scope, layer-by-layer DDD examination, quality/tests, structured verdict, publication).
-3. Publish the review on the PR: verdict first (approve / request changes / comment), findings by severity 🔴/🟡/🟢 with `file:line` and a concrete suggestion. Note: GitHub forbids `REQUEST_CHANGES` by the PR author — fall back to `COMMENT` with the verdict stated in the body.
-4. Report, do not fix: a review never includes implementation code, and never merge unless explicitly instructed.
+| Skill | Role | Procedure | Key rules |
+|---|---|---|---|
+| `/plan` — [.agents/skills/plan/SKILL.md](.agents/skills/plan/SKILL.md) | **Architecte** | `rust-architecture-planning` + `rust-dependency` | Read-only on sources, all tools accessible (smart-approve equivalent); **explicit plan approval mandatory** before any implementation; on approval, invoke the `implement` skill |
+| `/implement` — [.agents/skills/implement/SKILL.md](.agents/skills/implement/SKILL.md) | **Développeur** | `rust-feature-ddd` / `rust-bugfix` / `rust-refactoring` + `rust-testing` + `rust-quality-gate` | From an approved plan; **never commit or push without explicit user approval**; validate with `cargo build` / `test` / `fmt` / `clippy`; in Vibe Code, also monitor the PR checks |
+| `/review` — [.agents/skills/review/SKILL.md](.agents/skills/review/SKILL.md) | **Reviewer** | `rust-code-review` against [rules/](rules/) | Strict read-only; in Vibe Code, review the GitHub PR; in Vibe CLI, review the branch diff (current vs `main` unless specified otherwise) |
+
+Entry-point specifics:
+
+- **Vibe CLI**: only the built-in `ask` mode and the project agents (Architecte, Développeur, Reviewer) are selectable — the other built-in modes are disabled via [.vibe/config.toml](.vibe/config.toml) and replaced by the project agents.
+- **Vibe Code**: route through the three skills above; the same procedures apply (skills in `.agents/skills/` are auto-discovered).
+
+When the user asks for a review of a pull request (e.g. "lance la review", "review PR #N"), invoke the `review` skill and the **Reviewer** agent ([agents/reviewer.md](agents/reviewer.md)) — not an external review service. Follow its procedure exactly, without skipping any step (context, scope, layer-by-layer DDD examination, quality/tests, structured verdict, publication). Publish the review on the PR: verdict first (approve / request changes / comment), findings by severity 🔴/🟡/🟢 with `file:line` and a concrete suggestion. Note: GitHub forbids `REQUEST_CHANGES` by the PR author — fall back to `COMMENT` with the verdict stated in the body. A review never includes implementation code, and never merge unless explicitly instructed.

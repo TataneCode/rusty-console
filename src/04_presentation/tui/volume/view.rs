@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_render_volume_list_shows_volume_data_and_help() {
-        let backend = TestBackend::new(100, 20);
+        let backend = TestBackend::new(140, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         let volume = VolumeDto {
             id: "vol-1".to_string(),

@@ -31,7 +31,7 @@ pub const CONTAINER_TITLE: &str = "Containers";
 pub const CONTAINER_HEADERS: [&str; 7] =
     ["Name", "Image", "State", "CPU", "Memory", "Status", "Ports"];
 pub const CONTAINER_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | c: Details | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
 pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back ";
 pub const CONTAINER_LOGS_HELP: &str =
@@ -55,14 +55,14 @@ pub const ADD_CONTAINER_PORTS_LABEL: &str = "Ports (<host>:<internal>;...)";
 pub const VOLUME_TITLE: &str = "Volumes";
 pub const VOLUME_HEADERS: [&str; 5] = ["Name", "Driver", "Size", "In Use", "Created"];
 pub const VOLUME_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | c: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
 pub const VOLUME_DETAILS_TITLE: &str = " Volume Details ";
 pub const VOLUME_DETAILS_HELP: &str = " Esc/q: Back ";
 
 pub const NETWORK_TITLE: &str = "Networks";
 pub const NETWORK_HEADERS: [&str; 5] = ["Name", "Driver", "Scope", "Subnet", "Containers"];
 pub const NETWORK_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter/c: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
 pub const NETWORK_DETAILS_TITLE: &str = " Network Details ";
 pub const NETWORK_DETAILS_HELP: &str =
     " Esc/q: Back | j/k: Select container | d: Disconnect | r: Refresh ";
@@ -70,7 +70,7 @@ pub const NETWORK_DETAILS_HELP: &str =
 pub const IMAGE_TITLE: &str = "Images";
 pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use", "Created"];
 pub const IMAGE_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | d: Delete | c: Details | r: Refresh | X: Prune | A: Add | Esc: Back ";
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | d: Delete | Enter: Details | r: Refresh | X: Prune | A: Add | Esc: Back ";
 pub const IMAGE_DETAILS_TITLE: &str = " Image Details ";
 pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back | P: Pull Image | r: Refresh ";
 

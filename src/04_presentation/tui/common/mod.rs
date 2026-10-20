@@ -19,7 +19,7 @@ pub use input::{InputDialogState, InputField, TextInputState};
 pub use keys::{map_key_to_action, map_key_to_action_for_context, AppAction, KeyContext};
 pub use menu::render_main_menu;
 pub use progress_bar::{format_pull_bytes, pull_progress_bar_text, render_pull_progress_bar};
-pub use resources::filter_prompt_title;
+pub use resources::{filter_input_help, filter_prompt_title};
 pub use sort::{apply_name_sort, SortOrder};
 pub use spinner::Spinner;
 pub use theme::Theme;

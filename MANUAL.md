@@ -8,7 +8,7 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 - **Action bar** — the bottom bar shows available keys for the current screen; during long operations it is replaced by a loading spinner (`|/-\`, 200ms per frame).
 - **Confirmation dialogs** — every destructive action (delete, prune, stop all, …) opens a confirmation dialog first.
 - **Error popups** — errors are shown in a popup, dismissed on any keypress.
-- **Filter mode** — pressing `/` activates a name filter; type to search, press `Esc` to clear.
+- **Filter mode** — pressing `/` activates a name filter; type to search, press `Esc` to clear. While the filter is active, letter-key actions (start/stop, delete, sort, refresh, …) are disabled — only typing, `Esc`, navigation (`j`/`k`/arrows) and `Enter` (open details) remain available. The action bar is contextual: while the filter is active it shrinks to `Type: Filter | j/k: Navigate | Enter | Esc: Clear`, and returns to the full list of keys when the filter is cleared.
 - **Sort** — pressing `o` on a list screen cycles the name ordering: A→Z, then Z→A, then back to the default order. The chosen order survives refreshes.
 - **Add dialogs** — pressing `A` on the Images or Containers screen opens a dialog to download an image or create a container (see below).
 - **Refresh** — press `r` to reload the current list.
@@ -19,7 +19,7 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 |-----|--------|
 | `j` / `↓` | Move selection down |
 | `k` / `↑` | Move selection up |
-| `Enter` | Select / confirm |
+| `Enter` | Select / open details / confirm |
 | `Esc` / `q` | Go back / quit |
 | `r` | Refresh list |
 | `/` | Activate filter (type to search, `Esc` to clear) |
@@ -38,7 +38,7 @@ The container list shows all containers regardless of state, with live CPU and m
 | `R` | Restart the selected container |
 | `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` in an external terminal window when one is available, otherwise inline (TUI suspended) |
 | `l` | View container logs |
-| `c` | View container details (including live network I/O) |
+| `Enter` | View container details (including live network I/O) |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune all stopped containers |
 
@@ -100,6 +100,7 @@ The volume list shows all volumes and flags which ones are in use.
 
 | Key | Action |
 |-----|--------|
+| `Enter` | View volume details |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune unused volumes |
 | `o` | Cycle list sort by name (A→Z → Z→A → default) |
@@ -110,7 +111,7 @@ The image list shows all images with their usage status.
 
 | Key | Action |
 |-----|--------|
-| `c` | View image details |
+| `Enter` | View image details |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune dangling images |
 | `o` | Cycle list sort by name (A→Z → Z→A → default) |
@@ -137,7 +138,7 @@ The network list shows name, driver, scope, subnet, and connected container coun
 
 | Key | Action |
 |-----|--------|
-| `Enter` / `c` | View network details (driver, scope, subnet, gateway, connected containers) |
+| `Enter` | View network details (driver, scope, subnet, gateway, connected containers) |
 | `d` | Delete the selected network (opens confirmation dialog; predefined networks and networks with connected containers are refused) |
 | `X` | Prune unused networks |
 | `/` | Filter networks by name |

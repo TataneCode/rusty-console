@@ -156,7 +156,7 @@ impl App {
                     }
                 }
             }
-            AppAction::ViewDetails => {
+            AppAction::Select | AppAction::ViewDetails => {
                 if let Some(container) = self.container_presenter.selected_container().cloned() {
                     self.load_container_details(&container.id).await;
                     if self.container_presenter.selected_container.is_some() {
@@ -316,7 +316,7 @@ impl App {
             AppAction::Back => self.screen = Screen::MainMenu,
             AppAction::NavigateUp => self.volume_presenter.navigate_up(),
             AppAction::NavigateDown => self.volume_presenter.navigate_down(),
-            AppAction::ViewDetails => {
+            AppAction::Select | AppAction::ViewDetails => {
                 if let Some(volume) = self.volume_presenter.selected_volume().cloned() {
                     self.volume_presenter.set_details(volume);
                     self.screen = Screen::VolumeDetails;
@@ -351,7 +351,7 @@ impl App {
             AppAction::Back => self.screen = Screen::MainMenu,
             AppAction::NavigateUp => self.image_presenter.navigate_up(),
             AppAction::NavigateDown => self.image_presenter.navigate_down(),
-            AppAction::ViewDetails => {
+            AppAction::Select | AppAction::ViewDetails => {
                 if let Some(image) = self.image_presenter.selected_image().cloned() {
                     self.image_presenter.set_details(image);
                     self.screen = Screen::ImageDetails;

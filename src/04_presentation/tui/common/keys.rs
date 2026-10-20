@@ -52,7 +52,6 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
             Some(AppAction::ScrollDown)
         }
         KeyCode::Char('d') => Some(AppAction::Delete),
-        KeyCode::Char('c') => Some(AppAction::ViewDetails),
         KeyCode::Char('r') => Some(AppAction::Refresh),
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(AppAction::ScrollUp)
@@ -212,11 +211,8 @@ mod tests {
     }
 
     #[test]
-    fn test_view_details() {
-        assert_eq!(
-            map_key_to_action(key_event(KeyCode::Char('c'))),
-            Some(AppAction::ViewDetails)
-        );
+    fn test_char_c_no_longer_maps_to_view_details() {
+        assert_eq!(map_key_to_action(key_event(KeyCode::Char('c'))), None);
     }
 
     #[test]

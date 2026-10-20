@@ -1287,6 +1287,13 @@ mod tests {
         buffer_text(terminal.backend().buffer())
     }
 
+    fn render_app_wide(app: &mut App) -> String {
+        let backend = TestBackend::new(140, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|frame| app.render(frame)).unwrap();
+        buffer_text(terminal.backend().buffer())
+    }
+
     #[test]
     fn test_new_render_confirm_message_and_format_bytes() {
         let mut app = empty_app();
@@ -2464,6 +2471,102 @@ mod tests {
         app.execute_confirm_action(ConfirmAction::StackContainersRemoveAll)
             .await;
         assert_eq!(app.screen, Screen::StackList);
+    }
+
+    #[tokio::test]
+    async fn test_select_opens_details_on_container_volume_and_image_lists() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_get_by_id().returning(|_| {
+            Ok(Some(crate::domain::container::Container::new(
+                crate::domain::container::ContainerId::new("abc123").unwrap(),
+                "web",
+                "nginx:latest",
+                ContainerState::Running,
+                "Up",
+                Utc::now(),
+            )))
+        });
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::ContainerDetails);
+
+        app.screen = Screen::VolumeList;
+        app.volume_presenter
+            .set_volumes(vec![make_volume_dto(false, true)]);
+        app.handle_volume_list_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::VolumeDetails);
+
+        app.screen = Screen::ImageList;
+        app.image_presenter.set_images(vec![make_image_dto(true)]);
+        app.handle_image_list_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::ImageDetails);
+    }
+
+    #[tokio::test]
+    async fn test_filter_input_consumes_letter_action_keys() {
+        let mut app = empty_app();
+
+        app.screen = Screen::ContainerList;
+        app.container_presenter.activate_filter();
+        for c in [
+            's', 'd', 'o', 'r', 'p', 'e', 'l', 'A', 'X', 'R', 'S', 'D', 'P', 'c',
+        ] {
+            assert!(app.handle_filter_key(KeyCode::Char(c)), "char {c}");
+        }
+        assert_eq!(app.container_presenter.filter.value(), "sdorpelAXRSDPc");
+        assert_eq!(app.screen, Screen::ContainerList);
+        assert!(app.confirm_dialog.is_none());
+        assert!(app.exec_shell_dialog.is_none());
+        assert!(app.add_dialog.is_none());
+
+        app.screen = Screen::StackList;
+        app.stack_presenter.activate_filter();
+        assert!(app.handle_filter_key(KeyCode::Char('s')));
+        assert_eq!(app.stack_presenter.filter.value(), "s");
+        assert_eq!(app.screen, Screen::StackList);
+    }
+
+    #[test]
+    fn test_list_help_bars_bind_enter_for_details() {
+        for help in [
+            resources::CONTAINER_LIST_HELP,
+            resources::VOLUME_LIST_HELP,
+            resources::IMAGE_LIST_HELP,
+            resources::NETWORK_LIST_HELP,
+        ] {
+            assert!(help.contains("Enter: Details"), "missing in {help}");
+            assert!(!help.contains("c: Details"), "stale in {help}");
+        }
+    }
+
+    #[test]
+    fn test_render_container_list_shows_contextual_help_while_filter_active() {
+        let mut app = empty_app();
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.screen = Screen::ContainerList;
+
+        let rendered = render_app_wide(&mut app);
+        assert!(rendered.contains("Enter: Details"));
+        assert!(rendered.contains("Start/Stop"));
+
+        app.container_presenter.activate_filter();
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("Type: Filter"));
+        assert!(rendered.contains("Esc: Clear"));
+        assert!(rendered.contains("Enter: Details"));
+        assert!(!rendered.contains("Start/Stop"));
+        assert!(!rendered.contains("Quit"));
     }
 
     #[tokio::test]

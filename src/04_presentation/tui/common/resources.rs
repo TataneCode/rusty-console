@@ -134,6 +134,13 @@ pub fn filter_prompt_title(base_title: &str, active_filter: Option<&str>) -> Str
     }
 }
 
+/// Contextual action-bar text while the name filter input is active:
+/// only typing, navigation, Enter (open the selected item) and Esc (clear)
+/// remain available — every letter-key action is disabled.
+pub fn filter_input_help(enter_label: &str) -> String {
+    format!(" Type: Filter | j/k: Navigate | Enter: {enter_label} | Esc: Clear ")
+}
+
 pub fn logs_title(container_name: &str) -> String {
     format!(" Logs: {container_name} ")
 }
@@ -216,6 +223,22 @@ mod tests {
             filter_prompt_title("Volumes", Some("data")),
             format!(" Volumes [/: data{FILTER_CURSOR}] ")
         );
+    }
+
+    #[test]
+    fn test_filter_input_help_lists_only_input_navigation_enter_and_esc() {
+        let help = filter_input_help("Details");
+        assert!(help.contains("Type: Filter"));
+        assert!(help.contains("j/k: Navigate"));
+        assert!(help.contains("Enter: Details"));
+        assert!(help.contains("Esc: Clear"));
+        assert!(!help.contains("Quit"));
+        assert!(!help.contains("Delete"));
+        assert!(!help.contains("Sort"));
+        assert!(!help.contains("Refresh"));
+
+        let stack_help = filter_input_help("Drill-down");
+        assert!(stack_help.contains("Enter: Drill-down"));
     }
 
     #[test]

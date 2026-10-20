@@ -1,8 +1,8 @@
 use crate::application::image::ImageDto;
 use crate::application::image::ImagePullProgress;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_action_bar, render_loading_bar, render_pull_progress_bar,
-    render_table, resources, split_content_area, truncate_text, Theme,
+    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar,
+    render_pull_progress_bar, render_table, resources, split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -84,7 +84,11 @@ pub fn render_image_list(
     } else if help_bar.is_loading {
         render_loading_bar(frame, help_area, help_bar.spinner_char);
     } else {
-        render_action_bar(frame, help_area, resources::IMAGE_LIST_HELP);
+        let help = match active_filter {
+            Some(_) => filter_input_help("Details"),
+            None => resources::IMAGE_LIST_HELP.to_string(),
+        };
+        render_action_bar(frame, help_area, &help);
     }
 }
 
@@ -190,7 +194,7 @@ mod tests {
                     frame.area(),
                     &items,
                     &mut state,
-                    Some("ng"),
+                    None,
                     ImageHelpBarState {
                         is_loading: false,
                         spinner_char: "|",
@@ -205,6 +209,40 @@ mod tests {
         assert!(text.contains("nginx"));
         assert!(text.contains("latest"));
         assert!(text.contains("Delete"));
+    }
+
+    #[test]
+    fn test_render_image_list_shows_contextual_help_while_filter_active() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let items = vec![make_image()];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_image_list(
+                    frame,
+                    frame.area(),
+                    &items,
+                    &mut state,
+                    Some("ng"),
+                    ImageHelpBarState {
+                        is_loading: false,
+                        spinner_char: "|",
+                        pull_progress: None,
+                    },
+                )
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Type: Filter"));
+        assert!(text.contains("j/k: Navigate"));
+        assert!(text.contains("Enter: Details"));
+        assert!(text.contains("Esc: Clear"));
+        assert!(!text.contains("Quit"));
+        assert!(!text.contains("Delete"));
+        assert!(!text.contains("Prune"));
     }
 
     #[test]

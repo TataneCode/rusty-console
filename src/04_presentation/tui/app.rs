@@ -1287,6 +1287,13 @@ mod tests {
         buffer_text(terminal.backend().buffer())
     }
 
+    fn render_app_wide(app: &mut App) -> String {
+        let backend = TestBackend::new(140, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|frame| app.render(frame)).unwrap();
+        buffer_text(terminal.backend().buffer())
+    }
+
     #[test]
     fn test_new_render_confirm_message_and_format_bytes() {
         let mut app = empty_app();
@@ -2540,6 +2547,26 @@ mod tests {
             assert!(help.contains("Enter: Details"), "missing in {help}");
             assert!(!help.contains("c: Details"), "stale in {help}");
         }
+    }
+
+    #[test]
+    fn test_render_container_list_shows_contextual_help_while_filter_active() {
+        let mut app = empty_app();
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.screen = Screen::ContainerList;
+
+        let rendered = render_app_wide(&mut app);
+        assert!(rendered.contains("Enter: Details"));
+        assert!(rendered.contains("Start/Stop"));
+
+        app.container_presenter.activate_filter();
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("Type: Filter"));
+        assert!(rendered.contains("Esc: Clear"));
+        assert!(rendered.contains("Enter: Details"));
+        assert!(!rendered.contains("Start/Stop"));
+        assert!(!rendered.contains("Quit"));
     }
 
     #[tokio::test]

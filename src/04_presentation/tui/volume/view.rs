@@ -1,7 +1,7 @@
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
-    split_content_area, truncate_text, Theme,
+    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
+    resources, split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -67,7 +67,11 @@ pub fn render_volume_list(
     if is_loading {
         render_loading_bar(frame, help_area, spinner_char);
     } else {
-        render_action_bar(frame, help_area, resources::VOLUME_LIST_HELP);
+        let help = match active_filter {
+            Some(_) => filter_input_help("Details"),
+            None => resources::VOLUME_LIST_HELP.to_string(),
+        };
+        render_action_bar(frame, help_area, &help);
     }
 }
 
@@ -159,6 +163,37 @@ mod tests {
 
         terminal
             .draw(|frame| {
+                render_volume_list(frame, frame.area(), &items, &mut state, None, false, "|")
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Volumes"));
+        assert!(text.contains("db-data"));
+        assert!(text.contains("local"));
+        assert!(text.contains("Prune"));
+    }
+
+    #[test]
+    fn test_render_volume_list_shows_contextual_help_while_filter_active() {
+        let backend = TestBackend::new(140, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let volume = VolumeDto {
+            id: "vol-1".to_string(),
+            name: "db-data".to_string(),
+            driver: "local".to_string(),
+            mountpoint: "/var/lib/docker/volumes/db-data/_data".to_string(),
+            size: "10 MB".to_string(),
+            created: "2024-01-01".to_string(),
+            in_use: true,
+            linked_containers: vec!["/web".to_string()],
+            can_delete: false,
+        };
+        let items = vec![volume];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
                 render_volume_list(
                     frame,
                     frame.area(),
@@ -172,10 +207,13 @@ mod tests {
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());
-        assert!(text.contains("Volumes"));
-        assert!(text.contains("db-data"));
-        assert!(text.contains("local"));
-        assert!(text.contains("Prune"));
+        assert!(text.contains("Type: Filter"));
+        assert!(text.contains("j/k: Navigate"));
+        assert!(text.contains("Enter: Details"));
+        assert!(text.contains("Esc: Clear"));
+        assert!(!text.contains("Quit"));
+        assert!(!text.contains("Delete"));
+        assert!(!text.contains("Prune"));
     }
 
     #[test]

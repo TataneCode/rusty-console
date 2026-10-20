@@ -8,7 +8,7 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 - **Action bar** — the bottom bar shows available keys for the current screen; during long operations it is replaced by a loading spinner (`|/-\`, 200ms per frame).
 - **Confirmation dialogs** — every destructive action (delete, prune, stop all, …) opens a confirmation dialog first.
 - **Error popups** — errors are shown in a popup, dismissed on any keypress.
-- **Filter mode** — pressing `/` activates a name filter; type to search, press `Esc` to clear. While the filter is active, letter-key actions (start/stop, delete, sort, refresh, …) are disabled — only typing, `Esc`, navigation (`j`/`k`/arrows) and `Enter` (open details) remain available.
+- **Filter mode** — pressing `/` activates a name filter; type to search, press `Esc` to clear. While the filter is active, letter-key actions (start/stop, delete, sort, refresh, …) are disabled — only typing, `Esc`, navigation (`j`/`k`/arrows) and `Enter` (open details) remain available. The action bar is contextual: while the filter is active it shrinks to `Type: Filter | j/k: Navigate | Enter | Esc: Clear`, and returns to the full list of keys when the filter is cleared.
 - **Sort** — pressing `o` on a list screen cycles the name ordering: A→Z, then Z→A, then back to the default order. The chosen order survives refreshes.
 - **Add dialogs** — pressing `A` on the Images or Containers screen opens a dialog to download an image or create a container (see below).
 - **Refresh** — press `r` to reload the current list.

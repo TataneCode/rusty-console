@@ -1,8 +1,8 @@
 use crate::application::container::{ContainerDto, ContainerLogsDto};
 use crate::domain::container::ContainerState;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
-    split_content_area, truncate_text, Theme,
+    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
+    resources, split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -67,7 +67,11 @@ pub fn render_container_list(
     if is_loading {
         render_loading_bar(frame, help_area, spinner_char);
     } else {
-        render_action_bar(frame, help_area, resources::CONTAINER_LIST_HELP);
+        let help = match active_filter {
+            Some(_) => filter_input_help("Details"),
+            None => resources::CONTAINER_LIST_HELP.to_string(),
+        };
+        render_action_bar(frame, help_area, &help);
     }
 }
 
@@ -268,6 +272,29 @@ mod tests {
 
         terminal
             .draw(|frame| {
+                render_container_list(frame, frame.area(), &items, &mut state, None, false, "|")
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Containers"));
+        assert!(text.contains("web"));
+        assert!(text.contains("Running"));
+        assert!(text.contains("12.5%"));
+        assert!(text.contains("512.00 MB"));
+        assert!(text.contains("Exec"));
+        assert!(text.contains("Logs"));
+    }
+
+    #[test]
+    fn test_render_container_list_shows_contextual_help_while_filter_active() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let items = vec![make_container()];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
                 render_container_list(
                     frame,
                     frame.area(),
@@ -281,13 +308,13 @@ mod tests {
             .unwrap();
 
         let text = buffer_text(terminal.backend().buffer());
-        assert!(text.contains("Containers"));
-        assert!(text.contains("web"));
-        assert!(text.contains("Running"));
-        assert!(text.contains("12.5%"));
-        assert!(text.contains("512.00 MB"));
-        assert!(text.contains("Exec"));
-        assert!(text.contains("Logs"));
+        assert!(text.contains("Type: Filter"));
+        assert!(text.contains("j/k: Navigate"));
+        assert!(text.contains("Enter: Details"));
+        assert!(text.contains("Esc: Clear"));
+        assert!(!text.contains("Start/Stop"));
+        assert!(!text.contains("Quit"));
+        assert!(!text.contains("Prune"));
     }
 
     #[test]

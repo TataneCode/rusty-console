@@ -1,8 +1,8 @@
 use crate::application::stack::{StackContainerDto, StackDto};
 use crate::domain::stack::StackContainerState;
 use crate::presentation::tui::common::{
-    filter_prompt_title, render_action_bar, render_loading_bar, render_table, resources,
-    split_content_area, truncate_text, Theme,
+    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
+    resources, split_content_area, truncate_text, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -60,7 +60,11 @@ pub fn render_stack_list(
         state,
     );
 
-    render_help_bar(frame, help_area, help_bar, resources::STACK_LIST_HELP);
+    let help = match active_filter {
+        Some(_) => filter_input_help("Drill-down"),
+        None => resources::STACK_LIST_HELP.to_string(),
+    };
+    render_help_bar(frame, help_area, help_bar, &help);
 }
 
 fn render_help_bar(
@@ -177,7 +181,7 @@ mod tests {
                     frame.area(),
                     &items,
                     &mut state,
-                    Some("app"),
+                    None,
                     StackHelpBarState {
                         is_loading: false,
                         spinner_char: "|",
@@ -191,6 +195,45 @@ mod tests {
         assert!(text.contains("compose-app"));
         assert!(text.contains("1/2"));
         assert!(text.contains("Start All"));
+    }
+
+    #[test]
+    fn test_render_stack_list_shows_contextual_help_while_filter_active() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let stack = StackDto {
+            name: "compose-app".to_string(),
+            container_count: 2,
+            running_count: 1,
+            containers: vec![make_stack_container()],
+        };
+        let items = vec![stack];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_stack_list(
+                    frame,
+                    frame.area(),
+                    &items,
+                    &mut state,
+                    Some("app"),
+                    StackHelpBarState {
+                        is_loading: false,
+                        spinner_char: "|",
+                    },
+                )
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Type: Filter"));
+        assert!(text.contains("j/k: Navigate"));
+        assert!(text.contains("Enter: Drill-down"));
+        assert!(text.contains("Esc: Clear"));
+        assert!(!text.contains("Start All"));
+        assert!(!text.contains("Stop All"));
+        assert!(!text.contains("Quit"));
     }
 
     #[test]

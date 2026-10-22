@@ -21,10 +21,10 @@ pub struct ContainerPresenter {
     stats_by_container_id: HashMap<String, ContainerRuntimeStatsDto>,
 }
 
-pub fn filter_containers<'a>(
-    containers: &'a [ContainerDto],
+pub fn filter_containers<'items>(
+    containers: &'items [ContainerDto],
     filter: &str,
-) -> Vec<&'a ContainerDto> {
+) -> Vec<&'items ContainerDto> {
     if filter.is_empty() {
         containers.iter().collect()
     } else {

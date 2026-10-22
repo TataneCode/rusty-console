@@ -10,9 +10,9 @@ use ratatui::{
     Frame,
 };
 
-pub struct StackHelpBarState<'a> {
+pub struct StackHelpBarState<'text> {
     pub is_loading: bool,
-    pub spinner_char: &'a str,
+    pub spinner_char: &'text str,
 }
 
 pub fn render_stack_list(

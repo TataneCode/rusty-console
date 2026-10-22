@@ -11,7 +11,10 @@ pub struct VolumePresenter {
     pub sort_order: SortOrder,
 }
 
-pub fn filter_volumes<'a>(volumes: &'a [VolumeDto], filter: &str) -> Vec<&'a VolumeDto> {
+pub fn filter_volumes<'items>(
+    volumes: &'items [VolumeDto],
+    filter: &str,
+) -> Vec<&'items VolumeDto> {
     if filter.is_empty() {
         volumes.iter().collect()
     } else {

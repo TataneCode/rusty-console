@@ -10,10 +10,10 @@ use ratatui::{
     Frame,
 };
 
-pub struct ImageHelpBarState<'a> {
+pub struct ImageHelpBarState<'text> {
     pub is_loading: bool,
-    pub spinner_char: &'a str,
-    pub pull_progress: Option<&'a ImagePullProgress>,
+    pub spinner_char: &'text str,
+    pub pull_progress: Option<&'text ImagePullProgress>,
 }
 
 pub fn render_image_list(

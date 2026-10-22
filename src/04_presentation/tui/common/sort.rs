@@ -22,7 +22,11 @@ impl SortOrder {
     }
 }
 
-pub fn apply_name_sort<T>(items: &mut Vec<&T>, order: SortOrder, key: impl Fn(&T) -> &str) {
+pub fn apply_name_sort<TItem>(
+    items: &mut Vec<&TItem>,
+    order: SortOrder,
+    key: impl Fn(&TItem) -> &str,
+) {
     match order {
         SortOrder::Default => {}
         SortOrder::NameAsc => items.sort_by_key(|item| key(item).to_lowercase()),

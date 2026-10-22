@@ -12,7 +12,7 @@ pub struct StackPresenter {
     pub sort_order: SortOrder,
 }
 
-pub fn filter_stacks<'a>(stacks: &'a [StackDto], filter: &str) -> Vec<&'a StackDto> {
+pub fn filter_stacks<'items>(stacks: &'items [StackDto], filter: &str) -> Vec<&'items StackDto> {
     if filter.is_empty() {
         stacks.iter().collect()
     } else {

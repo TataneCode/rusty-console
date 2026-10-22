@@ -11,7 +11,10 @@ pub struct NetworkPresenter {
     pub container_selection: TableSelection,
 }
 
-pub fn filter_networks<'a>(networks: &'a [NetworkDto], filter: &str) -> Vec<&'a NetworkDto> {
+pub fn filter_networks<'items>(
+    networks: &'items [NetworkDto],
+    filter: &str,
+) -> Vec<&'items NetworkDto> {
     if filter.is_empty() {
         networks.iter().collect()
     } else {

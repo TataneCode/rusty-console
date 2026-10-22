@@ -12,7 +12,7 @@ pub struct ImagePresenter {
     pub pull_progress: Option<ImagePullProgress>,
 }
 
-pub fn filter_images<'a>(images: &'a [ImageDto], filter: &str) -> Vec<&'a ImageDto> {
+pub fn filter_images<'items>(images: &'items [ImageDto], filter: &str) -> Vec<&'items ImageDto> {
     if filter.is_empty() {
         images.iter().collect()
     } else {

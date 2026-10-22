@@ -75,12 +75,12 @@ pub fn render_container_list(
     }
 }
 
-pub struct LogSearchView<'a> {
+pub struct LogSearchView<'text> {
     pub active: bool,
-    pub value: &'a str,
-    pub active_term: Option<&'a str>,
+    pub value: &'text str,
+    pub active_term: Option<&'text str>,
     pub counter: Option<(usize, usize)>,
-    pub matches: &'a [usize],
+    pub matches: &'text [usize],
 }
 
 impl LogSearchView<'_> {

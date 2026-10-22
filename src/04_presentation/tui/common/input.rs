@@ -36,9 +36,9 @@ impl TextInputState {
     }
 }
 
-pub struct InputField<'a> {
-    pub label: &'a str,
-    pub value: &'a str,
+pub struct InputField<'text> {
+    pub label: &'text str,
+    pub value: &'text str,
     pub focused: bool,
 }
 

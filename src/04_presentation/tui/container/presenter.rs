@@ -26,24 +26,6 @@ fn container_sort_key(container: &ContainerDto) -> &str {
     container.name.as_str()
 }
 
-pub fn filter_containers<'items>(
-    containers: &'items [ContainerDto],
-    filter: &str,
-) -> Vec<&'items ContainerDto> {
-    if filter.is_empty() {
-        containers.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        containers
-            .iter()
-            .filter(|container| {
-                container.name.to_lowercase().contains(&filter_lower)
-                    || container.image.to_lowercase().contains(&filter_lower)
-            })
-            .collect()
-    }
-}
-
 impl ContainerPresenter {
     pub fn new() -> Self {
         ContainerPresenter {

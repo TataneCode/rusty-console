@@ -16,21 +16,6 @@ fn network_sort_key(network: &NetworkDto) -> &str {
     network.name.as_str()
 }
 
-pub fn filter_networks<'items>(
-    networks: &'items [NetworkDto],
-    filter: &str,
-) -> Vec<&'items NetworkDto> {
-    if filter.is_empty() {
-        networks.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        networks
-            .iter()
-            .filter(|network| network.name.to_lowercase().contains(&filter_lower))
-            .collect()
-    }
-}
-
 impl NetworkPresenter {
     pub fn new() -> Self {
         NetworkPresenter {

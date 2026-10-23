@@ -17,21 +17,6 @@ fn image_sort_key(image: &ImageDto) -> &str {
     image.full_name.as_str()
 }
 
-pub fn filter_images<'items>(images: &'items [ImageDto], filter: &str) -> Vec<&'items ImageDto> {
-    if filter.is_empty() {
-        images.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        images
-            .iter()
-            .filter(|image| {
-                image.repository.to_lowercase().contains(&filter_lower)
-                    || image.tag.to_lowercase().contains(&filter_lower)
-            })
-            .collect()
-    }
-}
-
 impl ImagePresenter {
     pub fn new() -> Self {
         ImagePresenter {

@@ -16,18 +16,6 @@ fn stack_sort_key(stack: &StackDto) -> &str {
     stack.name.as_str()
 }
 
-pub fn filter_stacks<'items>(stacks: &'items [StackDto], filter: &str) -> Vec<&'items StackDto> {
-    if filter.is_empty() {
-        stacks.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        stacks
-            .iter()
-            .filter(|stack| stack.name.to_lowercase().contains(&filter_lower))
-            .collect()
-    }
-}
-
 impl StackPresenter {
     pub fn new() -> Self {
         StackPresenter {

@@ -24,8 +24,6 @@ pub fn render_image_list(
     active_filter: Option<&str>,
     help_bar: ImageHelpBarState<'_>,
 ) {
-    let [content_area, help_area] = split_content_area(area);
-
     let widths = vec![
         Constraint::Percentage(25),
         Constraint::Percentage(15),
@@ -83,8 +81,8 @@ pub fn render_image_list(
     });
 
     // The pull progress bar redraws over the help bar while a pull runs.
-    let _ = content_area;
     if let Some(progress) = help_bar.pull_progress {
+        let help_area = split_content_area(area)[1];
         render_pull_progress_bar(frame, help_area, progress);
     }
 }

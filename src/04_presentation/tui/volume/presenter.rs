@@ -15,21 +15,6 @@ fn volume_sort_key(volume: &VolumeDto) -> &str {
     volume.name.as_str()
 }
 
-pub fn filter_volumes<'items>(
-    volumes: &'items [VolumeDto],
-    filter: &str,
-) -> Vec<&'items VolumeDto> {
-    if filter.is_empty() {
-        volumes.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        volumes
-            .iter()
-            .filter(|volume| volume.name.to_lowercase().contains(&filter_lower))
-            .collect()
-    }
-}
-
 impl VolumePresenter {
     pub fn new() -> Self {
         VolumePresenter {

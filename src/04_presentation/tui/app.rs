@@ -744,7 +744,7 @@ impl App {
 
         let active_container_ids: HashSet<String> = self
             .container_presenter
-            .containers
+            .items
             .iter()
             .filter(|container| container.state.is_active())
             .map(|container| container.id.clone())
@@ -1749,7 +1749,7 @@ mod tests {
         app.menu_state.select(Some(0));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::ContainerList);
-        assert_eq!(app.container_presenter.containers.len(), 1);
+        assert_eq!(app.container_presenter.items.len(), 1);
 
         app.screen = Screen::MainMenu;
         app.menu_state.select(Some(1));
@@ -1863,7 +1863,7 @@ mod tests {
         assert!(app.container_stats_subscription.is_none());
         assert!(app
             .container_presenter
-            .containers
+            .items
             .iter()
             .all(|container| container.runtime_stats.is_none()));
     }
@@ -2238,7 +2238,7 @@ mod tests {
             Some(ContainerStatsSubscription::new(receiver, Vec::new()));
         app.drain_container_stats();
 
-        assert_eq!(app.container_presenter.containers[0].cpu_display(), "80.0%");
+        assert_eq!(app.container_presenter.items[0].cpu_display(), "80.0%");
         assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
         assert!(app
             .popup_message
@@ -2263,7 +2263,7 @@ mod tests {
         assert!(app.container_stats_subscription.is_none());
         assert!(app
             .container_presenter
-            .containers
+            .items
             .iter()
             .all(|container| container.runtime_stats.is_none()));
     }

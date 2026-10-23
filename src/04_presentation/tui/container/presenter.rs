@@ -1,24 +1,29 @@
 use crate::application::container::{
     ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto, ContainerStatsUpdate,
 };
-use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
+use crate::presentation::tui::common::{FilterState, ListCore};
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
+use std::ops::{Deref, DerefMut};
 
 pub struct ContainerPresenter {
-    pub containers: Vec<ContainerDto>,
-    pub selection: TableSelection,
+    pub list: ListCore<ContainerDto>,
     pub logs: Option<ContainerLogsDto>,
     pub logs_state: ListState,
     pub selected_container: Option<ContainerDto>,
-    pub loading: bool,
-    pub error: Option<String>,
-    pub filter: FilterState,
-    pub sort_order: SortOrder,
     pub log_search: FilterState,
     pub log_search_results: Vec<usize>,
     pub log_search_position: usize,
     stats_by_container_id: HashMap<String, ContainerRuntimeStatsDto>,
+}
+
+fn matches_container(container: &ContainerDto, filter_lower: &str) -> bool {
+    container.name.to_lowercase().contains(filter_lower)
+        || container.image.to_lowercase().contains(filter_lower)
+}
+
+fn container_sort_key(container: &ContainerDto) -> &str {
+    container.name.as_str()
 }
 
 pub fn filter_containers<'items>(
@@ -42,15 +47,10 @@ pub fn filter_containers<'items>(
 impl ContainerPresenter {
     pub fn new() -> Self {
         ContainerPresenter {
-            containers: Vec::new(),
-            selection: TableSelection::new(),
+            list: ListCore::new(matches_container, container_sort_key),
             logs: None,
             logs_state: ListState::default(),
             selected_container: None,
-            loading: false,
-            error: None,
-            filter: FilterState::new(),
-            sort_order: SortOrder::default(),
             log_search: FilterState::new(),
             log_search_results: Vec::new(),
             log_search_position: 0,
@@ -59,45 +59,16 @@ impl ContainerPresenter {
     }
 
     pub fn set_containers(&mut self, containers: Vec<ContainerDto>) {
-        self.containers = containers;
+        self.list.set_items(containers);
         self.reapply_runtime_stats();
-        self.update_filtered_selection();
-        self.error = None;
-    }
-
-    pub fn set_error(&mut self, error: String) {
-        self.error = Some(error);
-    }
-
-    pub fn clear_error(&mut self) {
-        self.error = None;
-    }
-
-    pub fn set_loading(&mut self, loading: bool) {
-        self.loading = loading;
-    }
-
-    pub fn is_loading(&self) -> bool {
-        self.loading
     }
 
     pub fn filtered_containers(&self) -> Vec<&ContainerDto> {
-        let mut filtered = filter_containers(&self.containers, self.filter.value());
-        apply_name_sort(&mut filtered, self.sort_order, |container| {
-            container.name.as_str()
-        });
-        filtered
-    }
-    pub fn toggle_sort(&mut self) {
-        self.sort_order = self.sort_order.next();
-        self.update_filtered_selection();
+        self.list.filtered_items()
     }
 
     pub fn selected_container(&self) -> Option<&ContainerDto> {
-        let filtered = self.filtered_containers();
-        self.selection
-            .selected()
-            .and_then(|i| filtered.get(i).copied())
+        self.list.selected_item()
     }
 
     pub fn set_logs(&mut self, logs: ContainerLogsDto) {
@@ -264,47 +235,13 @@ impl ContainerPresenter {
         }
     }
 
-    pub fn navigate_up(&mut self) {
-        self.selection.previous();
-    }
-
-    pub fn navigate_down(&mut self) {
-        self.selection.next();
-    }
-
-    pub fn activate_filter(&mut self) {
-        self.filter.activate();
-    }
-
-    pub fn deactivate_filter(&mut self) {
-        self.filter.deactivate();
-        self.update_filtered_selection();
-    }
-
-    pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push_char(c);
-        self.update_filtered_selection();
-    }
-
-    pub fn pop_filter_char(&mut self) {
-        self.filter.pop_char();
-        self.update_filtered_selection();
-    }
-
-    pub fn is_filter_active(&self) -> bool {
-        self.filter.is_active()
-    }
-
-    pub fn active_filter(&self) -> Option<&str> {
-        self.filter.active_value()
-    }
-
     pub fn apply_stats_update(&mut self, update: ContainerStatsUpdate) {
         self.stats_by_container_id
             .insert(update.container_id.clone(), update.stats.clone());
 
         if let Some(container) = self
-            .containers
+            .list
+            .items
             .iter_mut()
             .find(|container| container.id == update.container_id)
         {
@@ -329,19 +266,28 @@ impl ContainerPresenter {
         self.reapply_runtime_stats();
     }
 
-    fn update_filtered_selection(&mut self) {
-        let count = self.filtered_containers().len();
-        self.selection.set_items(count);
-    }
-
     fn reapply_runtime_stats(&mut self) {
-        for container in &mut self.containers {
+        for container in &mut self.list.items {
             container.runtime_stats = self.stats_by_container_id.get(&container.id).cloned();
         }
 
         if let Some(container) = self.selected_container.as_mut() {
             container.runtime_stats = self.stats_by_container_id.get(&container.id).cloned();
         }
+    }
+}
+
+impl Deref for ContainerPresenter {
+    type Target = ListCore<ContainerDto>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.list
+    }
+}
+
+impl DerefMut for ContainerPresenter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.list
     }
 }
 
@@ -390,7 +336,7 @@ mod tests {
     #[test]
     fn test_new_creates_empty_state() {
         let p = ContainerPresenter::new();
-        assert!(p.containers.is_empty());
+        assert!(p.items.is_empty());
         assert!(p.logs.is_none());
         assert!(p.logs_state.selected().is_none());
         assert!(p.selected_container.is_none());
@@ -406,7 +352,7 @@ mod tests {
     fn test_set_containers_updates_list_and_selection() {
         let mut p = ContainerPresenter::new();
         p.set_containers(three_containers());
-        assert_eq!(p.containers.len(), 3);
+        assert_eq!(p.items.len(), 3);
         assert_eq!(p.selection.selected(), Some(0));
     }
 
@@ -631,7 +577,7 @@ mod tests {
     fn test_apply_stats_update_updates_list_and_selected_details() {
         let mut p = ContainerPresenter::new();
         p.set_containers(three_containers());
-        let details = p.containers[0].clone();
+        let details = p.items[0].clone();
         p.set_details(details);
 
         p.apply_stats_update(ContainerStatsUpdate {
@@ -647,11 +593,7 @@ mod tests {
         });
 
         assert_eq!(
-            p.containers[0]
-                .runtime_stats
-                .as_ref()
-                .unwrap()
-                .cpu_display(),
+            p.items[0].runtime_stats.as_ref().unwrap().cpu_display(),
             "12.5%"
         );
         assert_eq!(
@@ -683,7 +625,7 @@ mod tests {
         });
 
         p.retain_runtime_stats(&HashSet::from(["id_beta".to_string()]));
-        assert!(p.containers[0].runtime_stats.is_none());
+        assert!(p.items[0].runtime_stats.is_none());
 
         p.apply_stats_update(ContainerStatsUpdate {
             container_id: "id_beta".to_string(),
@@ -698,7 +640,7 @@ mod tests {
         });
         p.clear_runtime_stats();
         assert!(p
-            .containers
+            .items
             .iter()
             .all(|container| container.runtime_stats.is_none()));
     }

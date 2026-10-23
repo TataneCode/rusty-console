@@ -330,8 +330,8 @@ impl App {
                 let active_filter = presenter.active_filter().map(str::to_string);
                 let images: Vec<ImageDto> =
                     presenter.filtered_images().into_iter().cloned().collect();
+                let pull_progress = presenter.pull_progress.clone();
                 let selection_state = &mut presenter.selection.state;
-                let pull_progress = presenter.pull_progress.as_ref();
                 render_image_list(
                     frame,
                     content_area,
@@ -341,7 +341,7 @@ impl App {
                     ImageHelpBarState {
                         is_loading,
                         spinner_char,
-                        pull_progress,
+                        pull_progress: pull_progress.as_ref(),
                     },
                 );
             }
@@ -1761,7 +1761,7 @@ mod tests {
         app.menu_state.select(Some(2));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::ImageList);
-        assert_eq!(app.image_presenter.images.len(), 1);
+        assert_eq!(app.image_presenter.items.len(), 1);
 
         app.screen = Screen::MainMenu;
         app.menu_state.select(Some(3));

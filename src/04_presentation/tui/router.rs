@@ -292,7 +292,7 @@ impl App {
             Some(full_name) => {
                 let updated = self
                     .image_presenter
-                    .images
+                    .items
                     .iter()
                     .find(|image| image.full_name == full_name)
                     .cloned();

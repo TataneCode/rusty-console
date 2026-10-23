@@ -1,80 +1,38 @@
 use crate::application::volume::VolumeDto;
-use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
+use crate::presentation::tui::common::ListCore;
+use std::ops::{Deref, DerefMut};
 
 pub struct VolumePresenter {
-    pub volumes: Vec<VolumeDto>,
-    pub selection: TableSelection,
+    pub list: ListCore<VolumeDto>,
     pub selected_volume: Option<VolumeDto>,
-    pub loading: bool,
-    pub error: Option<String>,
-    pub filter: FilterState,
-    pub sort_order: SortOrder,
 }
 
-pub fn filter_volumes<'a>(volumes: &'a [VolumeDto], filter: &str) -> Vec<&'a VolumeDto> {
-    if filter.is_empty() {
-        volumes.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        volumes
-            .iter()
-            .filter(|volume| volume.name.to_lowercase().contains(&filter_lower))
-            .collect()
-    }
+fn matches_volume(volume: &VolumeDto, filter_lower: &str) -> bool {
+    volume.name.to_lowercase().contains(filter_lower)
+}
+
+fn volume_sort_key(volume: &VolumeDto) -> &str {
+    volume.name.as_str()
 }
 
 impl VolumePresenter {
     pub fn new() -> Self {
         VolumePresenter {
-            volumes: Vec::new(),
-            selection: TableSelection::new(),
+            list: ListCore::new(matches_volume, volume_sort_key),
             selected_volume: None,
-            loading: false,
-            error: None,
-            filter: FilterState::new(),
-            sort_order: SortOrder::default(),
         }
     }
 
     pub fn set_volumes(&mut self, volumes: Vec<VolumeDto>) {
-        self.volumes = volumes;
-        self.update_filtered_selection();
-        self.error = None;
-    }
-
-    pub fn set_error(&mut self, error: String) {
-        self.error = Some(error);
-    }
-
-    pub fn clear_error(&mut self) {
-        self.error = None;
-    }
-
-    pub fn set_loading(&mut self, loading: bool) {
-        self.loading = loading;
-    }
-
-    pub fn is_loading(&self) -> bool {
-        self.loading
+        self.list.set_items(volumes);
     }
 
     pub fn filtered_volumes(&self) -> Vec<&VolumeDto> {
-        let mut filtered = filter_volumes(&self.volumes, self.filter.value());
-        apply_name_sort(&mut filtered, self.sort_order, |volume| {
-            volume.name.as_str()
-        });
-        filtered
-    }
-    pub fn toggle_sort(&mut self) {
-        self.sort_order = self.sort_order.next();
-        self.update_filtered_selection();
+        self.list.filtered_items()
     }
 
     pub fn selected_volume(&self) -> Option<&VolumeDto> {
-        let filtered = self.filtered_volumes();
-        self.selection
-            .selected()
-            .and_then(|i| filtered.get(i).copied())
+        self.list.selected_item()
     }
 
     pub fn set_details(&mut self, volume: VolumeDto) {
@@ -84,45 +42,19 @@ impl VolumePresenter {
     pub fn clear_details(&mut self) {
         self.selected_volume = None;
     }
+}
 
-    pub fn navigate_up(&mut self) {
-        self.selection.previous();
+impl Deref for VolumePresenter {
+    type Target = ListCore<VolumeDto>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.list
     }
+}
 
-    pub fn navigate_down(&mut self) {
-        self.selection.next();
-    }
-
-    pub fn activate_filter(&mut self) {
-        self.filter.activate();
-    }
-
-    pub fn deactivate_filter(&mut self) {
-        self.filter.deactivate();
-        self.update_filtered_selection();
-    }
-
-    pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push_char(c);
-        self.update_filtered_selection();
-    }
-
-    pub fn pop_filter_char(&mut self) {
-        self.filter.pop_char();
-        self.update_filtered_selection();
-    }
-
-    pub fn is_filter_active(&self) -> bool {
-        self.filter.is_active()
-    }
-
-    pub fn active_filter(&self) -> Option<&str> {
-        self.filter.active_value()
-    }
-
-    fn update_filtered_selection(&mut self) {
-        let count = self.filtered_volumes().len();
-        self.selection.set_items(count);
+impl DerefMut for VolumePresenter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.list
     }
 }
 
@@ -162,7 +94,7 @@ mod tests {
     fn test_set_volumes_updates_list() {
         let mut p = VolumePresenter::new();
         p.set_volumes(three_volumes());
-        assert_eq!(p.volumes.len(), 3);
+        assert_eq!(p.items.len(), 3);
         assert_eq!(p.selection.selected(), Some(0));
         assert!(p.error.is_none());
     }

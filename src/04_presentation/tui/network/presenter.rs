@@ -1,71 +1,40 @@
 use crate::application::network::NetworkDto;
-use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
+use crate::presentation::tui::common::{ListCore, TableSelection};
+use std::ops::{Deref, DerefMut};
 
 pub struct NetworkPresenter {
-    pub networks: Vec<NetworkDto>,
-    pub selection: TableSelection,
+    pub list: ListCore<NetworkDto>,
     pub selected_network: Option<NetworkDto>,
-    pub loading: bool,
-    pub filter: FilterState,
-    pub sort_order: SortOrder,
     pub container_selection: TableSelection,
 }
 
-pub fn filter_networks<'a>(networks: &'a [NetworkDto], filter: &str) -> Vec<&'a NetworkDto> {
-    if filter.is_empty() {
-        networks.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        networks
-            .iter()
-            .filter(|network| network.name.to_lowercase().contains(&filter_lower))
-            .collect()
-    }
+fn matches_network(network: &NetworkDto, filter_lower: &str) -> bool {
+    network.name.to_lowercase().contains(filter_lower)
+}
+
+fn network_sort_key(network: &NetworkDto) -> &str {
+    network.name.as_str()
 }
 
 impl NetworkPresenter {
     pub fn new() -> Self {
         NetworkPresenter {
-            networks: Vec::new(),
-            selection: TableSelection::new(),
+            list: ListCore::new(matches_network, network_sort_key),
             selected_network: None,
-            loading: false,
-            filter: FilterState::new(),
-            sort_order: SortOrder::default(),
             container_selection: TableSelection::new(),
         }
     }
 
     pub fn set_networks(&mut self, networks: Vec<NetworkDto>) {
-        self.networks = networks;
-        self.update_filtered_selection();
-    }
-
-    pub fn set_loading(&mut self, loading: bool) {
-        self.loading = loading;
-    }
-
-    pub fn is_loading(&self) -> bool {
-        self.loading
+        self.list.set_items(networks);
     }
 
     pub fn filtered_networks(&self) -> Vec<&NetworkDto> {
-        let mut filtered = filter_networks(&self.networks, self.filter.value());
-        apply_name_sort(&mut filtered, self.sort_order, |network| {
-            network.name.as_str()
-        });
-        filtered
-    }
-    pub fn toggle_sort(&mut self) {
-        self.sort_order = self.sort_order.next();
-        self.update_filtered_selection();
+        self.list.filtered_items()
     }
 
     pub fn selected_network(&self) -> Option<&NetworkDto> {
-        let filtered = self.filtered_networks();
-        self.selection
-            .selected()
-            .and_then(|i| filtered.get(i).copied())
+        self.list.selected_item()
     }
 
     pub fn set_details(&mut self, network: NetworkDto) {
@@ -80,7 +49,8 @@ impl NetworkPresenter {
 
     pub fn select_network_by_name(&mut self, name: &str) {
         if let Some(network) = self
-            .networks
+            .list
+            .items
             .iter()
             .find(|network| network.name == name)
             .cloned()
@@ -99,14 +69,6 @@ impl NetworkPresenter {
         })
     }
 
-    pub fn navigate_up(&mut self) {
-        self.selection.previous();
-    }
-
-    pub fn navigate_down(&mut self) {
-        self.selection.next();
-    }
-
     pub fn navigate_container_up(&mut self) {
         self.container_selection.previous();
     }
@@ -114,37 +76,19 @@ impl NetworkPresenter {
     pub fn navigate_container_down(&mut self) {
         self.container_selection.next();
     }
+}
 
-    pub fn activate_filter(&mut self) {
-        self.filter.activate();
+impl Deref for NetworkPresenter {
+    type Target = ListCore<NetworkDto>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.list
     }
+}
 
-    pub fn deactivate_filter(&mut self) {
-        self.filter.deactivate();
-        self.update_filtered_selection();
-    }
-
-    pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push_char(c);
-        self.update_filtered_selection();
-    }
-
-    pub fn pop_filter_char(&mut self) {
-        self.filter.pop_char();
-        self.update_filtered_selection();
-    }
-
-    pub fn is_filter_active(&self) -> bool {
-        self.filter.is_active()
-    }
-
-    pub fn active_filter(&self) -> Option<&str> {
-        self.filter.active_value()
-    }
-
-    fn update_filtered_selection(&mut self) {
-        let count = self.filtered_networks().len();
-        self.selection.set_items(count);
+impl DerefMut for NetworkPresenter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.list
     }
 }
 
@@ -194,7 +138,7 @@ mod tests {
     fn test_set_networks_updates_list() {
         let mut p = NetworkPresenter::new();
         p.set_networks(three_networks());
-        assert_eq!(p.networks.len(), 3);
+        assert_eq!(p.items.len(), 3);
         assert_eq!(p.selection.selected(), Some(0));
     }
 

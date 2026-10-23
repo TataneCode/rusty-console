@@ -1,58 +1,33 @@
 use crate::application::image::{ImageDto, ImagePullProgress};
-use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
+use crate::presentation::tui::common::ListCore;
+use std::ops::{Deref, DerefMut};
 
 pub struct ImagePresenter {
-    pub images: Vec<ImageDto>,
-    pub selection: TableSelection,
+    pub list: ListCore<ImageDto>,
     pub selected_image: Option<ImageDto>,
-    pub loading: bool,
-    pub error: Option<String>,
-    pub filter: FilterState,
-    pub sort_order: SortOrder,
     pub pull_progress: Option<ImagePullProgress>,
 }
 
-pub fn filter_images<'a>(images: &'a [ImageDto], filter: &str) -> Vec<&'a ImageDto> {
-    if filter.is_empty() {
-        images.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        images
-            .iter()
-            .filter(|image| {
-                image.repository.to_lowercase().contains(&filter_lower)
-                    || image.tag.to_lowercase().contains(&filter_lower)
-            })
-            .collect()
-    }
+fn matches_image(image: &ImageDto, filter_lower: &str) -> bool {
+    image.repository.to_lowercase().contains(filter_lower)
+        || image.tag.to_lowercase().contains(filter_lower)
+}
+
+fn image_sort_key(image: &ImageDto) -> &str {
+    image.full_name.as_str()
 }
 
 impl ImagePresenter {
     pub fn new() -> Self {
         ImagePresenter {
-            images: Vec::new(),
-            selection: TableSelection::new(),
+            list: ListCore::new(matches_image, image_sort_key),
             selected_image: None,
-            loading: false,
-            error: None,
-            filter: FilterState::new(),
-            sort_order: SortOrder::default(),
             pull_progress: None,
         }
     }
 
     pub fn set_images(&mut self, images: Vec<ImageDto>) {
-        self.images = images;
-        self.update_filtered_selection();
-        self.error = None;
-    }
-
-    pub fn set_error(&mut self, error: String) {
-        self.error = Some(error);
-    }
-
-    pub fn clear_error(&mut self) {
-        self.error = None;
+        self.list.set_items(images);
     }
 
     pub fn set_pull_progress(&mut self, progress: ImagePullProgress) {
@@ -63,31 +38,12 @@ impl ImagePresenter {
         self.pull_progress = None;
     }
 
-    pub fn set_loading(&mut self, loading: bool) {
-        self.loading = loading;
-    }
-
-    pub fn is_loading(&self) -> bool {
-        self.loading
-    }
-
     pub fn filtered_images(&self) -> Vec<&ImageDto> {
-        let mut filtered = filter_images(&self.images, self.filter.value());
-        apply_name_sort(&mut filtered, self.sort_order, |image| {
-            image.full_name.as_str()
-        });
-        filtered
-    }
-    pub fn toggle_sort(&mut self) {
-        self.sort_order = self.sort_order.next();
-        self.update_filtered_selection();
+        self.list.filtered_items()
     }
 
     pub fn selected_image(&self) -> Option<&ImageDto> {
-        let filtered = self.filtered_images();
-        self.selection
-            .selected()
-            .and_then(|i| filtered.get(i).copied())
+        self.list.selected_item()
     }
 
     pub fn set_details(&mut self, image: ImageDto) {
@@ -97,45 +53,19 @@ impl ImagePresenter {
     pub fn clear_details(&mut self) {
         self.selected_image = None;
     }
+}
 
-    pub fn navigate_up(&mut self) {
-        self.selection.previous();
+impl Deref for ImagePresenter {
+    type Target = ListCore<ImageDto>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.list
     }
+}
 
-    pub fn navigate_down(&mut self) {
-        self.selection.next();
-    }
-
-    pub fn activate_filter(&mut self) {
-        self.filter.activate();
-    }
-
-    pub fn deactivate_filter(&mut self) {
-        self.filter.deactivate();
-        self.update_filtered_selection();
-    }
-
-    pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push_char(c);
-        self.update_filtered_selection();
-    }
-
-    pub fn pop_filter_char(&mut self) {
-        self.filter.pop_char();
-        self.update_filtered_selection();
-    }
-
-    pub fn is_filter_active(&self) -> bool {
-        self.filter.is_active()
-    }
-
-    pub fn active_filter(&self) -> Option<&str> {
-        self.filter.active_value()
-    }
-
-    fn update_filtered_selection(&mut self) {
-        let count = self.filtered_images().len();
-        self.selection.set_items(count);
+impl DerefMut for ImagePresenter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.list
     }
 }
 
@@ -176,7 +106,7 @@ mod tests {
     fn test_set_images_updates_list() {
         let mut p = ImagePresenter::new();
         p.set_images(three_images());
-        assert_eq!(p.images.len(), 3);
+        assert_eq!(p.items.len(), 3);
         assert_eq!(p.selection.selected(), Some(0));
         assert!(p.error.is_none());
     }

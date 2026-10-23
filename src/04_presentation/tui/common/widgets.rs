@@ -109,12 +109,12 @@ impl Default for TableSelection {
     }
 }
 
-pub fn render_table<'a>(
+pub fn render_table<'frame>(
     frame: &mut Frame,
     area: Rect,
     title: &str,
-    headers: Vec<&'a str>,
-    rows: Vec<Row<'a>>,
+    headers: Vec<&'frame str>,
+    rows: Vec<Row<'frame>>,
     widths: Vec<Constraint>,
     state: &mut TableState,
 ) {

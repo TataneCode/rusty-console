@@ -330,8 +330,8 @@ impl App {
                 let active_filter = presenter.active_filter().map(str::to_string);
                 let images: Vec<ImageDto> =
                     presenter.filtered_images().into_iter().cloned().collect();
+                let pull_progress = presenter.pull_progress.clone();
                 let selection_state = &mut presenter.selection.state;
-                let pull_progress = presenter.pull_progress.as_ref();
                 render_image_list(
                     frame,
                     content_area,
@@ -341,7 +341,7 @@ impl App {
                     ImageHelpBarState {
                         is_loading,
                         spinner_char,
-                        pull_progress,
+                        pull_progress: pull_progress.as_ref(),
                     },
                 );
             }
@@ -744,7 +744,7 @@ impl App {
 
         let active_container_ids: HashSet<String> = self
             .container_presenter
-            .containers
+            .items
             .iter()
             .filter(|container| container.state.is_active())
             .map(|container| container.id.clone())
@@ -1749,31 +1749,31 @@ mod tests {
         app.menu_state.select(Some(0));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::ContainerList);
-        assert_eq!(app.container_presenter.containers.len(), 1);
+        assert_eq!(app.container_presenter.items.len(), 1);
 
         app.screen = Screen::MainMenu;
         app.menu_state.select(Some(1));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::VolumeList);
-        assert_eq!(app.volume_presenter.volumes.len(), 1);
+        assert_eq!(app.volume_presenter.items.len(), 1);
 
         app.screen = Screen::MainMenu;
         app.menu_state.select(Some(2));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::ImageList);
-        assert_eq!(app.image_presenter.images.len(), 1);
+        assert_eq!(app.image_presenter.items.len(), 1);
 
         app.screen = Screen::MainMenu;
         app.menu_state.select(Some(3));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::StackList);
-        assert_eq!(app.stack_presenter.stacks.len(), 1);
+        assert_eq!(app.stack_presenter.items.len(), 1);
 
         app.screen = Screen::MainMenu;
         app.menu_state.select(Some(4));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::NetworkList);
-        assert_eq!(app.network_presenter.networks.len(), 1);
+        assert_eq!(app.network_presenter.items.len(), 1);
     }
 
     #[tokio::test]
@@ -1863,7 +1863,7 @@ mod tests {
         assert!(app.container_stats_subscription.is_none());
         assert!(app
             .container_presenter
-            .containers
+            .items
             .iter()
             .all(|container| container.runtime_stats.is_none()));
     }
@@ -2051,7 +2051,7 @@ mod tests {
         app.menu_state.select(Some(4));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::NetworkList);
-        assert_eq!(app.network_presenter.networks.len(), 1);
+        assert_eq!(app.network_presenter.items.len(), 1);
 
         app.handle_network_list_action(AppAction::NavigateDown)
             .await;
@@ -2238,7 +2238,7 @@ mod tests {
             Some(ContainerStatsSubscription::new(receiver, Vec::new()));
         app.drain_container_stats();
 
-        assert_eq!(app.container_presenter.containers[0].cpu_display(), "80.0%");
+        assert_eq!(app.container_presenter.items[0].cpu_display(), "80.0%");
         assert!(matches!(app.popup_message, Some(PopupMessage::Error(_))));
         assert!(app
             .popup_message
@@ -2263,7 +2263,7 @@ mod tests {
         assert!(app.container_stats_subscription.is_none());
         assert!(app
             .container_presenter
-            .containers
+            .items
             .iter()
             .all(|container| container.runtime_stats.is_none()));
     }

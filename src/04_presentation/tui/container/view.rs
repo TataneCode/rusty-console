@@ -1,8 +1,8 @@
 use crate::application::container::{ContainerDto, ContainerLogsDto};
 use crate::domain::container::ContainerState;
 use crate::presentation::tui::common::{
-    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
-    resources, split_content_area, truncate_text, Theme,
+    render_action_bar, render_list, resources, split_content_area, truncate_text, ListHelpBar,
+    ListRenderInput, ListViewSpec, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -20,29 +20,6 @@ pub fn render_container_list(
     is_loading: bool,
     spinner_char: &str,
 ) {
-    let [content_area, help_area] = split_content_area(area);
-
-    let rows: Vec<Row> = containers
-        .iter()
-        .map(|c| {
-            let state_style = match c.state {
-                ContainerState::Running => Theme::running_style(),
-                ContainerState::Paused | ContainerState::Restarting => Theme::paused_style(),
-                _ => Theme::stopped_style(),
-            };
-
-            Row::new(vec![
-                Cell::from(c.name.clone()),
-                Cell::from(truncate_text(&c.image, 30)),
-                Cell::from(c.state_display()).style(state_style),
-                Cell::from(c.cpu_display()),
-                Cell::from(truncate_text(&c.memory_display(), 18)),
-                Cell::from(c.status.clone()),
-                Cell::from(truncate_text(&c.ports, 25)),
-            ])
-        })
-        .collect();
-
     let widths = vec![
         Constraint::Percentage(16),
         Constraint::Percentage(18),
@@ -53,34 +30,48 @@ pub fn render_container_list(
         Constraint::Percentage(12),
     ];
 
-    let title = filter_prompt_title(resources::CONTAINER_TITLE, active_filter);
-    render_table(
-        frame,
-        content_area,
-        &title,
-        resources::CONTAINER_HEADERS.to_vec(),
-        rows,
+    let spec = ListViewSpec {
+        title: resources::CONTAINER_TITLE,
+        headers: resources::CONTAINER_HEADERS.to_vec(),
         widths,
-        state,
-    );
+        help_text: resources::CONTAINER_LIST_HELP,
+        filter_enter_label: "Details",
+    };
 
-    if is_loading {
-        render_loading_bar(frame, help_area, spinner_char);
-    } else {
-        let help = match active_filter {
-            Some(_) => filter_input_help("Details"),
-            None => resources::CONTAINER_LIST_HELP.to_string(),
+    let mut input = ListRenderInput {
+        items: containers,
+        state,
+        active_filter,
+        help_bar: ListHelpBar {
+            is_loading,
+            spinner_char,
+        },
+    };
+    render_list(frame, area, &spec, &mut input, |c| {
+        let state_style = match c.state {
+            ContainerState::Running => Theme::running_style(),
+            ContainerState::Paused | ContainerState::Restarting => Theme::paused_style(),
+            _ => Theme::stopped_style(),
         };
-        render_action_bar(frame, help_area, &help);
-    }
+
+        Row::new(vec![
+            Cell::from(c.name.clone()),
+            Cell::from(truncate_text(&c.image, 30)),
+            Cell::from(c.state_display()).style(state_style),
+            Cell::from(c.cpu_display()),
+            Cell::from(truncate_text(&c.memory_display(), 18)),
+            Cell::from(c.status.clone()),
+            Cell::from(truncate_text(&c.ports, 25)),
+        ])
+    });
 }
 
-pub struct LogSearchView<'a> {
+pub struct LogSearchView<'text> {
     pub active: bool,
-    pub value: &'a str,
-    pub active_term: Option<&'a str>,
+    pub value: &'text str,
+    pub active_term: Option<&'text str>,
     pub counter: Option<(usize, usize)>,
-    pub matches: &'a [usize],
+    pub matches: &'text [usize],
 }
 
 impl LogSearchView<'_> {

@@ -292,7 +292,7 @@ impl App {
             Some(full_name) => {
                 let updated = self
                     .image_presenter
-                    .images
+                    .items
                     .iter()
                     .find(|image| image.full_name == full_name)
                     .cloned();
@@ -469,7 +469,7 @@ impl App {
             Some(name)
                 if self
                     .network_presenter
-                    .networks
+                    .items
                     .iter()
                     .any(|network| network.name == name) =>
             {

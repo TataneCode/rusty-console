@@ -193,3 +193,22 @@ This log records significant structural decisions and refactorings. Each entry i
    - `src/tui/`
 
 **Rationale**: dependencies point strictly inward and the four DDD layers are visible at a glance in the directory listing; feature modules now live inside their layer.
+
+### ADR-002 — Shared list state via `ListCore<TItem>` composition (2026-10-22)
+
+**Status**: accepted
+
+**Context**: the five list presenters (container, image, network, volume, stack) duplicated the same list state (`items`, `selection`, `filter`, `sort_order`, `loading`, `error`) and the same 13 methods (navigation, filter, sort, loading, error), and the five `render_*_list` views duplicated the same table skeleton (split areas, filter-aware title, help bar with loading/filter/normal states). The duplication had already drifted: `NetworkPresenter` lacked the `error` field, and `StackPresenter::set_loading` contained an empty `if !loading {}` branch.
+
+**Decision**: factor the shared list state into a generic `ListCore<TItem>` struct in `04_presentation/tui/common/list.rs`, embedded by composition in each presenter and exposed via `Deref`/`DerefMut` so existing call sites (`presenter.selection`, `presenter.filter`, `presenter.navigate_up()`, …) and tests keep working unchanged; the filter predicate and sort key are injected as `fn` pointers at construction. Factor the list view skeleton into a generic `render_list()` in `04_presentation/tui/common/list_view.rs`, parameterized by a `ListViewSpec` (title, headers, widths, help texts) and a row closure. A trait-based alternative (required accessors + default methods) was rejected: traits carry no state, so it would add more boilerplate than it removes, and it is not the Rust idiom for shared state.
+
+**Consequences**:
+
+1. New modules `common/list.rs` (`ListCore<TItem>`, 15 unit tests) and `common/list_view.rs` (`render_list`, `ListViewSpec`, `ListRenderInput`, `ListHelpBar`, 3 render tests).
+2. All five presenters embed `ListCore<T>` and delegate through `Deref`/`DerefMut`; their domain-specific state stays in the presenter (container: logs/log-search/live stats; network: container sub-selection; stack: stack containers sub-list; image: pull progress).
+3. The five `render_*_list` functions are now thin wrappers declaring only their `ListViewSpec` and row closure; the image list keeps its pull-progress bar overlay as a specific case.
+4. The `filter_*` free functions are kept as thin wrappers for backward compatibility (still exported from each presenter module).
+5. Uniformization side effects (documented, no visible behavior change): `NetworkPresenter` gains the `error` field via `ListCore`; the dead `if !loading {}` branch in `StackPresenter::set_loading` is removed.
+6. Generic parameter naming convention adopted in the same pass: `TItem` for list item types, `'frame`/`'text`/`'items` for the display lifetimes (see `docs/refactoring/generic_parameter_naming_2026-10-22.md`).
+
+**Rationale**: composition is the Rust idiom for shared state (a trait cannot own fields); `Deref` keeps the presenter API stable, minimizing regression risk — all 498 tests pass without modification of test logic. The generic naming convention mirrors the project's C#/.NET heritage (port of FancyContainerConsole).

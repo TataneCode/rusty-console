@@ -1,8 +1,8 @@
 use crate::application::stack::{StackContainerDto, StackDto};
 use crate::domain::stack::StackContainerState;
 use crate::presentation::tui::common::{
-    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
-    resources, split_content_area, truncate_text, Theme,
+    render_action_bar, render_list, render_loading_bar, render_table, resources,
+    split_content_area, truncate_text, ListHelpBar, ListRenderInput, ListViewSpec, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -10,9 +10,9 @@ use ratatui::{
     Frame,
 };
 
-pub struct StackHelpBarState<'a> {
+pub struct StackHelpBarState<'text> {
     pub is_loading: bool,
-    pub spinner_char: &'a str,
+    pub spinner_char: &'text str,
 }
 
 pub fn render_stack_list(
@@ -23,48 +23,42 @@ pub fn render_stack_list(
     active_filter: Option<&str>,
     help_bar: StackHelpBarState<'_>,
 ) {
-    let [content_area, help_area] = split_content_area(area);
-
-    let rows: Vec<Row> = stacks
-        .iter()
-        .map(|s| {
-            let running_style = if s.running_count > 0 && s.running_count == s.container_count {
-                Theme::in_use_style()
-            } else {
-                Theme::default_style()
-            };
-
-            Row::new(vec![
-                Cell::from(s.name.clone()),
-                Cell::from(s.container_count.to_string()),
-                Cell::from(format!("{}/{}", s.running_count, s.container_count))
-                    .style(running_style),
-            ])
-        })
-        .collect();
-
     let widths = vec![
         Constraint::Percentage(60),
         Constraint::Percentage(20),
         Constraint::Percentage(20),
     ];
 
-    let title = filter_prompt_title(resources::STACK_TITLE, active_filter);
-    render_table(
-        frame,
-        content_area,
-        &title,
-        resources::STACK_HEADERS.to_vec(),
-        rows,
+    let spec = ListViewSpec {
+        title: resources::STACK_TITLE,
+        headers: resources::STACK_HEADERS.to_vec(),
         widths,
-        state,
-    );
-
-    let help = match active_filter {
-        Some(_) => filter_input_help("Drill-down"),
-        None => resources::STACK_LIST_HELP.to_string(),
+        help_text: resources::STACK_LIST_HELP,
+        filter_enter_label: "Drill-down",
     };
-    render_help_bar(frame, help_area, help_bar, &help);
+
+    let mut input = ListRenderInput {
+        items: stacks,
+        state,
+        active_filter,
+        help_bar: ListHelpBar {
+            is_loading: help_bar.is_loading,
+            spinner_char: help_bar.spinner_char,
+        },
+    };
+    render_list(frame, area, &spec, &mut input, |s| {
+        let running_style = if s.running_count > 0 && s.running_count == s.container_count {
+            Theme::in_use_style()
+        } else {
+            Theme::default_style()
+        };
+
+        Row::new(vec![
+            Cell::from(s.name.clone()),
+            Cell::from(s.container_count.to_string()),
+            Cell::from(format!("{}/{}", s.running_count, s.container_count)).style(running_style),
+        ])
+    });
 }
 
 fn render_help_bar(

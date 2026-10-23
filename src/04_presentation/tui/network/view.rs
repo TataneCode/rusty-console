@@ -1,7 +1,7 @@
 use crate::application::network::NetworkDto;
 use crate::presentation::tui::common::{
-    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
-    resources, split_content_area, truncate_text, Theme,
+    render_action_bar, render_list, resources, split_content_area, truncate_text, ListHelpBar,
+    ListRenderInput, ListViewSpec, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -18,29 +18,6 @@ pub fn render_network_list(
     is_loading: bool,
     spinner_char: &str,
 ) {
-    let [content_area, help_area] = split_content_area(area);
-
-    let rows: Vec<Row> = networks
-        .iter()
-        .map(|n| {
-            let builtin_style = if n.builtin {
-                Theme::in_use_style()
-            } else {
-                Theme::default_style()
-            };
-
-            let subnet = n.subnet.clone().unwrap_or_else(|| "N/A".to_string());
-
-            Row::new(vec![
-                Cell::from(truncate_text(&n.name, 40)),
-                Cell::from(n.driver.clone()),
-                Cell::from(n.scope.clone()),
-                Cell::from(subnet),
-                Cell::from(n.container_count.to_string()).style(builtin_style),
-            ])
-        })
-        .collect();
-
     let widths = vec![
         Constraint::Percentage(35),
         Constraint::Percentage(15),
@@ -49,26 +26,40 @@ pub fn render_network_list(
         Constraint::Percentage(15),
     ];
 
-    let title = filter_prompt_title(resources::NETWORK_TITLE, active_filter);
-    render_table(
-        frame,
-        content_area,
-        &title,
-        resources::NETWORK_HEADERS.to_vec(),
-        rows,
+    let spec = ListViewSpec {
+        title: resources::NETWORK_TITLE,
+        headers: resources::NETWORK_HEADERS.to_vec(),
         widths,
-        state,
-    );
+        help_text: resources::NETWORK_LIST_HELP,
+        filter_enter_label: "Details",
+    };
 
-    if is_loading {
-        render_loading_bar(frame, help_area, spinner_char);
-    } else {
-        let help = match active_filter {
-            Some(_) => filter_input_help("Details"),
-            None => resources::NETWORK_LIST_HELP.to_string(),
+    let mut input = ListRenderInput {
+        items: networks,
+        state,
+        active_filter,
+        help_bar: ListHelpBar {
+            is_loading,
+            spinner_char,
+        },
+    };
+    render_list(frame, area, &spec, &mut input, |n| {
+        let builtin_style = if n.builtin {
+            Theme::in_use_style()
+        } else {
+            Theme::default_style()
         };
-        render_action_bar(frame, help_area, &help);
-    }
+
+        let subnet = n.subnet.clone().unwrap_or_else(|| "N/A".to_string());
+
+        Row::new(vec![
+            Cell::from(truncate_text(&n.name, 40)),
+            Cell::from(n.driver.clone()),
+            Cell::from(n.scope.clone()),
+            Cell::from(subnet),
+            Cell::from(n.container_count.to_string()).style(builtin_style),
+        ])
+    });
 }
 
 pub fn render_network_details(

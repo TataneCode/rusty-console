@@ -19,32 +19,51 @@ pub struct ListHelpBar<'text> {
     pub spinner_char: &'text str,
 }
 
+/// Static description of a list screen: what the table shows and what the
+/// help bar says. The variable parts (items, selection, filter, loading)
+/// are passed separately to [`render_list`].
+pub struct ListViewSpec<'frame> {
+    pub title: &'frame str,
+    pub headers: Vec<&'frame str>,
+    pub widths: Vec<Constraint>,
+    pub help_text: &'frame str,
+    pub filter_enter_label: &'frame str,
+}
+
+/// Runtime inputs of a list screen render: the items to display, their
+/// selection state, the active filter text and the loading/spinner state.
+pub struct ListRenderInput<'items, 'text, TItem> {
+    pub items: &'items [TItem],
+    pub state: &'items mut TableState,
+    pub active_filter: Option<&'text str>,
+    pub help_bar: ListHelpBar<'text>,
+}
+
 pub fn render_list<'frame, TItem>(
     frame: &mut Frame,
     area: Rect,
-    title: &str,
-    headers: Vec<&'frame str>,
-    widths: Vec<Constraint>,
-    items: &[TItem],
+    spec: &ListViewSpec<'frame>,
+    input: &mut ListRenderInput<'_, '_, TItem>,
     row: impl Fn(&TItem) -> Row<'frame>,
-    state: &mut TableState,
-    active_filter: Option<&str>,
-    help_bar: ListHelpBar<'_>,
-    help_text: &str,
-    filter_enter_label: &str,
 ) {
+    let ListRenderInput {
+        items,
+        state,
+        active_filter,
+        help_bar,
+    } = input;
     let [content_area, help_area] = split_content_area(area);
 
     let rows: Vec<Row> = items.iter().map(row).collect();
 
-    let title = filter_prompt_title(title, active_filter);
+    let title = filter_prompt_title(spec.title, *active_filter);
     render_table(
         frame,
         content_area,
         &title,
-        headers,
+        spec.headers.clone(),
         rows,
-        widths,
+        spec.widths.clone(),
         state,
     );
 
@@ -52,8 +71,8 @@ pub fn render_list<'frame, TItem>(
         render_loading_bar(frame, help_area, help_bar.spinner_char);
     } else {
         let help = match active_filter {
-            Some(_) => filter_input_help(filter_enter_label),
-            None => help_text.to_string(),
+            Some(_) => filter_input_help(spec.filter_enter_label),
+            None => spec.help_text.to_string(),
         };
         render_action_bar(frame, help_area, &help);
     }
@@ -76,6 +95,42 @@ mod tests {
         name: String,
     }
 
+    fn make_spec() -> ListViewSpec<'static> {
+        ListViewSpec {
+            title: "Items",
+            headers: vec!["Name"],
+            widths: vec![Constraint::Percentage(100)],
+            help_text: " q: Quit | /: Filter ",
+            filter_enter_label: "Details",
+        }
+    }
+
+    fn draw_list(
+        terminal: &mut Terminal<TestBackend>,
+        items: &[Row_],
+        active_filter: Option<&str>,
+        is_loading: bool,
+        spinner_char: &str,
+    ) {
+        let mut state = TableState::default();
+        terminal
+            .draw(|frame| {
+                let mut input = ListRenderInput {
+                    items,
+                    state: &mut state,
+                    active_filter,
+                    help_bar: ListHelpBar {
+                        is_loading,
+                        spinner_char,
+                    },
+                };
+                render_list(frame, frame.area(), &make_spec(), &mut input, |item| {
+                    Row::new(vec![item.name.clone()])
+                });
+            })
+            .unwrap();
+    }
+
     #[test]
     fn test_render_list_shows_title_rows_and_help() {
         let backend = TestBackend::new(100, 20);
@@ -88,29 +143,8 @@ mod tests {
                 name: "beta".to_string(),
             },
         ];
-        let mut state = TableState::default();
 
-        terminal
-            .draw(|frame| {
-                render_list(
-                    frame,
-                    frame.area(),
-                    "Items",
-                    vec!["Name"],
-                    vec![Constraint::Percentage(100)],
-                    &items,
-                    |item| Row::new(vec![item.name.clone()]),
-                    &mut state,
-                    None,
-                    ListHelpBar {
-                        is_loading: false,
-                        spinner_char: "|",
-                    },
-                    " q: Quit | /: Filter ",
-                    "Details",
-                );
-            })
-            .unwrap();
+        draw_list(&mut terminal, &items, None, false, "|");
 
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("Items"));
@@ -127,29 +161,8 @@ mod tests {
         let items = vec![Row_ {
             name: "alpha".to_string(),
         }];
-        let mut state = TableState::default();
 
-        terminal
-            .draw(|frame| {
-                render_list(
-                    frame,
-                    frame.area(),
-                    "Items",
-                    vec!["Name"],
-                    vec![Constraint::Percentage(100)],
-                    &items,
-                    |item| Row::new(vec![item.name.clone()]),
-                    &mut state,
-                    Some("alp"),
-                    ListHelpBar {
-                        is_loading: false,
-                        spinner_char: "|",
-                    },
-                    " q: Quit | /: Filter ",
-                    "Details",
-                );
-            })
-            .unwrap();
+        draw_list(&mut terminal, &items, Some("alp"), false, "|");
 
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("[/: alp"));
@@ -165,29 +178,8 @@ mod tests {
         let items = vec![Row_ {
             name: "alpha".to_string(),
         }];
-        let mut state = TableState::default();
 
-        terminal
-            .draw(|frame| {
-                render_list(
-                    frame,
-                    frame.area(),
-                    "Items",
-                    vec!["Name"],
-                    vec![Constraint::Percentage(100)],
-                    &items,
-                    |item| Row::new(vec![item.name.clone()]),
-                    &mut state,
-                    None,
-                    ListHelpBar {
-                        is_loading: true,
-                        spinner_char: "/",
-                    },
-                    " q: Quit | /: Filter ",
-                    "Details",
-                );
-            })
-            .unwrap();
+        draw_list(&mut terminal, &items, None, true, "/");
 
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("Loading..."));

@@ -1,8 +1,8 @@
 use crate::application::image::ImageDto;
 use crate::application::image::ImagePullProgress;
 use crate::presentation::tui::common::{
-    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar,
-    render_pull_progress_bar, render_table, resources, split_content_area, truncate_text, Theme,
+    render_action_bar, render_list, render_loading_bar, render_pull_progress_bar, resources,
+    split_content_area, truncate_text, ListHelpBar, ListRenderInput, ListViewSpec, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -26,39 +26,6 @@ pub fn render_image_list(
 ) {
     let [content_area, help_area] = split_content_area(area);
 
-    let rows: Vec<Row> = images
-        .iter()
-        .map(|img| {
-            let style = if img.is_dangling {
-                Theme::dangling_style()
-            } else if img.in_use {
-                Theme::in_use_style()
-            } else {
-                Theme::default_style()
-            };
-
-            let in_use_text = if img.in_use {
-                resources::VALUE_YES
-            } else {
-                resources::VALUE_NO
-            };
-            let in_use_style = if img.in_use {
-                Theme::in_use_style()
-            } else {
-                Theme::default_style()
-            };
-
-            Row::new(vec![
-                Cell::from(truncate_text(&img.repository, 30)).style(style),
-                Cell::from(img.tag.clone()).style(style),
-                Cell::from(img.short_id.clone()),
-                Cell::from(img.size.clone()),
-                Cell::from(in_use_text).style(in_use_style),
-                Cell::from(img.created.clone()),
-            ])
-        })
-        .collect();
-
     let widths = vec![
         Constraint::Percentage(25),
         Constraint::Percentage(15),
@@ -68,27 +35,57 @@ pub fn render_image_list(
         Constraint::Percentage(25),
     ];
 
-    let title = filter_prompt_title(resources::IMAGE_TITLE, active_filter);
-    render_table(
-        frame,
-        content_area,
-        &title,
-        resources::IMAGE_HEADERS.to_vec(),
-        rows,
+    let spec = ListViewSpec {
+        title: resources::IMAGE_TITLE,
+        headers: resources::IMAGE_HEADERS.to_vec(),
         widths,
-        state,
-    );
+        help_text: resources::IMAGE_LIST_HELP,
+        filter_enter_label: "Details",
+    };
 
+    let mut input = ListRenderInput {
+        items: images,
+        state,
+        active_filter,
+        help_bar: ListHelpBar {
+            is_loading: help_bar.is_loading,
+            spinner_char: help_bar.spinner_char,
+        },
+    };
+    render_list(frame, area, &spec, &mut input, |img| {
+        let style = if img.is_dangling {
+            Theme::dangling_style()
+        } else if img.in_use {
+            Theme::in_use_style()
+        } else {
+            Theme::default_style()
+        };
+
+        let in_use_text = if img.in_use {
+            resources::VALUE_YES
+        } else {
+            resources::VALUE_NO
+        };
+        let in_use_style = if img.in_use {
+            Theme::in_use_style()
+        } else {
+            Theme::default_style()
+        };
+
+        Row::new(vec![
+            Cell::from(truncate_text(&img.repository, 30)).style(style),
+            Cell::from(img.tag.clone()).style(style),
+            Cell::from(img.short_id.clone()),
+            Cell::from(img.size.clone()),
+            Cell::from(in_use_text).style(in_use_style),
+            Cell::from(img.created.clone()),
+        ])
+    });
+
+    // The pull progress bar redraws over the help bar while a pull runs.
+    let _ = content_area;
     if let Some(progress) = help_bar.pull_progress {
         render_pull_progress_bar(frame, help_area, progress);
-    } else if help_bar.is_loading {
-        render_loading_bar(frame, help_area, help_bar.spinner_char);
-    } else {
-        let help = match active_filter {
-            Some(_) => filter_input_help("Details"),
-            None => resources::IMAGE_LIST_HELP.to_string(),
-        };
-        render_action_bar(frame, help_area, &help);
     }
 }
 

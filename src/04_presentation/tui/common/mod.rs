@@ -20,7 +20,7 @@ pub use input::render_input_dialog;
 pub use input::{InputDialogState, InputField, TextInputState};
 pub use keys::{map_key_to_action, map_key_to_action_for_context, AppAction, KeyContext};
 pub use list::ListCore;
-pub use list_view::{render_list, ListHelpBar};
+pub use list_view::{render_list, ListHelpBar, ListRenderInput, ListViewSpec};
 pub use menu::render_main_menu;
 pub use progress_bar::{format_pull_bytes, pull_progress_bar_text, render_pull_progress_bar};
 pub use resources::{filter_input_help, filter_prompt_title};

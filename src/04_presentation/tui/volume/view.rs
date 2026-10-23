@@ -1,7 +1,7 @@
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
-    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
-    resources, split_content_area, truncate_text, Theme,
+    render_action_bar, render_list, resources, split_content_area, truncate_text, ListHelpBar,
+    ListRenderInput, ListViewSpec, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -18,33 +18,6 @@ pub fn render_volume_list(
     is_loading: bool,
     spinner_char: &str,
 ) {
-    let [content_area, help_area] = split_content_area(area);
-
-    let rows: Vec<Row> = volumes
-        .iter()
-        .map(|v| {
-            let in_use_style = if v.in_use {
-                Theme::in_use_style()
-            } else {
-                Theme::default_style()
-            };
-
-            let in_use_text = if v.in_use {
-                resources::VALUE_YES
-            } else {
-                resources::VALUE_NO
-            };
-
-            Row::new(vec![
-                Cell::from(truncate_text(&v.name, 40)),
-                Cell::from(v.driver.clone()),
-                Cell::from(v.size.clone()),
-                Cell::from(in_use_text).style(in_use_style),
-                Cell::from(v.created.clone()),
-            ])
-        })
-        .collect();
-
     let widths = vec![
         Constraint::Percentage(35),
         Constraint::Percentage(15),
@@ -53,26 +26,44 @@ pub fn render_volume_list(
         Constraint::Percentage(25),
     ];
 
-    let title = filter_prompt_title(resources::VOLUME_TITLE, active_filter);
-    render_table(
-        frame,
-        content_area,
-        &title,
-        resources::VOLUME_HEADERS.to_vec(),
-        rows,
+    let spec = ListViewSpec {
+        title: resources::VOLUME_TITLE,
+        headers: resources::VOLUME_HEADERS.to_vec(),
         widths,
-        state,
-    );
+        help_text: resources::VOLUME_LIST_HELP,
+        filter_enter_label: "Details",
+    };
 
-    if is_loading {
-        render_loading_bar(frame, help_area, spinner_char);
-    } else {
-        let help = match active_filter {
-            Some(_) => filter_input_help("Details"),
-            None => resources::VOLUME_LIST_HELP.to_string(),
+    let mut input = ListRenderInput {
+        items: volumes,
+        state,
+        active_filter,
+        help_bar: ListHelpBar {
+            is_loading,
+            spinner_char,
+        },
+    };
+    render_list(frame, area, &spec, &mut input, |v| {
+        let in_use_style = if v.in_use {
+            Theme::in_use_style()
+        } else {
+            Theme::default_style()
         };
-        render_action_bar(frame, help_area, &help);
-    }
+
+        let in_use_text = if v.in_use {
+            resources::VALUE_YES
+        } else {
+            resources::VALUE_NO
+        };
+
+        Row::new(vec![
+            Cell::from(truncate_text(&v.name, 40)),
+            Cell::from(v.driver.clone()),
+            Cell::from(v.size.clone()),
+            Cell::from(in_use_text).style(in_use_style),
+            Cell::from(v.created.clone()),
+        ])
+    });
 }
 
 pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) {

@@ -469,7 +469,7 @@ impl App {
             Some(name)
                 if self
                     .network_presenter
-                    .networks
+                    .items
                     .iter()
                     .any(|network| network.name == name) =>
             {

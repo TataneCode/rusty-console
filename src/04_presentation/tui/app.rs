@@ -1773,7 +1773,7 @@ mod tests {
         app.menu_state.select(Some(4));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::NetworkList);
-        assert_eq!(app.network_presenter.networks.len(), 1);
+        assert_eq!(app.network_presenter.items.len(), 1);
     }
 
     #[tokio::test]
@@ -2051,7 +2051,7 @@ mod tests {
         app.menu_state.select(Some(4));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::NetworkList);
-        assert_eq!(app.network_presenter.networks.len(), 1);
+        assert_eq!(app.network_presenter.items.len(), 1);
 
         app.handle_network_list_action(AppAction::NavigateDown)
             .await;

@@ -1,15 +1,19 @@
 use crate::application::stack::{StackContainerDto, StackDto};
-use crate::presentation::tui::common::{apply_name_sort, FilterState, SortOrder, TableSelection};
+use crate::presentation::tui::common::{ListCore, TableSelection};
+use std::ops::{Deref, DerefMut};
 
 pub struct StackPresenter {
-    pub stacks: Vec<StackDto>,
-    pub selection: TableSelection,
+    pub list: ListCore<StackDto>,
     pub stack_containers: Vec<StackContainerDto>,
     pub container_selection: TableSelection,
-    pub loading: bool,
-    pub error: Option<String>,
-    pub filter: FilterState,
-    pub sort_order: SortOrder,
+}
+
+fn matches_stack(stack: &StackDto, filter_lower: &str) -> bool {
+    stack.name.to_lowercase().contains(filter_lower)
+}
+
+fn stack_sort_key(stack: &StackDto) -> &str {
+    stack.name.as_str()
 }
 
 pub fn filter_stacks<'items>(stacks: &'items [StackDto], filter: &str) -> Vec<&'items StackDto> {
@@ -27,55 +31,22 @@ pub fn filter_stacks<'items>(stacks: &'items [StackDto], filter: &str) -> Vec<&'
 impl StackPresenter {
     pub fn new() -> Self {
         StackPresenter {
-            stacks: Vec::new(),
-            selection: TableSelection::new(),
+            list: ListCore::new(matches_stack, stack_sort_key),
             stack_containers: Vec::new(),
             container_selection: TableSelection::new(),
-            loading: false,
-            error: None,
-            filter: FilterState::new(),
-            sort_order: SortOrder::default(),
         }
     }
 
     pub fn set_stacks(&mut self, stacks: Vec<StackDto>) {
-        self.stacks = stacks;
-        self.update_filtered_selection();
-        self.error = None;
-    }
-
-    pub fn set_error(&mut self, error: String) {
-        self.error = Some(error);
-    }
-
-    pub fn clear_error(&mut self) {
-        self.error = None;
-    }
-
-    pub fn set_loading(&mut self, loading: bool) {
-        self.loading = loading;
-        if !loading {}
-    }
-
-    pub fn is_loading(&self) -> bool {
-        self.loading
+        self.list.set_items(stacks);
     }
 
     pub fn filtered_stacks(&self) -> Vec<&StackDto> {
-        let mut filtered = filter_stacks(&self.stacks, self.filter.value());
-        apply_name_sort(&mut filtered, self.sort_order, |stack| stack.name.as_str());
-        filtered
-    }
-    pub fn toggle_sort(&mut self) {
-        self.sort_order = self.sort_order.next();
-        self.update_filtered_selection();
+        self.list.filtered_items()
     }
 
     pub fn selected_stack(&self) -> Option<&StackDto> {
-        let filtered = self.filtered_stacks();
-        self.selection
-            .selected()
-            .and_then(|i| filtered.get(i).copied())
+        self.list.selected_item()
     }
 
     pub fn select_stack_by_name(&mut self, stack_name: &str) -> bool {
@@ -107,49 +78,23 @@ impl StackPresenter {
         self.container_selection.next();
     }
 
-    pub fn navigate_up(&mut self) {
-        self.selection.previous();
-    }
-
-    pub fn navigate_down(&mut self) {
-        self.selection.next();
-    }
-
-    pub fn activate_filter(&mut self) {
-        self.filter.activate();
-    }
-
-    pub fn deactivate_filter(&mut self) {
-        self.filter.deactivate();
-        self.update_filtered_selection();
-    }
-
-    pub fn push_filter_char(&mut self, c: char) {
-        self.filter.push_char(c);
-        self.update_filtered_selection();
-    }
-
-    pub fn pop_filter_char(&mut self) {
-        self.filter.pop_char();
-        self.update_filtered_selection();
-    }
-
-    pub fn is_filter_active(&self) -> bool {
-        self.filter.is_active()
-    }
-
-    pub fn active_filter(&self) -> Option<&str> {
-        self.filter.active_value()
-    }
-
-    fn update_filtered_selection(&mut self) {
-        let count = self.filtered_stacks().len();
-        self.selection.set_items(count);
-    }
-
     fn update_container_selection(&mut self) {
         self.container_selection
             .set_items(self.stack_containers.len());
+    }
+}
+
+impl Deref for StackPresenter {
+    type Target = ListCore<StackDto>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.list
+    }
+}
+
+impl DerefMut for StackPresenter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.list
     }
 }
 
@@ -184,7 +129,7 @@ mod tests {
     #[test]
     fn test_new_empty() {
         let p = StackPresenter::new();
-        assert!(p.stacks.is_empty());
+        assert!(p.items.is_empty());
         assert!(p.selected_stack().is_none());
         assert!(p.stack_containers.is_empty());
         assert!(p.selected_stack_container().is_none());
@@ -198,7 +143,7 @@ mod tests {
     fn test_set_stacks_selects_first() {
         let mut p = StackPresenter::new();
         p.set_stacks(vec![make_stack("app-a", 2), make_stack("app-b", 1)]);
-        assert_eq!(p.stacks.len(), 2);
+        assert_eq!(p.items.len(), 2);
         assert_eq!(p.selected_stack().unwrap().name, "app-a");
     }
 
@@ -248,7 +193,7 @@ mod tests {
         let mut p = StackPresenter::new();
         p.set_stacks(vec![make_stack("old", 1)]);
         p.set_stacks(vec![make_stack("new-a", 2), make_stack("new-b", 3)]);
-        assert_eq!(p.stacks.len(), 2);
+        assert_eq!(p.items.len(), 2);
         assert_eq!(p.selected_stack().unwrap().name, "new-a");
     }
 

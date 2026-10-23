@@ -1767,7 +1767,7 @@ mod tests {
         app.menu_state.select(Some(3));
         app.handle_main_menu_action(AppAction::Select).await;
         assert_eq!(app.screen, Screen::StackList);
-        assert_eq!(app.stack_presenter.stacks.len(), 1);
+        assert_eq!(app.stack_presenter.items.len(), 1);
 
         app.screen = Screen::MainMenu;
         app.menu_state.select(Some(4));

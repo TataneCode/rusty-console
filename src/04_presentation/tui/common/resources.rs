@@ -77,10 +77,9 @@ pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back | P: Pull Image | r: Refresh 
 pub const STACK_TITLE: &str = "Stacks";
 pub const STACK_HEADERS: [&str; 3] = ["Stack", "Containers", "Running"];
 pub const STACK_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | r: Refresh | Esc: Back ";
-pub const STACK_CONTAINER_HEADERS: [&str; 5] = ["Name", "Image", "State", "Status", "Ports"];
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | D: Remove All | r: Refresh | Esc: Back ";
 pub const STACK_CONTAINERS_HELP: &str =
-    " Esc/q: Back | j/k: Navigate | e: Exec | s: Start/Stop | S: Stop All | Ctrl+S: Start All | D: Remove All | d: Delete | r: Refresh ";
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 
 pub const LABEL_ID: &str = "ID:";
 pub const LABEL_NAME: &str = "Name:";
@@ -170,7 +169,7 @@ pub fn logs_export_error_message(error: &str) -> String {
 }
 
 pub fn stack_containers_title(stack_name: &str) -> String {
-    format!(" Stack: {stack_name} ")
+    format!("Stack: {stack_name}")
 }
 
 pub fn prune_result_message(resource_name: &str, deleted_count: u32, freed: &str) -> String {
@@ -248,8 +247,9 @@ mod tests {
 
     #[test]
     fn test_stack_containers_title_formats_name() {
+        assert_eq!(stack_containers_title("compose-app"), "Stack: compose-app");
         assert_eq!(
-            stack_containers_title("compose-app"),
+            filter_prompt_title(&stack_containers_title("compose-app"), None),
             " Stack: compose-app "
         );
     }

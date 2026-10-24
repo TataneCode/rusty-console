@@ -35,6 +35,15 @@ impl StackContainerState {
         matches!(self, StackContainerState::Running)
     }
 
+    pub fn is_active(&self) -> bool {
+        matches!(
+            self,
+            StackContainerState::Running
+                | StackContainerState::Paused
+                | StackContainerState::Restarting
+        )
+    }
+
     pub fn can_be_started(&self) -> bool {
         matches!(
             self,
@@ -45,6 +54,23 @@ impl StackContainerState {
     }
 
     pub fn can_be_stopped(&self) -> bool {
+        matches!(
+            self,
+            StackContainerState::Running
+                | StackContainerState::Paused
+                | StackContainerState::Restarting
+        )
+    }
+
+    pub fn can_be_paused(&self) -> bool {
+        matches!(self, StackContainerState::Running)
+    }
+
+    pub fn can_be_unpaused(&self) -> bool {
+        matches!(self, StackContainerState::Paused)
+    }
+
+    pub fn can_be_restarted(&self) -> bool {
         matches!(
             self,
             StackContainerState::Running
@@ -91,5 +117,44 @@ mod tests {
     fn test_stopped_can_be_started() {
         assert!(StackContainerState::Stopped.can_be_started());
         assert!(!StackContainerState::Stopped.can_be_stopped());
+    }
+
+    #[test]
+    fn test_is_active() {
+        assert!(StackContainerState::Running.is_active());
+        assert!(StackContainerState::Paused.is_active());
+        assert!(StackContainerState::Restarting.is_active());
+        assert!(!StackContainerState::Stopped.is_active());
+        assert!(!StackContainerState::Exited.is_active());
+        assert!(!StackContainerState::Dead.is_active());
+        assert!(!StackContainerState::Created.is_active());
+        assert!(!StackContainerState::Removing.is_active());
+    }
+
+    #[test]
+    fn test_can_be_restarted() {
+        assert!(StackContainerState::Running.can_be_restarted());
+        assert!(StackContainerState::Paused.can_be_restarted());
+        assert!(StackContainerState::Restarting.can_be_restarted());
+        assert!(!StackContainerState::Stopped.can_be_restarted());
+        assert!(!StackContainerState::Exited.can_be_restarted());
+        assert!(!StackContainerState::Created.can_be_restarted());
+        assert!(!StackContainerState::Dead.can_be_restarted());
+        assert!(!StackContainerState::Removing.can_be_restarted());
+    }
+
+    #[test]
+    fn test_can_be_paused() {
+        assert!(StackContainerState::Running.can_be_paused());
+        assert!(!StackContainerState::Paused.can_be_paused());
+        assert!(!StackContainerState::Stopped.can_be_paused());
+        assert!(!StackContainerState::Restarting.can_be_paused());
+    }
+
+    #[test]
+    fn test_can_be_unpaused() {
+        assert!(StackContainerState::Paused.can_be_unpaused());
+        assert!(!StackContainerState::Running.can_be_unpaused());
+        assert!(!StackContainerState::Stopped.can_be_unpaused());
     }
 }

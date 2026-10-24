@@ -121,6 +121,7 @@ pub fn render_container_logs(
 
     let log_list = List::new(items)
         .block(Theme::section_block(Some(&title)))
+        .highlight_style(Theme::highlight_style())
         .highlight_symbol("> ");
 
     frame.render_stateful_widget(log_list, content_area, logs_state);
@@ -209,9 +210,11 @@ mod tests {
     };
     use crate::application::container::{ContainerDto, ContainerLogsDto, LogLineDto};
     use crate::domain::container::ContainerState;
+    use crate::presentation::tui::common::Theme;
     use ratatui::{
         backend::TestBackend,
         buffer::Buffer,
+        style::Modifier,
         widgets::{ListState, TableState},
         Terminal,
     };
@@ -222,6 +225,15 @@ mod tests {
             .iter()
             .map(|cell| cell.symbol())
             .collect::<String>()
+    }
+
+    fn find_text_index(buffer: &Buffer, text: &str) -> Option<usize> {
+        let symbols: Vec<&str> = buffer.content.iter().map(|cell| cell.symbol()).collect();
+        (0..symbols.len()).find(|&i| {
+            text.chars()
+                .enumerate()
+                .all(|(k, ch)| symbols.get(i + k).and_then(|s| s.chars().next()) == Some(ch))
+        })
     }
 
     fn make_container() -> ContainerDto {
@@ -382,6 +394,56 @@ mod tests {
         assert!(text.contains("first"));
         assert!(text.contains("second"));
         assert!(text.contains("> "));
+    }
+
+    #[test]
+    fn test_render_container_logs_highlights_selected_line() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let logs = ContainerLogsDto {
+            container_id: "abc123".to_string(),
+            container_name: "web".to_string(),
+            lines: vec![
+                LogLineDto {
+                    timestamp: None,
+                    message: "first".to_string(),
+                },
+                LogLineDto {
+                    timestamp: None,
+                    message: "second".to_string(),
+                },
+            ],
+        };
+        let mut state = ListState::default();
+        state.select(Some(1));
+        terminal
+            .draw(|frame| {
+                render_container_logs(
+                    frame,
+                    frame.area(),
+                    &logs,
+                    &mut state,
+                    &LogSearchView::inactive(),
+                )
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let highlight = Theme::highlight_style();
+        for (label, selected) in [("first", false), ("second", true)] {
+            let index = find_text_index(buffer, label).expect("line text present");
+            let cell = &buffer.content[index];
+            assert_eq!(
+                Some(cell.bg) == highlight.bg,
+                selected,
+                "{label} line highlight background mismatch"
+            );
+            assert_eq!(
+                cell.modifier.contains(Modifier::BOLD),
+                selected,
+                "{label} line bold modifier mismatch"
+            );
+        }
     }
 
     #[test]

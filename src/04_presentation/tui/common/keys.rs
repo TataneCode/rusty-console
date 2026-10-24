@@ -31,6 +31,7 @@ pub enum AppAction {
     NextLogMatch,
     PreviousLogMatch,
     ExportLogs,
+    CopyLogLine,
     DisconnectContainer,
 }
 
@@ -64,6 +65,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('N') => Some(AppAction::PreviousLogMatch),
         KeyCode::Char('e') => Some(AppAction::Exec),
         KeyCode::Char('E') => Some(AppAction::ExportLogs),
+        KeyCode::Char('y') => Some(AppAction::CopyLogLine),
         KeyCode::Char('S') => Some(AppAction::StopAll),
         KeyCode::Char('D') => Some(AppAction::RemoveAll),
         KeyCode::Char('P') => Some(AppAction::PullImages),
@@ -95,6 +97,7 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
             AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
             AppAction::ActivateLogSearch => None,
             AppAction::ExportLogs => None,
+            AppAction::CopyLogLine => None,
             AppAction::DisconnectContainer => None,
             other => Some(other),
         },
@@ -357,6 +360,18 @@ mod tests {
         );
         assert_eq!(
             map_key_to_action_for_context(key_event(KeyCode::Char('E')), KeyContext::Global),
+            None
+        );
+    }
+
+    #[test]
+    fn test_copy_log_line_key_y() {
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('y')), KeyContext::ContainerLogs),
+            Some(AppAction::CopyLogLine)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('y')), KeyContext::Global),
             None
         );
     }

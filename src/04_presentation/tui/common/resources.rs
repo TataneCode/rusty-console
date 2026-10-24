@@ -35,7 +35,7 @@ pub const CONTAINER_LIST_HELP: &str =
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
 pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back ";
 pub const CONTAINER_LOGS_HELP: &str =
-    " Esc/q: Back | j/k: Line | PgUp/PgDn: Page | Enter: Expand | /: Search | n/N: Match | E: Export ";
+    " Esc/q: Back | j/k: Line | PgUp/PgDn: Page | Enter: Expand | /: Search | n/N: Match | y: Copy | E: Export ";
 pub const EXPANDED_LOG_LINE_TITLE: &str = " Expanded log line ";
 pub const CONTAINER_DETAILS_ENV_VARS_LABEL: &str = "Environment Variables";
 pub const CONTAINER_DETAILS_NETWORK_IO_LABEL: &str = "Network I/O";
@@ -166,6 +166,14 @@ pub fn logs_export_success_message(file_name: &str) -> String {
 
 pub fn logs_export_error_message(error: &str) -> String {
     format!("Log export failed: {error}")
+}
+
+pub fn logs_copy_success_message() -> String {
+    "Log line copied to clipboard".to_string()
+}
+
+pub fn logs_copy_error_message(error: &str) -> String {
+    format!("Clipboard copy failed: {error}")
 }
 
 pub fn stack_containers_title(stack_name: &str) -> String {

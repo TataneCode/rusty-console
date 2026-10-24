@@ -5,7 +5,9 @@ use crate::application::container::{parse_port_mappings, CreateContainerRequest}
 use crate::presentation::tui::app::{
     format_bytes, AddDialog, AddDialogKind, App, PendingImagePull, Screen,
 };
-use crate::presentation::tui::common::{resources, AppAction, InputDialogState, PopupMessage};
+use crate::presentation::tui::common::{
+    copy_text, resources, AppAction, InputDialogState, PopupMessage,
+};
 use crate::presentation::tui::confirm::ConfirmAction;
 use crossterm::event::KeyCode;
 
@@ -234,6 +236,23 @@ impl App {
                             ));
                         }
                     }
+                }
+            }
+            AppAction::CopyLogLine => {
+                let line = self
+                    .container_presenter
+                    .selected_log_line()
+                    .map(|line| line.display_line());
+                match line.as_deref().map(copy_text) {
+                    Some(Ok(())) => {
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::logs_copy_success_message()));
+                    }
+                    Some(Err(e)) => {
+                        self.popup_message =
+                            Some(PopupMessage::Error(resources::logs_copy_error_message(&e)));
+                    }
+                    None => {}
                 }
             }
             AppAction::NextLogMatch => self.container_presenter.next_log_match(),

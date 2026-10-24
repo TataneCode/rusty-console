@@ -39,6 +39,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 | Container list: filter / sort / selection bounds | `container/presenter.rs`, `common/list.rs` | — |
 | Container list: start/stop, pause, restart, delete, prune, add | `app.rs` (confirm-action paths) | — |
 | Logs: navigation, search, export | `container/presenter.rs`, `container/view.rs` | `breadcrumb_ui.rs` (breadcrumb) |
+| Logs: selected line highlighted, `y` copies it to clipboard (popup feedback) | `container/view.rs` (highlight style), `common/keys.rs` (`y` context), `app.rs` (copy handler), `container/dto.rs` (`display_line`) | `logs_copy_ui.rs` |
 | Live CPU/memory stats streaming | `app.rs` (`drain_container_stats`), `container/presenter.rs` | — |
 | Stack list: drill-down, start/stop/remove all, filter, sort | `stack/presenter.rs`, `app.rs` | `stack_containers_ui.rs` |
 | Stack containers == container list features | `stack/presenter.rs`, `stack/view.rs`, `app.rs` | `stack_containers_ui.rs` (7 tests) |

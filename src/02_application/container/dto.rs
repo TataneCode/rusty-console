@@ -81,6 +81,15 @@ impl LogLineDto {
             .map(|ts| ts.format("%Y-%m-%d %H:%M:%S").to_string())
             .unwrap_or_default()
     }
+
+    pub fn display_line(&self) -> String {
+        let timestamp = self.timestamp_display();
+        if timestamp.is_empty() {
+            self.message.clone()
+        } else {
+            format!("{timestamp} {}", self.message)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -332,6 +341,25 @@ mod tests {
             container_port: 80,
         };
         assert_eq!(spec.to_string(), "8080:80");
+    }
+
+    #[test]
+    fn log_line_display_line_prefixes_timestamp_when_present() {
+        use chrono::TimeZone;
+        let line = LogLineDto {
+            timestamp: Some(Utc.with_ymd_and_hms(2026, 10, 26, 10, 30, 0).unwrap()),
+            message: "hello".to_string(),
+        };
+        assert_eq!(line.display_line(), "2026-10-26 10:30:00 hello");
+    }
+
+    #[test]
+    fn log_line_display_line_is_message_only_without_timestamp() {
+        let line = LogLineDto {
+            timestamp: None,
+            message: "hello".to_string(),
+        };
+        assert_eq!(line.display_line(), "hello");
     }
 
     #[test]

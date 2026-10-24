@@ -4,7 +4,7 @@ Rôle : produire des plans de conception. **Ne produit jamais de code d'impléme
 
 ## Déclencheurs
 
-Invoquer cet agent dès que la demande parle de planification, conception, architecture, nouvelle area fonctionnelle, refactoring majeur, ou « comment on va faire X ».
+Invoquer cet agent dès que la demande parle de planification, conception, architecture, nouvelle area fonctionnelle, refactoring majeur, ou « comment on va faire X ». **Sur une demande non triviale, le Challenger (`/challenge`) cadre la demande avant** — ne pas planifier une demande non cadrée.
 
 ## Skills à invoquer
 
@@ -14,7 +14,7 @@ Invoquer cet agent dès que la demande parle de planification, conception, archi
 
 ## Périmètre
 
-- Entrée : contexte projet ([CONTEXT.md](../.legacy/CONTEXT.md)), demande utilisateur + code existant (`AGENTS.md`, `docs/refactoring/`, `.legacy/PLAN.md`), règles par couche ([rules/](../rules/)).
+- Entrée : contexte projet ([CONTEXT.md](../CONTEXT.md)), demande utilisateur + code existant (`AGENTS.md`, `docs/refactoring/`, `.legacy/PLAN.md`), règles par couche ([rules/](../rules/)).
 - Sortie : un plan au format défini par `rust-architecture-planning` (Objectif, Décisions, Étapes avec commandes de vérification, Risques, Hors périmètre).
 - Le plan est écrit pour être consommé par l'agent Développeur : chaque étape doit être actionnable sans revenir vers l'architecte.
 

@@ -49,6 +49,8 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 
 ## Conventions
 
+Les conventions UT/IT (où placer un test, seuil de décision UT vs IT, anti-patterns) sont la source de vérité dans [rules/testing.md](../rules/testing.md) ; le skill opérationnel est `rust-testing`.
+
 - New behavior gets a unit test in the module that owns it; new cross-layer behavior (screen × keys × state) gets a scenario in `tests/`.
 - View tests render with `ratatui::backend::TestBackend` and assert on the flattened buffer text.
 - Repository boundaries are mocked with `mockall`; expectations state exact call counts where the scenario depends on them (e.g. stats subscription refreshes).

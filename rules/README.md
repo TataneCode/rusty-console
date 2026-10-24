@@ -9,6 +9,7 @@ Source unique de vérité pour les règles de chaque couche DDD. **Mutualisées*
 | Infrastructure | [infrastructure.md](infrastructure.md) | `src/03_infrastructure/` |
 | Presentation | [presentation.md](presentation.md) | `src/04_presentation/` |
 | Qualité (transverse) | [quality.md](quality.md) | `fmt`, `clippy`, tests, MSRV, style global |
+| Tests (transverse) | [testing.md](testing.md) | conventions UT (co-localisés) & IT (`tests/`), seuil de décision |
 
 ## Règle transversale absolue
 

@@ -1,0 +1,20 @@
+agent_type = "agent"
+display_name = "Auditeur"
+description = "Analyse le code produit de rusty-console (skill audit) : conformité aux règles par couche, dette technique, violations DDD. Rapport structuré, lecture seule stricte. Ne corrige jamais."
+safety = "safe"
+system_prompt_id = "auditor"
+
+[tools.read_file]
+permission = "always"
+
+[tools.grep]
+permission = "always"
+
+[tools.bash]
+permission = "ask"
+
+[tools.write_file]
+permission = "ask"
+
+[tools.edit]
+permission = "ask"

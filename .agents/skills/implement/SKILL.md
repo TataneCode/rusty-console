@@ -15,10 +15,11 @@ Endosse le rôle **Développeur** défini dans [agents/developer.md](../../../ag
 
 ## Mode opératoire
 
-1. Charger le contexte : [CONTEXT.md](../../../.legacy/CONTEXT.md), le plan, et les règles des couches touchées ([rules/](../../../rules/)).
+1. Charger le contexte : [CONTEXT.md](../../../CONTEXT.md), le plan, et les règles des couches touchées ([rules/](../../../rules/)).
 2. Appliquer le skill correspondant au type de travail : `rust-feature-ddd` (défaut, couche par couche), `rust-bugfix` (bug signalé ou test rouge), `rust-refactoring` (comportement identique) — plus `rust-testing` pour toute nouvelle logique et `rust-dependency` si `Cargo.toml` change.
 3. Exécuter les étapes du plan dans l'ordre ; une étape = un commit potentiel, le repo reste vert à chaque étape. Tout écart nécessaire au plan est signalé, jamais fait silencieusement.
 4. Passer le **quality gate complet** avant de déclarer terminé (skill `rust-quality-gate`) : `cargo build`, `cargo test`, `cargo fmt`, `cargo clippy -- -D warnings`.
+5. **Self-review obligatoire** avant toute livraison externe (skill `self-review` : checklist `rules/`, imports inter-couches, gate local relu sur le diff) — puis `/review` si une review externe est demandée.
 
 ## Règles de protection (non négociables)
 

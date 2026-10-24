@@ -14,6 +14,9 @@ base64 = "0.22"
 ratatui = "0.30"
 crossterm = "0.29"
 
+# Clipboard (cross-platform: X11/Wayland/macOS/Windows)
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+
 # Docker API
 bollard = "0.21"
 

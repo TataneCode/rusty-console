@@ -2,6 +2,7 @@
 
 > Statut : implémenté — branche `vibe/stack-containers-homogeneity-bddf38`, PR #41 (draft).
 > Baseline au moment du plan : 498 tests verts, `cargo clippy -- -D warnings` propre, release v3.1 (`b2acf9d`).
+> Décision structurelle enregistrée : **ADR-003** dans `ARCHITECTURE.md` (sous-liste stack promue en `ListCore<StackContainerDto>`).
 
 ## Objectif
 
@@ -33,7 +34,7 @@ L’écran drill-down devait offrir les mêmes fonctionnalités que l’écran C
 ## Décisions
 
 - **D1** — Déplacer les actions stack sur la liste des stacks : `D` Remove All ajouté sur **Stacks** (avec confirmation) ; `S`, `Ctrl+S`, `D` retirés de Stacks > Containers.
-- **D2** — `StackPresenter` embarque un second `ListCore<StackContainerDto>` (filtre nom/image, tri par nom) : filtre, tri et sélection survivent aux refreshs.
+- **D2** — `StackPresenter` embarque un second `ListCore<StackContainerDto>` (filtre nom/image, tri par nom) : filtre, tri et sélection survivent aux refreshs. *Décision structurelle consignée en ADR-003.*
 - **D3** — Rendu via le composant partagé `render_list`/`ListViewSpec` : mêmes 7 colonnes, titre `Stack: <name>` avec indicateur de filtre `[/: …]`, aide contextuelle en mode filtre, spinner de chargement.
 - **D4** — Stats live : `StackContainerDto` gagne `runtime_stats: Option<ContainerRuntimeStatsDto>` + `cpu_display()`/`memory_display()` ; la souscription de stats existante (`refresh_container_stats_subscription`) couvre les containers de la stack affichée.
 - **D5** — Actions container sur Stacks > Containers : `l` (logs via nouveau `ContainerActions::load_logs_by`), `Enter` (détails), `p`, `R`, `X`, `A`, `/`, `o`.

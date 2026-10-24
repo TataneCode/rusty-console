@@ -166,8 +166,8 @@ async fn start_container(&mut self) {
 
 ### Requirements
 - **Minimum Coverage**: 70% (current: ~91%)
-- **Test Location**: Unit tests live in `#[cfg(test)]` modules within each file
-- **Test Framework**: `mockall` for mocking, `tokio-test` for async tests
+- **Test Location**: Unit tests live in `#[cfg(test)]` modules within each file; cross-screen UI scenarios live in `tests/` (see [docs/TESTING.md](docs/TESTING.md))
+- **Test Framework**: `mockall` for mocking, `tokio` (`#[tokio::test]`) for async tests
 
 ### Test Pattern
 
@@ -196,10 +196,14 @@ mod tests {
 ### Coverage Check
 
 Before declaring a feature complete:
-1. Run `cargo test` - all tests must pass (currently 297+ tests)
+1. Run `cargo test` - all tests must pass (currently 518 tests: 500 lib + 18 integration UI)
 2. Run `cargo llvm-cov` - check coverage is ≥70%
-3. Run `cargo clippy -- -D warnings` - no warnings
-4. Run `cargo fmt` - code formatted
+3. Run `cargo clippy --all-targets -- -D warnings` - no warnings
+4. Run `cargo fmt --check` - code formatted
+
+### Integration Tests (`tests/`)
+
+Build the real `App` via `tests/common/mod.rs::build_app()` (real adapters, lazy bollard client — no daemon needed for rendering/action handling). Drive it with `app.handle_action(AppAction::…)` and `app.handle_filter_key(KeyCode::…)` (both public for this purpose), render with `ratatui::backend::TestBackend`, and assert on the flattened buffer. Add a scenario to [docs/TESTING.md](docs/TESTING.md)'s matrix when a new user-facing behavior lands.
 
 ## Bollard 0.18 API Specifics
 
@@ -293,6 +297,8 @@ src/
 - [PLAN.md](.legacy/PLAN.md) - Project roadmap
 - [EVOLUTION.md](.legacy/EVOLUTION.md) - Feature evolution history
 - [README.md](README.md) - User documentation
+- [docs/TESTING.md](docs/TESTING.md) - Test suites, commands, and scenario coverage matrix
+- [docs/plans/](docs/plans/) - Per-feature plans with their test scenarios (e.g. [stack containers homogeneity](docs/plans/stack_containers_homogeneity_2026-10-26.md))
 - [AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) - Agent roles (architect, developer, reviewer) and skills orchestration
 - [CONTEXT.md](.legacy/CONTEXT.md) - General project context (pitch, stack, current state, resource map)
 - [rules/](rules/) - Per-layer DDD rules shared by agents and skills (domain, application, infrastructure, presentation, quality)

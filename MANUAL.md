@@ -66,9 +66,9 @@ terminal, then the TUI resumes when the shell exits.
 
 ### Realtime stats
 
-- The **container list** shows live **CPU** and **Memory** values for active containers.
+- The **container list** and the **stack containers** screen show live **CPU** and **Memory** values for active containers.
 - **Network I/O** is shown only in **container details**.
-- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh.
+- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh. Logs and details opened from the stack containers screen return to that screen with `Esc`/`q`.
 
 ## Stacks
 

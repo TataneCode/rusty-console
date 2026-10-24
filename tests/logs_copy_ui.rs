@@ -46,8 +46,14 @@ fn render_app_text_and_styles(
     (text, styles)
 }
 
-fn find_text_index(text: &str, target: &str) -> Option<usize> {
-    text.find(target)
+fn find_text_cell_index(buffer: &ratatui::buffer::Buffer, target: &str) -> Option<usize> {
+    let symbols: Vec<&str> = buffer.content.iter().map(|cell| cell.symbol()).collect();
+    (0..symbols.len()).find(|&i| {
+        target
+            .chars()
+            .enumerate()
+            .all(|(k, ch)| symbols.get(i + k).and_then(|s| s.chars().next()) == Some(ch))
+    })
 }
 
 #[test]
@@ -67,31 +73,37 @@ fn logs_screen_selected_line_is_highlighted() {
     let Some(mut app) = logs_app() else {
         return;
     };
-    let (text, styles) = render_app_text_and_styles(&mut app);
+    let backend = ratatui::backend::TestBackend::new(100, 20);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal.draw(|frame| app.render(frame)).unwrap();
+    let buffer = terminal.backend().buffer();
 
-    let selected = find_text_index(&text, "second line").expect("selected line present");
-    let other = find_text_index(&text, "first line").expect("other line present");
+    let selected = find_text_cell_index(buffer, "first line").expect("selected line present");
+    let other = find_text_cell_index(buffer, "second line").expect("other line present");
 
+    let cell = &buffer.content[selected];
     assert!(
-        styles[selected].2.contains(Modifier::BOLD),
+        cell.modifier.contains(Modifier::BOLD),
         "selected log line should be bold"
     );
     assert_eq!(
-        styles[selected].0,
+        cell.bg,
         Color::DarkGray,
         "selected log line should have the highlight background"
     );
     assert_eq!(
-        styles[selected].1,
+        cell.fg,
         Color::White,
         "selected log line should have the highlight foreground"
     );
+
+    let cell = &buffer.content[other];
     assert!(
-        !styles[other].2.contains(Modifier::BOLD),
+        !cell.modifier.contains(Modifier::BOLD),
         "non-selected log line should not be bold"
     );
     assert_eq!(
-        styles[other].0,
+        cell.bg,
         Color::Reset,
         "non-selected log line should have no highlight background"
     );

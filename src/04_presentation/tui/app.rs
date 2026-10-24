@@ -5,7 +5,7 @@ use crate::application::image::{
     ImageDto, ImagePullEvent, ImagePullOutcome, ImagePullSubscription,
 };
 use crate::application::network::NetworkDto;
-use crate::application::stack::StackDto;
+use crate::application::stack::{StackContainerDto, StackDto};
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
     dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
@@ -74,6 +74,8 @@ pub(crate) struct AddDialog {
 pub struct App {
     pub screen: Screen,
     pub previous_screen: Option<Screen>,
+    pub(crate) logs_return_screen: Option<Screen>,
+    pub(crate) details_return_screen: Option<Screen>,
     pub should_quit: bool,
     pub menu_state: ListState,
     pub container_presenter: ContainerPresenter,
@@ -138,6 +140,8 @@ impl App {
         App {
             screen: Screen::MainMenu,
             previous_screen: None,
+            logs_return_screen: None,
+            details_return_screen: None,
             should_quit: false,
             menu_state,
             container_presenter: ContainerPresenter::new(),
@@ -407,19 +411,27 @@ impl App {
                 );
             }
             Screen::StackContainers => {
-                let stack_name = self
-                    .stack_presenter
+                let presenter = &mut self.stack_presenter;
+                let stack_name = presenter
                     .selected_stack()
                     .map(|s| s.name.as_str())
                     .unwrap_or("Stack")
                     .to_string();
-                let is_loading = self.stack_presenter.is_loading();
+                let is_loading = presenter.containers.is_loading();
+                let active_filter = presenter.containers.active_filter().map(str::to_string);
+                let containers: Vec<StackContainerDto> = presenter
+                    .filtered_stack_containers()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let selection_state = &mut presenter.containers.selection.state;
                 render_stack_containers(
                     frame,
                     content_area,
                     &stack_name,
-                    &self.stack_presenter.stack_containers,
-                    &mut self.stack_presenter.container_selection.state,
+                    &containers,
+                    selection_state,
+                    active_filter.as_deref(),
                     StackHelpBarState {
                         is_loading,
                         spinner_char,
@@ -622,6 +634,19 @@ impl App {
         self.container_presenter.set_loading(false);
     }
 
+    pub(crate) async fn load_container_logs_by(&mut self, id: &str, name: &str) {
+        self.container_presenter.set_loading(true);
+        match self
+            .container_actions
+            .load_logs_by(id, name, Some(500))
+            .await
+        {
+            Ok(logs) => self.container_presenter.set_logs(logs),
+            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+        }
+        self.container_presenter.set_loading(false);
+    }
+
     pub(crate) async fn toggle_container(&mut self, container: &ContainerDto) {
         self.container_presenter.set_loading(true);
         let result = if container.can_stop {
@@ -720,7 +745,7 @@ impl App {
     }
 
     pub(crate) async fn refresh_stack_containers(&mut self) {
-        self.stack_presenter.set_loading(true);
+        self.stack_presenter.containers.set_loading(true);
         let selected_stack_name = self
             .stack_presenter
             .selected_stack()
@@ -736,21 +761,45 @@ impl App {
             .map(|stack| stack.containers.clone())
             .unwrap_or_default();
         self.stack_presenter.set_stack_containers(containers);
-        self.stack_presenter.set_loading(false);
+        self.stack_presenter.containers.set_loading(false);
+        self.refresh_container_stats_subscription().await;
     }
 
-    async fn refresh_container_stats_subscription(&mut self) {
+    pub(crate) fn set_container_list_loading(&mut self, loading: bool) {
+        match self.screen {
+            Screen::StackContainers => self.stack_presenter.containers.set_loading(loading),
+            _ => self.container_presenter.set_loading(loading),
+        }
+    }
+
+    pub(crate) async fn refresh_container_stats_subscription(&mut self) {
         self.stop_container_stats_subscription();
 
-        let active_container_ids: HashSet<String> = self
-            .container_presenter
-            .items
-            .iter()
-            .filter(|container| container.state.is_active())
-            .map(|container| container.id.clone())
-            .collect();
-        self.container_presenter
-            .retain_runtime_stats(&active_container_ids);
+        let active_container_ids: HashSet<String> = match self.screen {
+            Screen::StackContainers => self
+                .stack_presenter
+                .containers
+                .items
+                .iter()
+                .filter(|container| container.state.is_active())
+                .map(|container| container.id.clone())
+                .collect(),
+            _ => self
+                .container_presenter
+                .items
+                .iter()
+                .filter(|container| container.state.is_active())
+                .map(|container| container.id.clone())
+                .collect(),
+        };
+        match self.screen {
+            Screen::StackContainers => self
+                .stack_presenter
+                .retain_runtime_stats(&active_container_ids),
+            _ => self
+                .container_presenter
+                .retain_runtime_stats(&active_container_ids),
+        }
 
         if active_container_ids.is_empty() {
             return;
@@ -1189,6 +1238,10 @@ mod tests {
             ports: "80/tcp".to_string(),
             can_start,
             can_stop,
+            can_restart: can_stop,
+            can_pause: can_stop,
+            can_unpause: false,
+            runtime_stats: None,
         }
     }
 
@@ -2381,6 +2434,7 @@ mod tests {
             .expect_get_all()
             .times(2)
             .returning(|| Ok(vec![]));
+        expect_empty_stats_subscription(&mut container_repo, 1);
         let mut volume_repo = MockVolumeRepository::new();
         volume_repo.expect_delete().returning(|_| Ok(()));
         volume_repo.expect_prune().returning(|| {
@@ -2468,9 +2522,13 @@ mod tests {
         app.screen = Screen::StackContainers;
         app.execute_confirm_action(ConfirmAction::ContainerDelete(true))
             .await;
+        assert_eq!(app.screen, Screen::StackContainers);
+
+        app.screen = Screen::StackList;
+        app.stack_presenter.set_loading(true);
         app.execute_confirm_action(ConfirmAction::StackContainersRemoveAll)
             .await;
-        assert_eq!(app.screen, Screen::StackList);
+        assert!(!app.stack_presenter.is_loading());
     }
 
     #[tokio::test]
@@ -2775,13 +2833,15 @@ mod tests {
         container_repo.expect_unpause().returning(|_| Ok(()));
         container_repo.expect_restart().returning(|_| Ok(()));
         container_repo.expect_get_all().returning(|| Ok(vec![]));
+        expect_empty_stats_subscription(&mut container_repo, 2);
         let mut stack_repo = MockStackRepository::new();
         stack_repo
             .expect_get_all()
-            .times(4)
+            .times(3)
             .returning(|| Ok(vec![make_stack(1)]));
-        stack_repo.expect_stop_all().times(2).returning(|_| Ok(()));
+        stack_repo.expect_stop_all().returning(|_| Ok(()));
         stack_repo.expect_start_all().returning(|_| Ok(()));
+        stack_repo.expect_remove_all().returning(|_| Ok(()));
         let mut image_repo = MockImageRepository::new();
         image_repo.expect_get_all().returning(|| Ok(vec![]));
 
@@ -2817,8 +2877,14 @@ mod tests {
         app.handle_stack_list_action(AppAction::ActivateFilter)
             .await;
         assert!(app.stack_presenter.is_filter_active());
+        app.handle_stack_list_action(AppAction::RemoveAll).await;
+        assert_eq!(
+            app.confirm_dialog,
+            Some((ConfirmAction::StackContainersRemoveAll, true))
+        );
 
         app.popup_message = None;
+        app.confirm_dialog = None;
         app.stack_presenter.set_stacks(vec![stack.clone()]);
         app.stack_presenter
             .set_stack_containers(stack.containers.clone());
@@ -2830,16 +2896,90 @@ mod tests {
             app.confirm_dialog,
             Some((ConfirmAction::ContainerDelete(true), true))
         );
-        app.confirm_dialog = None;
-        app.handle_stack_containers_action(AppAction::StopAll).await;
-        app.handle_stack_containers_action(AppAction::StartAll)
-            .await;
-        app.handle_stack_containers_action(AppAction::RemoveAll)
-            .await;
-        assert_eq!(
-            app.confirm_dialog,
-            Some((ConfirmAction::StackContainersRemoveAll, true))
+    }
+
+    #[tokio::test]
+    async fn test_stack_containers_action_matches_container_list_features() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo
+            .expect_get_logs()
+            .returning(|_, _| Ok("line1\nline2".to_string()));
+        container_repo.expect_get_by_id().returning(|_| {
+            Ok(Some(crate::domain::container::Container::new(
+                crate::domain::container::ContainerId::new("stack-1").unwrap(),
+                "web",
+                "nginx:latest",
+                ContainerState::Running,
+                "Up",
+                Utc::now(),
+            )))
+        });
+        container_repo.expect_stop().returning(|_| Ok(()));
+        container_repo.expect_pause().returning(|_| Ok(()));
+        container_repo.expect_restart().returning(|_| Ok(()));
+        let mut stack_repo = MockStackRepository::new();
+        stack_repo
+            .expect_get_all()
+            .times(4)
+            .returning(|| Ok(vec![make_stack(1)]));
+        expect_empty_stats_subscription(&mut container_repo, 3);
+
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            stack_repo,
+            MockNetworkRepository::new(),
         );
+        app.stack_presenter
+            .set_stacks(vec![make_stack_dto(vec![make_stack_container(
+                false, true,
+            )])]);
+        app.stack_presenter
+            .set_stack_containers(vec![make_stack_container(false, true)]);
+        app.screen = Screen::StackContainers;
+
+        // Logs open from the stack container and return to the stack screen
+        app.handle_stack_containers_action(AppAction::ViewLogs)
+            .await;
+        assert_eq!(app.screen, Screen::ContainerLogs);
+        assert_eq!(app.logs_return_screen, Some(Screen::StackContainers));
+        app.handle_container_logs_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::StackContainers);
+
+        // Details open from the stack container and return to the stack screen
+        app.handle_stack_containers_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::ContainerDetails);
+        assert_eq!(app.details_return_screen, Some(Screen::StackContainers));
+        app.handle_details_action(AppAction::Back);
+        assert_eq!(app.screen, Screen::StackContainers);
+
+        // Pause / restart / start-stop act on the selected stack container
+        app.handle_stack_containers_action(AppAction::PauseUnpause)
+            .await;
+        app.handle_stack_containers_action(AppAction::Restart).await;
+        app.handle_stack_containers_action(AppAction::StartStop)
+            .await;
+        assert!(!app.stack_presenter.containers.is_loading());
+
+        // Filter, sort and Add are wired on the stack containers screen
+        app.handle_stack_containers_action(AppAction::ActivateFilter)
+            .await;
+        assert!(app.is_filter_active());
+        assert!(app.handle_filter_key(KeyCode::Char('w')));
+        assert_eq!(app.stack_presenter.containers.filter.value(), "w");
+        assert!(app.handle_filter_key(KeyCode::Esc));
+        app.handle_stack_containers_action(AppAction::ToggleSort)
+            .await;
+        app.handle_stack_containers_action(AppAction::Add).await;
+        assert!(app.add_dialog.is_some());
+        app.add_dialog = None;
+
+        // Leaving the screen stops the stats subscription and clears the containers
+        app.handle_stack_containers_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::StackList);
+        assert!(app.container_stats_subscription.is_none());
+        assert!(app.stack_presenter.containers.items.is_empty());
     }
 
     #[tokio::test]

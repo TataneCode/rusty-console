@@ -12,7 +12,7 @@ use crossterm::event::KeyCode;
 use tokio::sync::mpsc::error::TryRecvError;
 
 impl App {
-    pub(crate) async fn handle_action(&mut self, action: AppAction) {
+    pub async fn handle_action(&mut self, action: AppAction) {
         if matches!(action, AppAction::Select)
             && self.screen == Screen::ContainerLogs
             && self.container_presenter.is_log_search_active()
@@ -150,8 +150,10 @@ impl App {
             AppAction::NavigateDown => self.container_presenter.navigate_down(),
             AppAction::ViewLogs => {
                 if let Some(container) = self.container_presenter.selected_container().cloned() {
+                    self.container_presenter.deactivate_log_search();
                     self.load_container_logs(&container).await;
                     if self.container_presenter.logs.is_some() {
+                        self.logs_return_screen = Some(Screen::ContainerList);
                         self.screen = Screen::ContainerLogs;
                     }
                 }
@@ -160,6 +162,7 @@ impl App {
                 if let Some(container) = self.container_presenter.selected_container().cloned() {
                     self.load_container_details(&container.id).await;
                     if self.container_presenter.selected_container.is_some() {
+                        self.details_return_screen = Some(Screen::ContainerList);
                         self.screen = Screen::ContainerDetails;
                     }
                 }
@@ -204,7 +207,10 @@ impl App {
             AppAction::Quit | AppAction::Back => {
                 self.container_presenter.deactivate_log_search();
                 self.container_presenter.clear_logs();
-                self.screen = Screen::ContainerList;
+                self.screen = self
+                    .logs_return_screen
+                    .take()
+                    .unwrap_or(Screen::ContainerList);
             }
             AppAction::ActivateLogSearch => self.container_presenter.activate_log_search(),
             AppAction::ExportLogs => {
@@ -254,7 +260,10 @@ impl App {
             AppAction::Quit | AppAction::Back => match &self.screen {
                 Screen::ContainerDetails => {
                     self.container_presenter.clear_details();
-                    self.screen = Screen::ContainerList;
+                    self.screen = self
+                        .details_return_screen
+                        .take()
+                        .unwrap_or(Screen::ContainerList);
                 }
                 Screen::VolumeDetails => {
                     self.volume_presenter.clear_details();
@@ -487,8 +496,11 @@ impl App {
     pub(crate) async fn execute_confirm_action(&mut self, action: ConfirmAction) {
         // Set loading state based on current screen
         match self.screen {
-            Screen::ContainerList | Screen::StackContainers => {
+            Screen::ContainerList => {
                 self.container_presenter.set_loading(true);
+            }
+            Screen::StackContainers => {
+                self.stack_presenter.containers.set_loading(true);
             }
             Screen::VolumeList => {
                 self.volume_presenter.set_loading(true);
@@ -525,14 +537,14 @@ impl App {
                         .await
                     {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));
-                        self.container_presenter.set_loading(false);
+                        self.set_container_list_loading(false);
                     } else if matches!(self.screen, Screen::StackContainers) {
                         self.refresh_stack_containers().await;
                     } else {
                         self.load_containers().await;
                     }
                 } else {
-                    self.container_presenter.set_loading(false);
+                    self.set_container_list_loading(false);
                 }
             }
             ConfirmAction::VolumeDelete => {
@@ -599,7 +611,7 @@ impl App {
                 }
             }
             ConfirmAction::ContainersPrune => {
-                self.container_presenter.set_loading(true);
+                self.set_container_list_loading(true);
                 match self.container_actions.prune_containers().await {
                     Ok(result) => {
                         self.popup_message =
@@ -608,11 +620,15 @@ impl App {
                                 result.deleted_count,
                                 &format_bytes(result.space_freed),
                             )));
-                        self.load_containers().await;
+                        if matches!(self.screen, Screen::StackContainers) {
+                            self.refresh_stack_containers().await;
+                        } else {
+                            self.load_containers().await;
+                        }
                     }
                     Err(e) => {
                         self.popup_message = Some(PopupMessage::Error(e.to_string()));
-                        self.container_presenter.set_loading(false);
+                        self.set_container_list_loading(false);
                     }
                 }
             }
@@ -668,16 +684,13 @@ impl App {
                 }
             }
             ConfirmAction::StackContainersRemoveAll => {
-                self.stack_presenter.set_loading(true);
                 let ids: Vec<String> = self
                     .stack_presenter
-                    .stack_containers
-                    .iter()
-                    .map(|c| c.id.clone())
-                    .collect();
+                    .selected_stack()
+                    .map(|stack| stack.containers.iter().map(|c| c.id.clone()).collect())
+                    .unwrap_or_default();
                 match self.stack_actions.remove_all(&ids).await {
                     Ok(_) => {
-                        self.screen = Screen::StackList;
                         self.load_stacks().await;
                     }
                     Err(e) => {
@@ -696,13 +709,14 @@ impl App {
             Screen::ImageList => self.image_presenter.is_filter_active(),
             Screen::NetworkList => self.network_presenter.is_filter_active(),
             Screen::StackList => self.stack_presenter.is_filter_active(),
+            Screen::StackContainers => self.stack_presenter.containers.is_filter_active(),
             Screen::ContainerLogs => self.container_presenter.is_log_search_active(),
             _ => false,
         }
     }
 
     /// Returns true if the key was consumed by the filter input.
-    pub(crate) fn handle_filter_key(&mut self, code: KeyCode) -> bool {
+    pub fn handle_filter_key(&mut self, code: KeyCode) -> bool {
         match code {
             KeyCode::Esc => {
                 match self.screen {
@@ -711,6 +725,7 @@ impl App {
                     Screen::ImageList => self.image_presenter.deactivate_filter(),
                     Screen::NetworkList => self.network_presenter.deactivate_filter(),
                     Screen::StackList => self.stack_presenter.deactivate_filter(),
+                    Screen::StackContainers => self.stack_presenter.containers.deactivate_filter(),
                     Screen::ContainerLogs => self.container_presenter.deactivate_log_search(),
                     _ => {}
                 }
@@ -723,6 +738,7 @@ impl App {
                     Screen::ImageList => self.image_presenter.pop_filter_char(),
                     Screen::NetworkList => self.network_presenter.pop_filter_char(),
                     Screen::StackList => self.stack_presenter.pop_filter_char(),
+                    Screen::StackContainers => self.stack_presenter.containers.pop_filter_char(),
                     Screen::ContainerLogs => self.container_presenter.pop_log_search_char(),
                     _ => {}
                 }
@@ -735,6 +751,7 @@ impl App {
                     Screen::ImageList => self.image_presenter.push_filter_char(c),
                     Screen::NetworkList => self.network_presenter.push_filter_char(c),
                     Screen::StackList => self.stack_presenter.push_filter_char(c),
+                    Screen::StackContainers => self.stack_presenter.containers.push_filter_char(c),
                     Screen::ContainerLogs => self.container_presenter.push_log_search_char(c),
                     _ => {}
                 }
@@ -755,6 +772,7 @@ impl App {
                     let containers = stack.containers.clone();
                     self.stack_presenter.set_stack_containers(containers);
                     self.screen = Screen::StackContainers;
+                    self.refresh_container_stats_subscription().await;
                 }
             }
             AppAction::StartStop => {
@@ -803,6 +821,13 @@ impl App {
                     self.stack_presenter.set_loading(false);
                 }
             }
+            AppAction::RemoveAll => {
+                if let Some(stack) = self.stack_presenter.selected_stack() {
+                    if !stack.containers.is_empty() {
+                        self.confirm_dialog = Some((ConfirmAction::StackContainersRemoveAll, true));
+                    }
+                }
+            }
             AppAction::Refresh => self.load_stacks().await,
             AppAction::ActivateFilter => {
                 self.stack_presenter.activate_filter();
@@ -816,28 +841,50 @@ impl App {
         match action {
             AppAction::Quit => self.should_quit = true,
             AppAction::Back => {
+                self.stop_container_stats_subscription();
+                self.stack_presenter.clear_runtime_stats();
                 self.screen = Screen::StackList;
                 self.stack_presenter.set_stack_containers(vec![]);
                 self.load_stacks().await;
             }
             AppAction::NavigateUp => self.stack_presenter.navigate_container_up(),
             AppAction::NavigateDown => self.stack_presenter.navigate_container_down(),
+            AppAction::ViewLogs => {
+                if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
+                    self.container_presenter.deactivate_log_search();
+                    self.load_container_logs_by(&container.id, &container.name)
+                        .await;
+                    if self.container_presenter.logs.is_some() {
+                        self.logs_return_screen = Some(Screen::StackContainers);
+                        self.screen = Screen::ContainerLogs;
+                    }
+                }
+            }
+            AppAction::Select | AppAction::ViewDetails => {
+                if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
+                    self.load_container_details(&container.id).await;
+                    if self.container_presenter.selected_container.is_some() {
+                        self.details_return_screen = Some(Screen::StackContainers);
+                        self.screen = Screen::ContainerDetails;
+                    }
+                }
+            }
             AppAction::StartStop => {
                 if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
-                    self.stack_presenter.set_loading(true);
+                    self.stack_presenter.containers.set_loading(true);
                     let result = if container.can_stop {
                         self.container_actions.stop_container(&container.id).await
                     } else if container.can_start {
                         self.container_actions.start_container(&container.id).await
                     } else {
-                        self.stack_presenter.set_loading(false);
+                        self.stack_presenter.containers.set_loading(false);
                         return;
                     };
                     match result {
                         Ok(_) => self.refresh_stack_containers().await,
                         Err(e) => {
                             self.popup_message = Some(PopupMessage::Error(e.to_string()));
-                            self.stack_presenter.set_loading(false);
+                            self.stack_presenter.containers.set_loading(false);
                         }
                     }
                 }
@@ -848,59 +895,57 @@ impl App {
                     self.confirm_dialog = Some((ConfirmAction::ContainerDelete(force), true));
                 }
             }
-            AppAction::StopAll => {
-                self.stack_presenter.set_loading(true);
-                if let Some(stack) = self.stack_presenter.selected_stack() {
-                    let ids: Vec<String> = stack
-                        .containers
-                        .iter()
-                        .filter(|c| c.can_stop)
-                        .map(|c| c.id.clone())
-                        .collect();
-                    if !ids.is_empty() {
-                        match self.stack_actions.stop_all(&ids).await {
-                            Ok(_) => self.refresh_stack_containers().await,
-                            Err(e) => {
-                                self.popup_message = Some(PopupMessage::Error(e.to_string()));
-                                self.stack_presenter.set_loading(false);
-                            }
-                        }
+            AppAction::PauseUnpause => {
+                if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
+                    self.stack_presenter.containers.set_loading(true);
+                    let result = if container.can_pause {
+                        self.container_actions.pause_container(&container.id).await
+                    } else if container.can_unpause {
+                        self.container_actions
+                            .unpause_container(&container.id)
+                            .await
                     } else {
-                        self.stack_presenter.set_loading(false);
+                        self.stack_presenter.containers.set_loading(false);
+                        return;
+                    };
+                    match result {
+                        Ok(_) => self.refresh_stack_containers().await,
+                        Err(e) => {
+                            self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                            self.stack_presenter.containers.set_loading(false);
+                        }
                     }
-                } else {
-                    self.stack_presenter.set_loading(false);
                 }
             }
-            AppAction::StartAll => {
-                self.stack_presenter.set_loading(true);
-                if let Some(stack) = self.stack_presenter.selected_stack() {
-                    let ids: Vec<String> = stack
-                        .containers
-                        .iter()
-                        .filter(|c| c.can_start)
-                        .map(|c| c.id.clone())
-                        .collect();
-                    if !ids.is_empty() {
-                        match self.stack_actions.start_all(&ids).await {
-                            Ok(_) => self.refresh_stack_containers().await,
-                            Err(e) => {
-                                self.popup_message = Some(PopupMessage::Error(e.to_string()));
-                                self.stack_presenter.set_loading(false);
-                            }
-                        }
-                    } else {
-                        self.stack_presenter.set_loading(false);
+            AppAction::Restart => {
+                if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
+                    if !container.can_restart {
+                        return;
                     }
-                } else {
-                    self.stack_presenter.set_loading(false);
+                    self.stack_presenter.containers.set_loading(true);
+                    match self
+                        .container_actions
+                        .restart_container(&container.id)
+                        .await
+                    {
+                        Ok(_) => self.refresh_stack_containers().await,
+                        Err(e) => {
+                            self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                            self.stack_presenter.containers.set_loading(false);
+                        }
+                    }
                 }
-            }
-            AppAction::RemoveAll if !self.stack_presenter.stack_containers.is_empty() => {
-                self.confirm_dialog = Some((ConfirmAction::StackContainersRemoveAll, true));
             }
             AppAction::Refresh => self.refresh_stack_containers().await,
+            AppAction::Prune => {
+                self.confirm_dialog = Some((ConfirmAction::ContainersPrune, true));
+            }
+            AppAction::ActivateFilter => {
+                self.stack_presenter.containers.activate_filter();
+            }
             AppAction::Exec => self.open_exec_shell_dialog(),
+            AppAction::Add => self.open_add_dialog(),
+            AppAction::ToggleSort => self.stack_presenter.containers.toggle_sort(),
             _ => {}
         }
     }
@@ -1005,7 +1050,7 @@ impl App {
         }
         let kind = match self.screen {
             Screen::ImageList | Screen::ImageDetails => AddDialogKind::Image,
-            Screen::ContainerList => AddDialogKind::Container,
+            Screen::ContainerList | Screen::StackContainers => AddDialogKind::Container,
             _ => return,
         };
         let field_count = match kind {
@@ -1084,12 +1129,14 @@ impl App {
         if disconnected {
             self.container_stats_subscription = None;
             self.container_presenter.clear_runtime_stats();
+            self.stack_presenter.clear_runtime_stats();
         }
 
         for event in drained_events {
             match event {
                 ContainerStatsEvent::Update(update) => {
-                    self.container_presenter.apply_stats_update(update);
+                    self.container_presenter.apply_stats_update(update.clone());
+                    self.stack_presenter.apply_stats_update(update);
                 }
                 ContainerStatsEvent::Error {
                     container_id,

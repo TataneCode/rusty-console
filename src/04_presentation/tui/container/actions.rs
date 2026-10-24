@@ -29,6 +29,17 @@ impl ContainerActions {
             .await
     }
 
+    pub async fn load_logs_by(
+        &self,
+        container_id: &str,
+        container_name: &str,
+        tail: Option<usize>,
+    ) -> Result<ContainerLogsDto, AppError> {
+        self.service
+            .get_logs(container_id, container_name, tail)
+            .await
+    }
+
     pub async fn export_logs_by(
         &self,
         container_id: &str,

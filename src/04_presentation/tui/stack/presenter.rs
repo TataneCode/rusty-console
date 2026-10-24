@@ -1,11 +1,13 @@
+use crate::application::container::ContainerStatsUpdate;
 use crate::application::stack::{StackContainerDto, StackDto};
-use crate::presentation::tui::common::{ListCore, TableSelection};
+use crate::presentation::tui::common::ListCore;
+use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 
 pub struct StackPresenter {
     pub list: ListCore<StackDto>,
-    pub stack_containers: Vec<StackContainerDto>,
-    pub container_selection: TableSelection,
+    pub containers: ListCore<StackContainerDto>,
+    stats_by_container_id: HashMap<String, crate::application::container::ContainerRuntimeStatsDto>,
 }
 
 fn matches_stack(stack: &StackDto, filter_lower: &str) -> bool {
@@ -16,12 +18,21 @@ fn stack_sort_key(stack: &StackDto) -> &str {
     stack.name.as_str()
 }
 
+fn matches_stack_container(container: &StackContainerDto, filter_lower: &str) -> bool {
+    container.name.to_lowercase().contains(filter_lower)
+        || container.image.to_lowercase().contains(filter_lower)
+}
+
+fn stack_container_sort_key(container: &StackContainerDto) -> &str {
+    container.name.as_str()
+}
+
 impl StackPresenter {
     pub fn new() -> Self {
         StackPresenter {
             list: ListCore::new(matches_stack, stack_sort_key),
-            stack_containers: Vec::new(),
-            container_selection: TableSelection::new(),
+            containers: ListCore::new(matches_stack_container, stack_container_sort_key),
+            stats_by_container_id: HashMap::new(),
         }
     }
 
@@ -48,27 +59,55 @@ impl StackPresenter {
     }
 
     pub fn set_stack_containers(&mut self, containers: Vec<StackContainerDto>) {
-        self.stack_containers = containers;
-        self.update_container_selection();
+        self.containers.set_items(containers);
+        self.reapply_runtime_stats();
+    }
+
+    pub fn filtered_stack_containers(&self) -> Vec<&StackContainerDto> {
+        self.containers.filtered_items()
     }
 
     pub fn selected_stack_container(&self) -> Option<&StackContainerDto> {
-        self.container_selection
-            .selected()
-            .and_then(|i| self.stack_containers.get(i))
+        self.containers.selected_item()
     }
 
     pub fn navigate_container_up(&mut self) {
-        self.container_selection.previous();
+        self.containers.navigate_up();
     }
 
     pub fn navigate_container_down(&mut self) {
-        self.container_selection.next();
+        self.containers.navigate_down();
     }
 
-    fn update_container_selection(&mut self) {
-        self.container_selection
-            .set_items(self.stack_containers.len());
+    pub fn apply_stats_update(&mut self, update: ContainerStatsUpdate) {
+        self.stats_by_container_id
+            .insert(update.container_id.clone(), update.stats.clone());
+
+        if let Some(container) = self
+            .containers
+            .items
+            .iter_mut()
+            .find(|container| container.id == update.container_id)
+        {
+            container.runtime_stats = Some(update.stats);
+        }
+    }
+
+    pub fn retain_runtime_stats(&mut self, monitored_container_ids: &HashSet<String>) {
+        self.stats_by_container_id
+            .retain(|id, _| monitored_container_ids.contains(id));
+        self.reapply_runtime_stats();
+    }
+
+    pub fn clear_runtime_stats(&mut self) {
+        self.stats_by_container_id.clear();
+        self.reapply_runtime_stats();
+    }
+
+    fn reapply_runtime_stats(&mut self) {
+        for container in &mut self.containers.items {
+            container.runtime_stats = self.stats_by_container_id.get(&container.id).cloned();
+        }
     }
 }
 
@@ -119,12 +158,15 @@ mod tests {
         let p = StackPresenter::new();
         assert!(p.items.is_empty());
         assert!(p.selected_stack().is_none());
-        assert!(p.stack_containers.is_empty());
+        assert!(p.containers.items.is_empty());
         assert!(p.selected_stack_container().is_none());
         assert!(!p.loading);
+        assert!(!p.containers.loading);
         assert!(p.error.is_none());
         assert!(p.filter.value().is_empty());
         assert!(!p.filter.is_active());
+        assert!(p.containers.filter.value().is_empty());
+        assert!(!p.containers.filter.is_active());
     }
 
     #[test]
@@ -273,34 +315,148 @@ mod tests {
         assert_eq!(p.selected_stack().unwrap().name, "db-postgres");
     }
 
+    fn make_stack_container(name: &str, image: &str) -> StackContainerDto {
+        StackContainerDto {
+            id: format!("id_{name}"),
+            name: name.to_string(),
+            image: image.to_string(),
+            state: StackContainerState::Running,
+            status: "Up".to_string(),
+            ports: "80/tcp".to_string(),
+            can_start: false,
+            can_stop: true,
+            can_restart: true,
+            can_pause: true,
+            can_unpause: false,
+            runtime_stats: None,
+        }
+    }
+
+    fn three_stack_containers() -> Vec<StackContainerDto> {
+        vec![
+            make_stack_container("alpha", "nginx:latest"),
+            make_stack_container("beta", "redis:7"),
+            make_stack_container("gamma", "nginx:alpine"),
+        ]
+    }
+
     #[test]
     fn test_set_stack_containers_selects_first() {
         let mut p = StackPresenter::new();
-        p.set_stack_containers(vec![
-            StackContainerDto {
-                id: "1".to_string(),
-                name: "web".to_string(),
-                image: "nginx:latest".to_string(),
-                state: StackContainerState::Running,
-                status: "Up".to_string(),
-                ports: "80/tcp".to_string(),
-                can_start: false,
-                can_stop: true,
-            },
-            StackContainerDto {
-                id: "2".to_string(),
-                name: "db".to_string(),
-                image: "postgres:16".to_string(),
-                state: StackContainerState::Stopped,
-                status: "Exited".to_string(),
-                ports: "-".to_string(),
-                can_start: true,
-                can_stop: false,
-            },
-        ]);
-        assert_eq!(p.selected_stack_container().unwrap().name, "web");
+        p.set_stack_containers(three_stack_containers());
+        assert_eq!(p.selected_stack_container().unwrap().name, "alpha");
         p.navigate_container_down();
-        assert_eq!(p.selected_stack_container().unwrap().name, "db");
+        assert_eq!(p.selected_stack_container().unwrap().name, "beta");
+    }
+
+    #[test]
+    fn test_stack_containers_filter_by_name_and_image() {
+        let mut p = StackPresenter::new();
+        p.set_stack_containers(three_stack_containers());
+        assert_eq!(p.filtered_stack_containers().len(), 3);
+
+        p.containers.push_filter_char('a');
+        p.containers.push_filter_char('l');
+        p.containers.push_filter_char('p');
+        p.containers.push_filter_char('h');
+        let filtered = p.filtered_stack_containers();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "alpha");
+
+        let mut p = StackPresenter::new();
+        p.set_stack_containers(three_stack_containers());
+        for c in "NGINX".chars() {
+            p.containers.push_filter_char(c);
+        }
+        assert_eq!(p.filtered_stack_containers().len(), 2);
+    }
+
+    #[test]
+    fn test_stack_containers_filter_keeps_selection_in_bounds() {
+        let mut p = StackPresenter::new();
+        p.set_stack_containers(three_stack_containers());
+        p.navigate_container_down();
+        p.navigate_container_down();
+        assert_eq!(p.containers.selection.selected(), Some(2));
+        for c in "beta".chars() {
+            p.containers.push_filter_char(c);
+        }
+        assert_eq!(p.filtered_stack_containers().len(), 1);
+        assert_eq!(p.selected_stack_container().unwrap().name, "beta");
+    }
+
+    #[test]
+    fn test_stack_containers_toggle_sort_cycles_orders() {
+        let mut p = StackPresenter::new();
+        p.set_stack_containers(three_stack_containers());
+        p.containers.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_stack_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["alpha", "beta", "gamma"]);
+        p.containers.toggle_sort();
+        let names: Vec<&str> = p
+            .filtered_stack_containers()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["gamma", "beta", "alpha"]);
+    }
+
+    #[test]
+    fn test_stack_container_runtime_stats() {
+        let mut p = StackPresenter::new();
+        p.set_stack_containers(three_stack_containers());
+        assert_eq!(p.filtered_stack_containers()[0].cpu_display(), "N/A");
+
+        p.apply_stats_update(crate::application::container::ContainerStatsUpdate {
+            container_id: "id_alpha".to_string(),
+            stats: crate::application::container::ContainerRuntimeStatsDto {
+                cpu_percent: 12.5,
+                memory_usage: crate::domain::shared::ByteSize::new(512),
+                memory_limit: crate::domain::shared::ByteSize::new(1024),
+                memory_percent: 50.0,
+                network_rx: crate::domain::shared::ByteSize::new(256),
+                network_tx: crate::domain::shared::ByteSize::new(128),
+            },
+        });
+        assert_eq!(p.filtered_stack_containers()[0].cpu_display(), "12.5%");
+        assert_eq!(
+            p.filtered_stack_containers()[0].memory_display(),
+            "512 B (50%)"
+        );
+
+        p.retain_runtime_stats(&HashSet::from(["id_beta".to_string()]));
+        assert_eq!(p.filtered_stack_containers()[0].cpu_display(), "N/A");
+
+        p.apply_stats_update(crate::application::container::ContainerStatsUpdate {
+            container_id: "id_beta".to_string(),
+            stats: crate::application::container::ContainerRuntimeStatsDto {
+                cpu_percent: 2.0,
+                memory_usage: crate::domain::shared::ByteSize::new(20),
+                memory_limit: crate::domain::shared::ByteSize::new(40),
+                memory_percent: 50.0,
+                network_rx: crate::domain::shared::ByteSize::new(3),
+                network_tx: crate::domain::shared::ByteSize::new(4),
+            },
+        });
+        p.clear_runtime_stats();
+        assert!(p
+            .filtered_stack_containers()
+            .iter()
+            .all(|container| container.runtime_stats.is_none()));
+    }
+
+    #[test]
+    fn test_stack_container_loading_state() {
+        let mut p = StackPresenter::new();
+        assert!(!p.containers.is_loading());
+        p.containers.set_loading(true);
+        assert!(p.containers.is_loading());
+        p.containers.set_loading(false);
+        assert!(!p.containers.is_loading());
     }
 
     #[test]

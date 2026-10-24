@@ -1,8 +1,7 @@
 use crate::application::stack::{StackContainerDto, StackDto};
 use crate::domain::stack::StackContainerState;
 use crate::presentation::tui::common::{
-    render_action_bar, render_list, render_loading_bar, render_table, resources,
-    split_content_area, truncate_text, ListHelpBar, ListRenderInput, ListViewSpec, Theme,
+    render_list, resources, truncate_text, ListHelpBar, ListRenderInput, ListViewSpec, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -61,70 +60,60 @@ pub fn render_stack_list(
     });
 }
 
-fn render_help_bar(
-    frame: &mut Frame,
-    area: Rect,
-    help_bar: StackHelpBarState<'_>,
-    help_text: &str,
-) {
-    if help_bar.is_loading {
-        render_loading_bar(frame, area, help_bar.spinner_char);
-    } else {
-        render_action_bar(frame, area, help_text);
-    }
-}
-
 pub fn render_stack_containers(
     frame: &mut Frame,
     area: Rect,
     stack_name: &str,
     containers: &[StackContainerDto],
     state: &mut TableState,
+    active_filter: Option<&str>,
     help_bar: StackHelpBarState<'_>,
 ) {
-    let [content_area, help_area] = split_content_area(area);
-
-    let rows: Vec<Row> = containers
-        .iter()
-        .map(|c| {
-            let state_style = match c.state {
-                StackContainerState::Running => Theme::running_style(),
-                StackContainerState::Paused | StackContainerState::Restarting => {
-                    Theme::paused_style()
-                }
-                _ => Theme::stopped_style(),
-            };
-
-            Row::new(vec![
-                Cell::from(c.name.clone()),
-                Cell::from(truncate_text(&c.image, 30)),
-                Cell::from(c.state_display()).style(state_style),
-                Cell::from(c.status.clone()),
-                Cell::from(truncate_text(&c.ports, 25)),
-            ])
-        })
-        .collect();
-
     let widths = vec![
-        Constraint::Percentage(20),
-        Constraint::Percentage(25),
+        Constraint::Percentage(16),
+        Constraint::Percentage(18),
         Constraint::Percentage(10),
-        Constraint::Percentage(25),
-        Constraint::Percentage(20),
+        Constraint::Percentage(10),
+        Constraint::Percentage(16),
+        Constraint::Percentage(18),
+        Constraint::Percentage(12),
     ];
 
     let title = resources::stack_containers_title(stack_name);
-    render_table(
-        frame,
-        content_area,
-        &title,
-        resources::STACK_CONTAINER_HEADERS.to_vec(),
-        rows,
+    let spec = ListViewSpec {
+        title: &title,
+        headers: resources::CONTAINER_HEADERS.to_vec(),
         widths,
-        state,
-    );
+        help_text: resources::STACK_CONTAINERS_HELP,
+        filter_enter_label: "Details",
+    };
 
-    render_help_bar(frame, help_area, help_bar, resources::STACK_CONTAINERS_HELP);
+    let mut input = ListRenderInput {
+        items: containers,
+        state,
+        active_filter,
+        help_bar: ListHelpBar {
+            is_loading: help_bar.is_loading,
+            spinner_char: help_bar.spinner_char,
+        },
+    };
+    render_list(frame, area, &spec, &mut input, |c| {
+        let state_style = match c.state {
+            StackContainerState::Running => Theme::running_style(),
+            StackContainerState::Paused | StackContainerState::Restarting => Theme::paused_style(),
+            _ => Theme::stopped_style(),
+        };
+
+        Row::new(vec![
+            Cell::from(c.name.clone()),
+            Cell::from(truncate_text(&c.image, 30)),
+            Cell::from(c.state_display()).style(state_style),
+            Cell::from(c.cpu_display()),
+            Cell::from(truncate_text(&c.memory_display(), 18)),
+            Cell::from(c.status.clone()),
+            Cell::from(truncate_text(&c.ports, 25)),
+        ])
+    });
 }
 
 #[cfg(test)]
@@ -152,6 +141,10 @@ mod tests {
             ports: "80/tcp".to_string(),
             can_start: false,
             can_stop: true,
+            can_restart: true,
+            can_pause: true,
+            can_unpause: false,
+            runtime_stats: None,
         }
     }
 
@@ -245,6 +238,7 @@ mod tests {
                     "compose-app",
                     &containers,
                     &mut state,
+                    None,
                     StackHelpBarState {
                         is_loading: false,
                         spinner_char: "|",
@@ -258,5 +252,72 @@ mod tests {
         assert!(text.contains("web"));
         assert!(text.contains("Running"));
         assert!(text.contains("Exec"));
+        assert!(text.contains("CPU"));
+        assert!(text.contains("Memory"));
+        assert!(text.contains("N/A"));
+        assert!(text.contains("l: Logs"));
+        assert!(text.contains("o: Sort"));
+    }
+
+    #[test]
+    fn test_render_stack_containers_shows_contextual_help_while_filter_active() {
+        let backend = TestBackend::new(140, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let containers = vec![make_stack_container()];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_stack_containers(
+                    frame,
+                    frame.area(),
+                    "compose-app",
+                    &containers,
+                    &mut state,
+                    Some("web"),
+                    StackHelpBarState {
+                        is_loading: false,
+                        spinner_char: "|",
+                    },
+                )
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("[/: web"));
+        assert!(text.contains("Type: Filter"));
+        assert!(text.contains("Enter: Details"));
+        assert!(text.contains("Esc: Clear"));
+        assert!(!text.contains("Exec"));
+        assert!(!text.contains("Quit"));
+    }
+
+    #[test]
+    fn test_render_stack_containers_shows_loading_bar_when_loading() {
+        let backend = TestBackend::new(140, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let containers = vec![make_stack_container()];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_stack_containers(
+                    frame,
+                    frame.area(),
+                    "compose-app",
+                    &containers,
+                    &mut state,
+                    None,
+                    StackHelpBarState {
+                        is_loading: true,
+                        spinner_char: "/",
+                    },
+                )
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Loading..."));
+        assert!(!text.contains("Exec"));
     }
 }

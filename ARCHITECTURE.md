@@ -212,3 +212,21 @@ This log records significant structural decisions and refactorings. Each entry i
 6. Generic parameter naming convention adopted in the same pass: `TItem` for list item types, `'frame`/`'text`/`'items` for the display lifetimes (see `docs/refactoring/generic_parameter_naming_2026-10-22.md`).
 
 **Rationale**: composition is the Rust idiom for shared state (a trait cannot own fields); `Deref` keeps the presenter API stable, minimizing regression risk — all 498 tests pass without modification of test logic. The generic naming convention mirrors the project's C#/.NET heritage (port of FancyContainerConsole).
+
+### ADR-003 — Stack containers sub-list promoted to `ListCore<StackContainerDto>` (2026-10-26)
+
+**Status**: accepted
+
+**Context**: `StackPresenter` kept its drill-down container list as a bare `Vec<StackContainerDto>` plus a hand-managed `TableSelection`, rendered by a hand-rolled table + help bar. As a result, the Stacks > Containers screen lacked filter, sort, contextual filter help and the shared loading spinner, and its columns drifted from the Containers screen (no CPU/Memory), while it carried stack-level actions (Stop All / Start All / Remove All) that belong to the stack list.
+
+**Decision**: embed a second `ListCore<StackContainerDto>` in `StackPresenter` (filter predicate on name/image, sort key on name) and render the screen through the shared `render_list()`/`ListViewSpec` with the same 7-column layout as the container list; the stack list keeps its own `ListCore<StackDto>`. The existing container stats subscription is extended to the active containers of the displayed stack, and `StackContainerDto` gains the pause/unpause/restart capabilities plus `runtime_stats` (`StackContainerState` mirrors `ContainerState`'s capability methods). Logs and details opened from the drill-down return to it via `logs_return_screen`/`details_return_screen` on `App`. Stack-level actions move to the stack list (`D` Remove All added there).
+
+**Consequences**:
+
+1. The two container screens share columns, chrome (filter-aware title, contextual help, spinner) and the full per-container action set (logs, details, exec, start/stop, pause, restart, delete, prune, add, filter, sort, live CPU/memory).
+2. Filter, sort and selection on the stack containers screen survive refreshes (`ListCore::set_items` re-clamps selection).
+3. `StackContainerState` (`01_domain/stack/state.rs`) gains `is_active`, `can_be_paused`, `can_be_unpaused`, `can_be_restarted`; `StackContainerDto` gains the matching `can_*` flags and `runtime_stats`.
+4. `App` gains `logs_return_screen`/`details_return_screen` so `ContainerLogs`/`ContainerDetails` return to their origin screen.
+5. Stack-level actions (`S`, `Ctrl+S`, `D`) are removed from the drill-down screen and `D` Remove All is added to the stack list with the existing confirmation dialog.
+
+**Rationale**: extends ADR-002 to presenter sub-lists instead of duplicating list state a second time. Keeping the drill-down as a plain `Vec` would have re-created the exact drift ADR-002 eliminated (the two container screens diverging in columns, filter, sort and chrome). Composition keeps the presenter/view/actions triad and the inward dependency flow intact; the functional choices (which keys, which actions) are documented in `MANUAL.md` and the feature plan `docs/plans/stack_containers_homogeneity_2026-10-26.md`.

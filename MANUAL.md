@@ -66,9 +66,9 @@ terminal, then the TUI resumes when the shell exits.
 
 ### Realtime stats
 
-- The **container list** shows live **CPU** and **Memory** values for active containers.
+- The **container list** and the **stack containers** screen show live **CPU** and **Memory** values for active containers.
 - **Network I/O** is shown only in **container details**.
-- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh.
+- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh. Logs and details opened from the stack containers screen return to that screen with `Esc`/`q`.
 
 ## Stacks
 
@@ -79,20 +79,27 @@ Stacks are detected from Docker Compose container labels. The stack list shows r
 | `Enter` | Drill down into the stack's containers |
 | `s` | Start all containers in the selected stack |
 | `S` | Stop all containers in the selected stack |
+| `D` | Remove all containers in the selected stack (force, with confirmation) |
 | `o` | Cycle list sort by name (A→Z → Z→A → default) |
 
 ### Stack containers (drill-down)
 
+This screen offers the same features as the Containers list (same columns, live CPU/memory, filter, sort, logs, details, exec, start/stop, pause, restart, delete, prune, add). Stack-level actions live on the stack list instead.
+
 | Key | Action |
 |-----|--------|
 | `s` | Start or stop the selected container |
-| `o` | Cycle list sort by name (A→Z → Z→A → default) |
-| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container) |
+| `p` | Pause or unpause the selected container |
+| `R` | Restart the selected container |
+| `l` | View container logs |
+| `Enter` | View container details (including live network I/O) |
 | `e` | Open the exec shell picker for the selected container |
-| `d` | Delete the selected container |
-| `Ctrl+S` | Start all containers in the stack |
-| `S` | Stop all containers in the stack |
-| `D` | Remove all containers in the stack (force, with confirmation) |
+| `d` | Delete the selected container (opens confirmation dialog) |
+| `/` | Filter containers by name or image |
+| `o` | Cycle list sort by name (A→Z → Z→A → default) |
+| `X` | Prune all stopped containers |
+| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container) |
+| `r` | Refresh the stack's containers |
 
 ## Volumes
 

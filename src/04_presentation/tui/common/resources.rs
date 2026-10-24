@@ -168,6 +168,14 @@ pub fn logs_export_error_message(error: &str) -> String {
     format!("Log export failed: {error}")
 }
 
+pub fn logs_copy_success_message() -> String {
+    "Log line copied to clipboard".to_string()
+}
+
+pub fn logs_copy_error_message(error: &str) -> String {
+    format!("Clipboard copy failed: {error}")
+}
+
 pub fn stack_containers_title(stack_name: &str) -> String {
     format!("Stack: {stack_name}")
 }

@@ -1943,6 +1943,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_copy_log_line_shows_popup_feedback() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerLogs;
+        app.container_presenter
+            .set_logs(crate::application::container::ContainerLogsDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                lines: vec![crate::application::container::LogLineDto {
+                    timestamp: None,
+                    message: "line1".to_string(),
+                }],
+            });
+        app.handle_action(AppAction::CopyLogLine).await;
+        assert!(
+            app.popup_message.is_some(),
+            "copy feedback popup should be shown (success or clipboard error)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_copy_log_line_without_selection_is_noop() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerLogs;
+        app.handle_action(AppAction::CopyLogLine).await;
+        assert!(app.popup_message.is_none());
+    }
+
+    #[tokio::test]
     async fn test_expanded_log_line_overlay_open_and_close() {
         let mut app = empty_app();
         app.screen = Screen::ContainerLogs;

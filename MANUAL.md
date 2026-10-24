@@ -59,10 +59,21 @@ terminal, then the TUI resumes when the shell exits.
 
 ## Log view
 
+The selected log line is highlighted. Copying copies the line as displayed
+(timestamp included when present) to the system clipboard (cross-platform).
+
 | Key | Action |
 |-----|--------|
+| `j` / `k` or arrows | Move line selection (highlighted) |
+| `PgUp` / `PgDn` | Page up / down |
 | `Ctrl+U` | Scroll up |
 | `Ctrl+D` | Scroll down |
+| `Enter` | Expand the selected line (full text, wrapped) |
+| `y` | Copy the selected line to the clipboard |
+| `/` | Search in logs (case-insensitive) |
+| `n` / `N` | Next / previous search match |
+| `E` | Export all logs to a `.log` file |
+| `Esc` / `q` | Back |
 
 ### Realtime stats
 

@@ -241,13 +241,7 @@ impl App {
             AppAction::CopyLogLine => {
                 let line = self
                     .container_presenter
-                    .logs
-                    .as_ref()
-                    .and_then(|logs| {
-                        self.container_presenter
-                            .selected_logs_line()
-                            .and_then(|index| logs.lines.get(index))
-                    })
+                    .selected_log_line()
                     .map(|line| line.display_line());
                 match line.as_deref().map(copy_text) {
                     Some(Ok(())) => {

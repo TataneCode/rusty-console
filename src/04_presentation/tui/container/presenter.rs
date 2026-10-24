@@ -1,5 +1,5 @@
 use crate::application::container::{
-    ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto, ContainerStatsUpdate,
+    ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto, ContainerStatsUpdate, LogLineDto,
 };
 use crate::presentation::tui::common::{FilterState, ListCore};
 use ratatui::widgets::ListState;
@@ -128,6 +128,11 @@ impl ContainerPresenter {
 
     pub fn selected_logs_line(&self) -> Option<usize> {
         self.logs_state.selected()
+    }
+
+    pub fn selected_log_line(&self) -> Option<&LogLineDto> {
+        let index = self.logs_state.selected()?;
+        self.logs.as_ref()?.lines.get(index)
     }
 
     pub fn logs_lines_len(&self) -> usize {
@@ -553,6 +558,31 @@ mod tests {
         p.set_logs(make_logs(0));
         assert!(p.logs_state.selected().is_none());
         assert_eq!(p.logs_lines_len(), 0);
+    }
+
+    #[test]
+    fn test_selected_log_line_returns_selected_dto() {
+        let mut p = ContainerPresenter::new();
+        p.set_logs(make_logs(3));
+        assert_eq!(
+            p.selected_log_line().map(|l| l.message.clone()),
+            Some("line0".to_string())
+        );
+        p.select_logs_line(2);
+        assert_eq!(
+            p.selected_log_line().map(|l| l.message.clone()),
+            Some("line2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_selected_log_line_is_none_without_logs_or_selection() {
+        let p = ContainerPresenter::new();
+        assert!(p.selected_log_line().is_none());
+
+        let mut p2 = ContainerPresenter::new();
+        p2.set_logs(make_logs(0));
+        assert!(p2.selected_log_line().is_none());
     }
 
     #[test]

@@ -29,7 +29,9 @@ fn logs_app() -> Option<rusty_console::App> {
     Some(app)
 }
 
-fn render_app_text_and_styles(app: &mut rusty_console::App) -> (String, Vec<(Color, Modifier)>) {
+fn render_app_text_and_styles(
+    app: &mut rusty_console::App,
+) -> (String, Vec<(Color, Color, Modifier)>) {
     let backend = ratatui::backend::TestBackend::new(100, 20);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal.draw(|frame| app.render(frame)).unwrap();
@@ -39,9 +41,13 @@ fn render_app_text_and_styles(app: &mut rusty_console::App) -> (String, Vec<(Col
     let styles = buffer
         .content
         .iter()
-        .map(|cell| (cell.fg, cell.modifier))
+        .map(|cell| (cell.bg, cell.fg, cell.modifier))
         .collect();
     (text, styles)
+}
+
+fn find_text_index(text: &str, target: &str) -> Option<usize> {
+    text.find(target)
 }
 
 #[test]
@@ -61,14 +67,33 @@ fn logs_screen_selected_line_is_highlighted() {
     let Some(mut app) = logs_app() else {
         return;
     };
-    let (_, styles) = render_app_text_and_styles(&mut app);
-    let highlighted = styles
-        .iter()
-        .filter(|(_, modifier)| modifier.contains(Modifier::BOLD))
-        .count();
+    let (text, styles) = render_app_text_and_styles(&mut app);
+
+    let selected = find_text_index(&text, "second line").expect("selected line present");
+    let other = find_text_index(&text, "first line").expect("other line present");
+
     assert!(
-        highlighted > 0,
-        "selected log line should be bold/highlighted"
+        styles[selected].2.contains(Modifier::BOLD),
+        "selected log line should be bold"
+    );
+    assert_eq!(
+        styles[selected].0,
+        Color::DarkGray,
+        "selected log line should have the highlight background"
+    );
+    assert_eq!(
+        styles[selected].1,
+        Color::White,
+        "selected log line should have the highlight foreground"
+    );
+    assert!(
+        !styles[other].2.contains(Modifier::BOLD),
+        "non-selected log line should not be bold"
+    );
+    assert_eq!(
+        styles[other].0,
+        Color::Reset,
+        "non-selected log line should have no highlight background"
     );
 }
 

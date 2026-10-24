@@ -17,7 +17,7 @@ Règle : **1 comportement = 1 test**, nommé par le comportement (`rejects_zero_
 
 - Co-localisés dans `#[cfg(test)]` **dans chaque fichier** — pas de répertoire `tests/` parallèle pour les tests unitaires.
 - **Domain** : pas de mock (couche pure) — tester les invariants, les rejets de `new()`.
-- **Application** : `#[cfg_attr(test, mockall::automock)]` sur le trait repository ; attentes explicites (`mock.expect_xxx().with(eq(...)).returning(...)`) ; `#[tokio::test]` pour les services async.
+- **Application** : `#[cfg_attr(test, mockall::automock)]` sur le trait repository ; attentes explicites (`mock.expect_xxx().with(eq(...)).returning(...)`) ; `#[tokio::test]` pour les services async (`tokio-test` disponible en dev-dependency pour les helpers).
 - **Infrastructure** : tester les mappers bollard→domaine avec des fixtures construites à la main. **Jamais de test contre un vrai démon Docker** dans la suite standard.
 - **Presentation** : tester les fonctions pures de `view.rs` (références → widgets) et la logique de `presenter.rs` (sélection, scroll) sans mock lourd.
 - Si un bug est corrigé : écrire d'abord le test qui échoue (reproduction), puis corriger.

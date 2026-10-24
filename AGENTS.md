@@ -39,7 +39,7 @@ Skills métier invoqués par les rôles ci-dessus : `rust-architecture-planning`
 | Qualité transverse (commandes, style) | [rules/quality.md](rules/quality.md) |
 | Conventions UT & IT | [rules/testing.md](rules/testing.md) + [docs/TESTING.md](docs/TESTING.md) (matrice des scénarios) |
 | Architecture (schéma, DI, data flow) | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Procédures agents/skills | [.agents/skills/](.agents/skills/) + [.legacy/AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) |
+| Procédures agents/skills | [.agents/skills/](.agents/skills/) + [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) |
 | Rôles d'agents (Markdown agnostique) | [agents/](agents/) |
 | Wiring Vibe CLI | [.vibe/](.vibe/) (`agents/`, `prompts/`, `config.toml`) |
 

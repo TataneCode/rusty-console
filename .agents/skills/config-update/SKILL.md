@@ -19,7 +19,7 @@ Faire évoluer la configuration vibe coding du dépôt (skills, règles, agents,
 
 ### 1. Cadrer le changement
 - Quel sujet évolue (skill, règle, agent, commande) ? Quel problème concret résout-il (tokens, duplication, friction) ?
-- Lire [CONTEXT.md](../../../CONTEXT.md) et [.legacy/AGENT_ARCHITECTURE.md](../../../.legacy/AGENT_ARCHITECTURE.md) pour comprendre l'articulation globale.
+- Lire [CONTEXT.md](../../../CONTEXT.md) et [AGENT_ARCHITECTURE.md](../../../AGENT_ARCHITECTURE.md) pour comprendre l'articulation globale.
 
 ### 2. Choisir le bon endroit (anti-duplication)
 
@@ -42,7 +42,7 @@ Faire évoluer la configuration vibe coding du dépôt (skills, règles, agents,
 ### 4. Propager les références
 
 - `grep -rn "<ancien-chemin-ou-nom>"` sur le dépôt : mettre à jour **tous** les pointeurs (skills, agents, prompts, docs).
-- Mettre à jour [.legacy/AGENT_ARCHITECTURE.md](../../../.legacy/AGENT_ARCHITECTURE.md) (arborescence + orchestration) si la structure a changé.
+- Mettre à jour [AGENT_ARCHITECTURE.md](../../../AGENT_ARCHITECTURE.md) (arborescence + orchestration) si la structure a changé.
 - Ne jamais laisser `.legacy/` référencé comme source par un skill actif (archive uniquement).
 
 ### 5. Vérifier la cohérence

@@ -35,7 +35,8 @@ Additional resources:
 
 - [xx_learning/](./xx_learning/) — a project-based Rust learning path built around this codebase, from ownership basics to the full application architecture
 - [CONTEXT.md](./CONTEXT.md) — project map for AI agents (navigation, state, key commands); [AGENTS.md](./AGENTS.md) — agent entry point (confirmation gate, routing table)
-- [.legacy/](./.legacy/) — historical documents (roadmap, evolution history, agent architecture)
+- [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md) — how the agents, skills and rules articulate
+- [.legacy/](./.legacy/) — historical documents (roadmap, evolution history, architecture logs)
 
 ## License
 

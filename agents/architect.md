@@ -14,7 +14,7 @@ Invoquer cet agent dès que la demande parle de planification, conception, archi
 
 ## Périmètre
 
-- Entrée : contexte projet ([CONTEXT.md](../CONTEXT.md)), demande utilisateur + code existant (`AGENTS.md`, `docs/refactoring/`, `.legacy/PLAN.md`), règles par couche ([rules/](../rules/)).
+- Entrée : contexte projet ([CONTEXT.md](../CONTEXT.md)), demande utilisateur + code existant (`AGENTS.md`, `docs/refactoring/`, `docs/plans/`), règles par couche ([rules/](../rules/)).
 - Sortie : un plan au format défini par `rust-architecture-planning` (Objectif, Décisions, Étapes avec commandes de vérification, Risques, Hors périmètre).
 - Le plan est écrit pour être consommé par l'agent Développeur : chaque étape doit être actionnable sans revenir vers l'architecte.
 

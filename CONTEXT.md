@@ -48,7 +48,7 @@ Aucune couche externe ne peut importer une couche interne. L'UI ne voit jamais l
 | `agents/` | Définitions de rôles agnostiques (Markdown). |
 | `.vibe/` | Wiring Vibe CLI : `agents/*.toml`, `prompts/*.md`, `config.toml` (modes). |
 | `docs/` | `TESTING.md` (matrice des scénarios), `plans/`, `refactoring/`. |
-| `.legacy/` | Archive historique (PLAN, EVOLUTION, logs). Ne pas référencer depuis les skills. |
+| `.legacy/` | Archive historique (PLAN, EVOLUTION, logs). Aucune référence depuis les skills ni les agents. |
 
 ## Commandes essentielles
 
@@ -74,5 +74,5 @@ Gate complet avant toute livraison : voir `rules/quality.md`.
 - [rules/README.md](rules/README.md) — index des règles par couche.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — vision haut niveau (schéma, DI, data flow).
 - [docs/TESTING.md](docs/TESTING.md) — suites et matrice des scénarios user-facing.
-- [.legacy/AGENT_ARCHITECTURE.md](.legacy/AGENT_ARCHITECTURE.md) — orchestration agents/skills (détail).
+- [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) — orchestration agents/skills (détail).
 - [xx_learning/](xx_learning/) — parcours d'apprentissage Rust du projet.

@@ -39,6 +39,7 @@ serde_json = "1.0"
 
 [dev-dependencies]
 mockall = "0.14"
+tokio = { version = "1.43", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4"
 
 # RPM packaging (cargo-generate-rpm). The binary is installed system-wide and

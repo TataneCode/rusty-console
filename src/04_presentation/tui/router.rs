@@ -12,7 +12,7 @@ use crossterm::event::KeyCode;
 use tokio::sync::mpsc::error::TryRecvError;
 
 impl App {
-    pub(crate) async fn handle_action(&mut self, action: AppAction) {
+    pub async fn handle_action(&mut self, action: AppAction) {
         if matches!(action, AppAction::Select)
             && self.screen == Screen::ContainerLogs
             && self.container_presenter.is_log_search_active()
@@ -716,7 +716,7 @@ impl App {
     }
 
     /// Returns true if the key was consumed by the filter input.
-    pub(crate) fn handle_filter_key(&mut self, code: KeyCode) -> bool {
+    pub fn handle_filter_key(&mut self, code: KeyCode) -> bool {
         match code {
             KeyCode::Esc => {
                 match self.screen {

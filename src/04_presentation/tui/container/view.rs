@@ -230,9 +230,9 @@ mod tests {
     fn find_text_index(buffer: &Buffer, text: &str) -> Option<usize> {
         let symbols: Vec<&str> = buffer.content.iter().map(|cell| cell.symbol()).collect();
         (0..symbols.len()).find(|&i| {
-            text.chars().enumerate().all(|(k, ch)| {
-                symbols.get(i + k).and_then(|s| s.chars().next()) == Some(ch)
-            })
+            text.chars()
+                .enumerate()
+                .all(|(k, ch)| symbols.get(i + k).and_then(|s| s.chars().next()) == Some(ch))
         })
     }
 

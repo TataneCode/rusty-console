@@ -251,14 +251,12 @@ impl App {
                     .map(|line| line.display_line());
                 match line.as_deref().map(copy_text) {
                     Some(Ok(())) => {
-                        self.popup_message = Some(PopupMessage::Info(
-                            resources::logs_copy_success_message(),
-                        ));
+                        self.popup_message =
+                            Some(PopupMessage::Info(resources::logs_copy_success_message()));
                     }
                     Some(Err(e)) => {
-                        self.popup_message = Some(PopupMessage::Error(
-                            resources::logs_copy_error_message(&e),
-                        ));
+                        self.popup_message =
+                            Some(PopupMessage::Error(resources::logs_copy_error_message(&e)));
                     }
                     None => {}
                 }

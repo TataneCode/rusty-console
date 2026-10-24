@@ -21,5 +21,5 @@ Toute livraison doit passer `fmt` + `clippy -D warnings` + `test` sans erreur.
 - **Sécurité mémoire** : éviter les `clone()` superflus, préférer les références ; `Arc` uniquement au point d'injection DI.
 - **Noms** : conventions Rust (snake_case fonctions, PascalCase types) ; renommer plutôt que d'ajouter `#[allow(clippy::...)]`.
 - **Dépendances** : minimum nécessaire, features les plus étroites possibles (voir skill `rust-dependency`).
-- **Tests** : couverture ≥ 70 % (courant : ~91 %) ; unit tests co-localisés dans `#[cfg(test)]` dans chaque fichier ; `mockall` pour les traits, `tokio-test` pour l'async ; le nom du test décrit le comportement (ex. `rejects_zero_port_mapping`).
+- **Tests** : couverture ≥ 70 % (courant : ~91 %) ; conventions UT/IT dans [testing.md](testing.md) (unit tests co-localisés dans `#[cfg(test)]`, IT dans `tests/`, `mockall` pour les traits, nom du test = comportement, ex. `rejects_zero_port_mapping`).
 - **Diff minimal** : ne changer que ce qui est nécessaire ; matcher le style existant ; lire un fichier entièrement avant de le modifier.

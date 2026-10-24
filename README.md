@@ -34,7 +34,9 @@ Requires a Rust toolchain and a running Docker daemon. See the [installation gui
 Additional resources:
 
 - [xx_learning/](./xx_learning/) — a project-based Rust learning path built around this codebase, from ownership basics to the full application architecture
-- [.legacy/](./.legacy/) — historical documents (roadmap, evolution history, agent architecture, project context)
+- [CONTEXT.md](./CONTEXT.md) — project map for AI agents (navigation, state, key commands); [AGENTS.md](./AGENTS.md) — agent entry point (confirmation gate, routing table)
+- [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md) — how the agents, skills and rules articulate
+- [.legacy/](./.legacy/) — historical documents (roadmap, evolution history, architecture logs)
 
 ## License
 

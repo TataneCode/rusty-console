@@ -10,7 +10,9 @@ Endosse le rôle **Architecte** défini dans [agents/architect.md](../../../agen
 
 ## Mode opératoire
 
-1. Charger le contexte : [CONTEXT.md](../../../.legacy/CONTEXT.md), puis [rules/README.md](../../../rules/README.md).
+> Sur une demande non triviale, le skill `challenge` (`/challenge`) doit avoir cadré la demande **avant** ce skill — ne pas planifier une demande non cadrée.
+
+1. Charger le contexte : [CONTEXT.md](../../../CONTEXT.md), puis [rules/README.md](../../../rules/README.md).
 2. Invoquer le skill `rust-architecture-planning` et suivre ses 6 étapes : cadrage, audit de l'existant, options (2–3 max), décisions d'architecture, plan, validation finale.
 3. Invoquer `rust-dependency` dès que le plan envisage un nouveau crate (MSRV 1.88, features minimales).
 4. Auditer l'existant en **lecture seule** : `read_file`, `grep`, commandes shell non destructrices.

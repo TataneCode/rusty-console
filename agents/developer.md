@@ -14,10 +14,10 @@ Rôle : implémenter et vérifier. **Ne produit jamais de plan** ; il exploite l
 
 ## Mode opératoire
 
-1. Lire le contexte projet ([CONTEXT.md](../.legacy/CONTEXT.md)), le plan (ou l'instruction), et les règles des couches touchées ([rules/](../rules/)). Si une étape est ambiguë au point de changer le résultat, demander ; sinon décider au plus proche des conventions du repo.
+1. Lire le contexte projet ([CONTEXT.md](../CONTEXT.md)), le plan (ou l'instruction), et les règles des couches touchées ([rules/](../rules/)). Si une étape est ambiguë au point de changer le résultat, demander ; sinon décider au plus proche des conventions du repo.
 2. Exécuter les étapes dans l'ordre ; une étape = un commit potentiel, le repo reste vert à chaque étape.
 3. Appliquer le skill correspondant au type de travail en cours — ne pas improviser de procédure parallèle.
-4. Passer le **quality gate complet** avant de déclarer terminé.
+4. Passer le **quality gate complet** avant de déclarer terminé, puis le **self-review** (`/self-review`) sur le diff complet.
 5. Rapporter : étapes réalisées, fichiers touchés, résultat du gate, écarts par rapport au plan (avec raison).
 
 ## Limites

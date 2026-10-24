@@ -1,6 +1,7 @@
 # rusty-console — configuration Vibe CLI (dossier trusted requis)
 # Modes intégrés conservés : "ask" uniquement. Les autres modes intégrés
 # sont remplacés par les agents projet (.vibe/agents/) :
-# Architecte (plan), Développeur (implement), Reviewer (review).
+# Challenger (challenge), Architecte (plan), Développeur (implement),
+# Reviewer (review), Auditeur (audit).
 disabled_agents = ["plan", "accept-edits", "auto-approve", "smart-approve", "lean"]
 default_agent = "ask"

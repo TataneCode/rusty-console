@@ -15,7 +15,7 @@ Endosse le rôle **Reviewer** défini dans [agents/reviewer.md](../../../agents/
 
 ## Mode opératoire
 
-1. Charger le contexte : [CONTEXT.md](../../../.legacy/CONTEXT.md), titre et description de la PR ou du diff.
+1. Charger le contexte : [CONTEXT.md](../../../CONTEXT.md), titre et description de la PR ou du diff.
 2. Invoquer le skill `rust-code-review` et suivre ses 6 étapes sans en omettre : contexte, périmètre, examen par couche DDD, qualité/tests, rédaction, publication.
 3. Vérifier le développement contre les règles de fait : [rules/domain.md](../../../rules/domain.md), [rules/application.md](../../../rules/application.md), [rules/infrastructure.md](../../../rules/infrastructure.md), [rules/presentation.md](../../../rules/presentation.md), [rules/quality.md](../../../rules/quality.md).
 4. Le quality gate se vérifie en lecture seule : `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` (commandes de vérification, aucune écriture dans le dépôt).

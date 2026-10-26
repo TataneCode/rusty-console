@@ -27,8 +27,12 @@ fn container_list_action_bar_shows_help_text_and_highlighted_keys() {
 
     let (text, styles) = render_app_text_and_styles(&mut app);
     assert!(
-        text.contains("q: Quit | /: Filter | o: Sort | j/k: Navigate"),
-        "action bar help missing: {text}"
+        text.contains("j/k: Navigate | Enter: Details | /: Filter | r: Refresh | q: Quit | Space: All commands"),
+        "reduced action bar help missing: {text}"
+    );
+    assert!(
+        !text.contains("o: Sort"),
+        "full command list must move to the help popup, not the footer: {text}"
     );
 
     let highlighted_keys = styles
@@ -53,5 +57,5 @@ fn main_menu_action_bar_shows_help_text() {
         return;
     };
     let (text, _) = render_app_text_and_styles(&mut app);
-    assert!(text.contains("j/k: Navigate | Enter: Select | q: Quit"));
+    assert!(text.contains("j/k: Navigate | Enter: Select | q: Quit | Space: All commands"));
 }

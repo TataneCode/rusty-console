@@ -67,19 +67,68 @@ impl App {
             return;
         }
 
-        match &self.screen {
-            Screen::MainMenu => self.handle_main_menu_action(action).await,
-            Screen::ContainerList => self.handle_container_list_action(action).await,
-            Screen::ContainerLogs => self.handle_container_logs_action(action).await,
-            Screen::ContainerDetails => self.handle_details_action(action),
-            Screen::VolumeList => self.handle_volume_list_action(action).await,
-            Screen::VolumeDetails => self.handle_details_action(action),
-            Screen::ImageList => self.handle_image_list_action(action).await,
-            Screen::ImageDetails => self.handle_image_details_action(action).await,
-            Screen::NetworkList => self.handle_network_list_action(action).await,
-            Screen::NetworkDetails => self.handle_network_details_action(action).await,
-            Screen::StackList => self.handle_stack_list_action(action).await,
-            Screen::StackContainers => self.handle_stack_containers_action(action).await,
+        if self.help_popup_open {
+            match action {
+                AppAction::ToggleHelp | AppAction::Back | AppAction::Quit => {
+                    self.help_popup_open = false;
+                }
+                AppAction::NavigateUp | AppAction::ScrollUp => self.help_popup_state.scroll_up(),
+                AppAction::NavigateDown | AppAction::ScrollDown => {
+                    self.help_popup_state.scroll_down();
+                }
+                AppAction::PageUp => {
+                    for _ in 0..10 {
+                        self.help_popup_state.scroll_up();
+                    }
+                }
+                AppAction::PageDown => {
+                    for _ in 0..10 {
+                        self.help_popup_state.scroll_down();
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        match action {
+            AppAction::ToggleHelp => {
+                if self.current_help_text().is_some() {
+                    self.help_popup_open = true;
+                    self.help_popup_state = Default::default();
+                }
+            }
+            _ => match &self.screen {
+                Screen::MainMenu => self.handle_main_menu_action(action).await,
+                Screen::ContainerList => self.handle_container_list_action(action).await,
+                Screen::ContainerLogs => self.handle_container_logs_action(action).await,
+                Screen::ContainerDetails => self.handle_details_action(action),
+                Screen::VolumeList => self.handle_volume_list_action(action).await,
+                Screen::VolumeDetails => self.handle_details_action(action),
+                Screen::ImageList => self.handle_image_list_action(action).await,
+                Screen::ImageDetails => self.handle_image_details_action(action).await,
+                Screen::NetworkList => self.handle_network_list_action(action).await,
+                Screen::NetworkDetails => self.handle_network_details_action(action).await,
+                Screen::StackList => self.handle_stack_list_action(action).await,
+                Screen::StackContainers => self.handle_stack_containers_action(action).await,
+            },
+        }
+    }
+
+    pub(crate) fn current_help_text(&self) -> Option<&'static str> {
+        match self.screen {
+            Screen::MainMenu => Some(resources::MAIN_MENU_HELP),
+            Screen::ContainerList => Some(resources::CONTAINER_LIST_HELP),
+            Screen::ContainerLogs => Some(resources::CONTAINER_LOGS_HELP),
+            Screen::ContainerDetails => Some(resources::CONTAINER_DETAILS_HELP),
+            Screen::VolumeList => Some(resources::VOLUME_LIST_HELP),
+            Screen::VolumeDetails => Some(resources::VOLUME_DETAILS_HELP),
+            Screen::ImageList => Some(resources::IMAGE_LIST_HELP),
+            Screen::ImageDetails => Some(resources::IMAGE_DETAILS_HELP),
+            Screen::NetworkList => Some(resources::NETWORK_LIST_HELP),
+            Screen::NetworkDetails => Some(resources::NETWORK_DETAILS_HELP),
+            Screen::StackList => Some(resources::STACK_LIST_HELP),
+            Screen::StackContainers => Some(resources::STACK_CONTAINERS_HELP),
         }
     }
 
@@ -980,11 +1029,12 @@ pub(crate) fn normalize_image_ref(input: &str) -> String {
 }
 
 impl App {
-    pub(crate) fn has_modal_overlay(&self) -> bool {
+    pub fn has_modal_overlay(&self) -> bool {
         self.popup_message.is_some()
             || self.confirm_dialog.is_some()
             || self.exec_shell_dialog.is_some()
             || self.add_dialog.is_some()
+            || self.help_popup_open
     }
 
     pub(crate) fn handle_add_dialog_key(&mut self, code: KeyCode) -> bool {

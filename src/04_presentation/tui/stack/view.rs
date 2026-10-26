@@ -32,7 +32,6 @@ pub fn render_stack_list(
         title: resources::STACK_TITLE,
         headers: resources::STACK_HEADERS.to_vec(),
         widths,
-        help_text: resources::STACK_LIST_HELP,
         filter_enter_label: "Drill-down",
     };
 
@@ -84,7 +83,6 @@ pub fn render_stack_containers(
         title: &title,
         headers: resources::CONTAINER_HEADERS.to_vec(),
         widths,
-        help_text: resources::STACK_CONTAINERS_HELP,
         filter_enter_label: "Details",
     };
 
@@ -181,7 +179,9 @@ mod tests {
         assert!(text.contains("Stacks"));
         assert!(text.contains("compose-app"));
         assert!(text.contains("1/2"));
-        assert!(text.contains("Start All"));
+        assert!(text.contains("Enter: Drill-down"));
+        assert!(text.contains("Space: All commands"));
+        assert!(!text.contains("Start All"));
     }
 
     #[test]
@@ -251,12 +251,13 @@ mod tests {
         assert!(text.contains("Stack: compose-app"));
         assert!(text.contains("web"));
         assert!(text.contains("Running"));
-        assert!(text.contains("Exec"));
         assert!(text.contains("CPU"));
         assert!(text.contains("Memory"));
         assert!(text.contains("N/A"));
-        assert!(text.contains("l: Logs"));
-        assert!(text.contains("o: Sort"));
+        assert!(text.contains("Enter: Details"));
+        assert!(text.contains("Space: All commands"));
+        assert!(!text.contains("Exec"));
+        assert!(!text.contains("o: Sort"));
     }
 
     #[test]

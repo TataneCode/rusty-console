@@ -5,7 +5,8 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 ## Common UI elements
 
 - **Breadcrumb bar** — shows the current location (e.g. `Rusty - docker manager > Containers > web logs`), truncating leading segments first when space runs out.
-- **Action bar** — the bottom bar shows available keys for the current screen; during long operations it is replaced by a loading spinner (`|/-\`, 200ms per frame).
+- **Action bar** — the bottom bar shows the fundamental keys for the current screen (navigation, `Enter`, filter, refresh, quit); during long operations it is replaced by a loading spinner (`|/-\`, 200ms per frame).
+- **Help popup** — pressing `Space` opens a popup listing every keybinding of the current screen, one per line; close it with `Esc`, `q` or `Space`. When the list is taller than the popup, scroll it with `j`/`k` (or ↑/↓, PgUp/PgDn); a scrollbar appears on the right. The action bar always ends with `Space: All commands` as a reminder.
 - **Confirmation dialogs** — every destructive action (delete, prune, stop all, …) opens a confirmation dialog first.
 - **Error popups** — errors are shown in a popup, dismissed on any keypress.
 - **Filter mode** — pressing `/` activates a name filter; type to search, press `Esc` to clear. While the filter is active, letter-key actions (start/stop, delete, sort, refresh, …) are disabled — only typing, `Esc`, navigation (`j`/`k`/arrows) and `Enter` (open details) remain available. The action bar is contextual: while the filter is active it shrinks to `Type: Filter | j/k: Navigate | Enter | Esc: Clear`, and returns to the full list of keys when the filter is cleared.
@@ -24,6 +25,7 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 | `r` | Refresh list |
 | `/` | Activate filter (type to search, `Esc` to clear) |
 | `o` | Cycle list sort: A→Z → Z→A → default |
+| `Space` | Open the help popup (full keybinding list of the current screen) |
 
 ## Containers
 

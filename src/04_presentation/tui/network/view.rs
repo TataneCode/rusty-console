@@ -30,7 +30,6 @@ pub fn render_network_list(
         title: resources::NETWORK_TITLE,
         headers: resources::NETWORK_HEADERS.to_vec(),
         widths,
-        help_text: resources::NETWORK_LIST_HELP,
         filter_enter_label: "Details",
     };
 
@@ -196,7 +195,8 @@ mod tests {
         assert!(text.contains("app-net"));
         assert!(text.contains("bridge"));
         assert!(text.contains("172.20.0.0/16"));
-        assert!(text.contains("Prune"));
+        assert!(text.contains("Space: All commands"));
+        assert!(!text.contains("Prune"));
     }
 
     #[test]

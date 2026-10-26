@@ -134,7 +134,7 @@ async fn popup_does_not_open_over_another_modal() {
 }
 
 #[tokio::test]
-async fn details_screens_footer_keeps_space_hint_and_popup_lists_their_commands() {
+async fn details_screen_popup_lists_its_own_commands() {
     let Some(mut app) = build_app() else {
         return;
     };
@@ -157,11 +157,12 @@ async fn details_screens_footer_keeps_space_hint_and_popup_lists_their_commands(
 
     let rendered = render_app(&mut app);
     assert!(rendered.contains("Space: All commands"));
-    assert!(!rendered.contains("d: Disconnect"));
+    assert!(rendered.contains("d: Disconnect"));
 
     app.handle_action(AppAction::ToggleHelp).await;
     let rendered = render_app(&mut app);
     assert!(rendered.contains("Keybindings"));
     assert!(rendered.contains("d: Disconnect"));
     assert!(rendered.contains("r: Refresh"));
+    assert!(rendered.contains("Esc/q/Space: Close"));
 }

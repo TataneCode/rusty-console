@@ -29,7 +29,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 |---|---|
 | `tests/stack_containers_ui.rs` | Homogeneity of the two container screens: Stacks > Containers has the same 7-column layout and the same container actions as Containers (logs, details, exec, start/stop, delete, pause, restart, prune, add, filter, sort, loading spinner); stack-level actions (Start All, Stop All, Remove All) live only on the stack list; filter shows the contextual help bar and narrows rows; `Esc` clears the filter; sort cycles A→Z → Z→A → default |
 | `tests/action_bar_ui.rs` | Action bar content (reduced footer + `Space: All commands` hint) and key highlighting on list screens and the main menu |
-| `tests/help_popup_ui.rs` | `Space` opens the keybindings popup with the full command list of the current screen; popup is modal and closes on `Esc`/`q`/`Space`; does not open over another modal; details screens keep the `Space` hint and list their own commands |
+| `tests/help_popup_ui.rs` | `Space` opens the keybindings popup with the full command list of the current screen; popup is modal and closes on `Esc`/`q`/`Space`; does not open over another modal; details screens list their own commands in the popup |
 | `tests/breadcrumb_ui.rs` | Breadcrumb path on the main menu, container logs and container list screens |
 | `tests/integration_docker.rs` | Real Docker daemon: pull images, create/start/stop/delete containers, inspect — skipped when no daemon is available |
 

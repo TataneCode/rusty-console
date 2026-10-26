@@ -7,7 +7,7 @@ pub const BREADCRUMB_LOGS_LABEL: &str = "logs";
 pub const BREADCRUMB_DETAILS_LABEL: &str = "details";
 pub const BREADCRUMB_CONTAINERS_LABEL: &str = "containers";
 pub const MAIN_MENU_BLOCK_TITLE: &str = " Menu ";
-pub const MAIN_MENU_HELP: &str = " j/k: Navigate | Enter: Select | q: Quit ";
+pub const MAIN_MENU_HELP: &str = " j/k: Navigate | Enter: Select | q: Quit | Space: All commands ";
 pub const MAIN_MENU_HIGHLIGHT_SYMBOL: &str = "> ";
 pub const MAIN_MENU_ITEMS: [&str; 6] = [
     "  Containers",
@@ -21,6 +21,8 @@ pub const MAIN_MENU_ITEMS: [&str; 6] = [
 pub const CONFIRM_TITLE: &str = " Confirm ";
 pub const ERROR_TITLE: &str = " Error ";
 pub const INFO_TITLE: &str = " Info ";
+pub const HELP_POPUP_TITLE: &str = " Keybindings ";
+pub const HELP_POPUP_CLOSE_HELP: &str = " Esc/q/Space: Close ";
 pub const CONFIRM_YES_LABEL: &str = "  [Yes]";
 pub const CONFIRM_NO_LABEL: &str = "  [No]";
 pub const CONFIRM_YES_BUTTON_WIDTH: u16 = 7;
@@ -33,9 +35,9 @@ pub const CONTAINER_HEADERS: [&str; 7] =
 pub const CONTAINER_LIST_HELP: &str =
     " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
-pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back ";
+pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back | Space: All commands ";
 pub const CONTAINER_LOGS_HELP: &str =
-    " Esc/q: Back | j/k: Line | PgUp/PgDn: Page | Enter: Expand | /: Search | n/N: Match | y: Copy | E: Export ";
+    " Esc/q: Back | j/k: Line | PgUp/PgDn: Page | Enter: Expand | /: Search | n/N: Match | y: Copy | E: Export | Space: All commands ";
 pub const EXPANDED_LOG_LINE_TITLE: &str = " Expanded log line ";
 pub const CONTAINER_DETAILS_ENV_VARS_LABEL: &str = "Environment Variables";
 pub const CONTAINER_DETAILS_NETWORK_IO_LABEL: &str = "Network I/O";
@@ -57,7 +59,7 @@ pub const VOLUME_HEADERS: [&str; 5] = ["Name", "Driver", "Size", "In Use", "Crea
 pub const VOLUME_LIST_HELP: &str =
     " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
 pub const VOLUME_DETAILS_TITLE: &str = " Volume Details ";
-pub const VOLUME_DETAILS_HELP: &str = " Esc/q: Back ";
+pub const VOLUME_DETAILS_HELP: &str = " Esc/q: Back | Space: All commands ";
 
 pub const NETWORK_TITLE: &str = "Networks";
 pub const NETWORK_HEADERS: [&str; 5] = ["Name", "Driver", "Scope", "Subnet", "Containers"];
@@ -65,14 +67,15 @@ pub const NETWORK_LIST_HELP: &str =
     " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
 pub const NETWORK_DETAILS_TITLE: &str = " Network Details ";
 pub const NETWORK_DETAILS_HELP: &str =
-    " Esc/q: Back | j/k: Select container | d: Disconnect | r: Refresh ";
+    " Esc/q: Back | j/k: Select container | d: Disconnect | r: Refresh | Space: All commands ";
 
 pub const IMAGE_TITLE: &str = "Images";
 pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use", "Created"];
 pub const IMAGE_LIST_HELP: &str =
     " q: Quit | /: Filter | o: Sort | j/k: Navigate | d: Delete | Enter: Details | r: Refresh | X: Prune | A: Add | Esc: Back ";
 pub const IMAGE_DETAILS_TITLE: &str = " Image Details ";
-pub const IMAGE_DETAILS_HELP: &str = " Esc/q: Back | P: Pull Image | r: Refresh ";
+pub const IMAGE_DETAILS_HELP: &str =
+    " Esc/q: Back | P: Pull Image | r: Refresh | Space: All commands ";
 
 pub const STACK_TITLE: &str = "Stacks";
 pub const STACK_HEADERS: [&str; 3] = ["Stack", "Containers", "Running"];
@@ -131,6 +134,14 @@ pub fn filter_prompt_title(base_title: &str, active_filter: Option<&str>) -> Str
         Some(filter) => format!(" {base_title} [/: {filter}{FILTER_CURSOR}] "),
         None => format!(" {base_title} "),
     }
+}
+
+/// Reduced footer shown on list screens: only the fundamental commands stay
+/// visible; the full list opens in the help popup with the Space key.
+pub fn list_footer_help(enter_label: &str) -> String {
+    format!(
+        " j/k: Navigate | Enter: {enter_label} | /: Filter | r: Refresh | q: Quit | Space: All commands "
+    )
 }
 
 /// Contextual action-bar text while the name filter input is active:
@@ -230,6 +241,40 @@ mod tests {
             filter_prompt_title("Volumes", Some("data")),
             format!(" Volumes [/: data{FILTER_CURSOR}] ")
         );
+    }
+
+    #[test]
+    fn test_list_footer_help_shows_only_fundamental_commands() {
+        let footer = list_footer_help("Details");
+        assert!(footer.contains("j/k: Navigate"));
+        assert!(footer.contains("Enter: Details"));
+        assert!(footer.contains("/: Filter"));
+        assert!(footer.contains("r: Refresh"));
+        assert!(footer.contains("q: Quit"));
+        assert!(footer.contains("Space: All commands"));
+        assert!(!footer.contains("Sort"));
+        assert!(!footer.contains("Delete"));
+        assert!(!footer.contains("Logs"));
+
+        let stack_footer = list_footer_help("Drill-down");
+        assert!(stack_footer.contains("Enter: Drill-down"));
+    }
+
+    #[test]
+    fn test_details_and_logs_helps_carry_space_hint() {
+        for help in [
+            MAIN_MENU_HELP,
+            CONTAINER_DETAILS_HELP,
+            CONTAINER_LOGS_HELP,
+            VOLUME_DETAILS_HELP,
+            NETWORK_DETAILS_HELP,
+            IMAGE_DETAILS_HELP,
+        ] {
+            assert!(
+                help.contains("Space: All commands"),
+                "missing hint in {help}"
+            );
+        }
     }
 
     #[test]

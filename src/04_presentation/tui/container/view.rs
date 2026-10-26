@@ -34,7 +34,6 @@ pub fn render_container_list(
         title: resources::CONTAINER_TITLE,
         headers: resources::CONTAINER_HEADERS.to_vec(),
         widths,
-        help_text: resources::CONTAINER_LIST_HELP,
         filter_enter_label: "Details",
     };
 
@@ -285,8 +284,10 @@ mod tests {
         assert!(text.contains("Running"));
         assert!(text.contains("12.5%"));
         assert!(text.contains("512.00 MB"));
-        assert!(text.contains("Exec"));
-        assert!(text.contains("Logs"));
+        assert!(text.contains("j/k: Navigate"));
+        assert!(text.contains("Space: All commands"));
+        assert!(!text.contains("Exec"));
+        assert!(!text.contains("Logs"));
     }
 
     #[test]

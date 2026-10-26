@@ -30,7 +30,6 @@ pub fn render_volume_list(
         title: resources::VOLUME_TITLE,
         headers: resources::VOLUME_HEADERS.to_vec(),
         widths,
-        help_text: resources::VOLUME_LIST_HELP,
         filter_enter_label: "Details",
     };
 
@@ -162,7 +161,8 @@ mod tests {
         assert!(text.contains("Volumes"));
         assert!(text.contains("db-data"));
         assert!(text.contains("local"));
-        assert!(text.contains("Prune"));
+        assert!(text.contains("Space: All commands"));
+        assert!(!text.contains("Prune"));
     }
 
     #[test]

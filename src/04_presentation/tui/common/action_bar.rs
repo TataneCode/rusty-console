@@ -8,6 +8,21 @@ use ratatui::{
 
 const SEPARATOR: &str = " | ";
 
+/// Splits one "key: Label" segment into styled spans: key in yellow bold,
+/// label in white. Segments without a colon render as plain labels.
+pub fn help_segment_spans(segment: &str) -> Vec<Span<'static>> {
+    match segment.split_once(':') {
+        Some((key, label)) => vec![
+            Span::styled(key.to_string(), Theme::action_key_style()),
+            Span::styled(format!(":{label}"), Theme::action_label_style()),
+        ],
+        None => vec![Span::styled(
+            segment.to_string(),
+            Theme::action_label_style(),
+        )],
+    }
+}
+
 /// Splits a help string (" q: Quit | /: Filter ") into styled spans:
 /// keys in yellow bold, labels in white, separators dimmed.
 pub fn action_bar_line(help_text: &str) -> Line<'static> {
@@ -16,19 +31,7 @@ pub fn action_bar_line(help_text: &str) -> Line<'static> {
         if index > 0 {
             spans.push(Span::styled(SEPARATOR, Theme::help_style()));
         }
-        match segment.split_once(':') {
-            Some((key, label)) => {
-                spans.push(Span::styled(key.to_string(), Theme::action_key_style()));
-                spans.push(Span::styled(
-                    format!(":{label}"),
-                    Theme::action_label_style(),
-                ));
-            }
-            None => spans.push(Span::styled(
-                segment.to_string(),
-                Theme::action_label_style(),
-            )),
-        }
+        spans.extend(help_segment_spans(segment));
     }
     Line::from(spans)
 }

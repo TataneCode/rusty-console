@@ -37,7 +37,6 @@ pub fn render_image_list(
         title: resources::IMAGE_TITLE,
         headers: resources::IMAGE_HEADERS.to_vec(),
         widths,
-        help_text: resources::IMAGE_LIST_HELP,
         filter_enter_label: "Details",
     };
 
@@ -203,7 +202,8 @@ mod tests {
         assert!(text.contains("Images"));
         assert!(text.contains("nginx"));
         assert!(text.contains("latest"));
-        assert!(text.contains("Delete"));
+        assert!(text.contains("Space: All commands"));
+        assert!(!text.contains("Delete"));
     }
 
     #[test]

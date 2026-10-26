@@ -9,9 +9,9 @@ use crate::application::stack::{StackContainerDto, StackDto};
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
     dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
-    render_expanded_log_line, render_input_dialog, render_main_menu, render_popup_message,
-    render_selection_dialog, resources, split_app_area, AppAction, InputDialogState, InputField,
-    KeyContext, PopupMessage, Spinner,
+    render_expanded_log_line, render_help_popup, render_input_dialog, render_main_menu,
+    render_popup_message, render_selection_dialog, resources, split_app_area, AppAction,
+    InputDialogState, InputField, KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -91,6 +91,7 @@ pub struct App {
     pub confirm_dialog: Option<(ConfirmAction, bool)>,
     pub expanded_log_line: Option<usize>,
     pub popup_message: Option<PopupMessage>,
+    pub help_popup_open: bool,
     pub spinner: Spinner,
     exec_command_config: ExecCommandConfig,
     pub(crate) exec_shell_dialog: Option<ExecShellDialog>,
@@ -157,6 +158,7 @@ impl App {
             confirm_dialog: None,
             expanded_log_line: None,
             popup_message: None,
+            help_popup_open: false,
             spinner: Spinner::new(),
             exec_command_config,
             exec_shell_dialog: None,
@@ -444,9 +446,15 @@ impl App {
             || self.confirm_dialog.is_some()
             || self.popup_message.is_some()
             || self.exec_shell_dialog.is_some()
-            || self.add_dialog.is_some();
+            || self.add_dialog.is_some()
+            || self.help_popup_open;
         if has_overlay {
             dim_background(frame);
+        }
+        if self.help_popup_open {
+            if let Some(help_text) = self.current_help_text() {
+                render_help_popup(frame, help_text);
+            }
         }
         if let Some(line) = self.container_presenter.logs.as_ref().and_then(|logs| {
             self.expanded_log_line
@@ -2635,6 +2643,48 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_help_popup_toggles_and_is_modal() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerList;
+
+        app.handle_action(AppAction::ToggleHelp).await;
+        assert!(app.help_popup_open);
+        assert!(app.has_modal_overlay());
+
+        // Other actions are swallowed while the popup is open.
+        app.handle_action(AppAction::NavigateDown).await;
+        assert!(app.help_popup_open);
+
+        app.handle_action(AppAction::ToggleHelp).await;
+        assert!(!app.help_popup_open);
+
+        app.handle_action(AppAction::ToggleHelp).await;
+        app.handle_action(AppAction::Quit).await;
+        assert!(!app.help_popup_open);
+        assert!(!app.should_quit, "q must close the popup, not quit the app");
+
+        let rendered = render_app(&mut app);
+        assert!(!rendered.contains("Keybindings"));
+    }
+
+    #[test]
+    fn test_help_popup_renders_full_command_list_of_current_screen() {
+        let mut app = empty_app();
+        app.screen = Screen::VolumeList;
+        app.help_popup_open = true;
+
+        let rendered = render_app_wide(&mut app);
+        assert!(rendered.contains("Keybindings"));
+        assert!(rendered.contains("Esc/q/Space: Close"));
+        for command in ["X: Prune", "d: Delete", "o: Sort", "Enter: Details"] {
+            assert!(
+                rendered.contains(command),
+                "missing {command} in {rendered}"
+            );
+        }
+    }
+
     #[test]
     fn test_render_container_list_shows_contextual_help_while_filter_active() {
         let mut app = empty_app();
@@ -2644,7 +2694,8 @@ mod tests {
 
         let rendered = render_app_wide(&mut app);
         assert!(rendered.contains("Enter: Details"));
-        assert!(rendered.contains("Start/Stop"));
+        assert!(rendered.contains("Space: All commands"));
+        assert!(!rendered.contains("Start/Stop"));
 
         app.container_presenter.activate_filter();
         let rendered = render_app(&mut app);

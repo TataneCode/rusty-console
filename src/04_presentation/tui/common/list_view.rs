@@ -5,8 +5,8 @@
 //! that switches between loading spinner, filter input mode, and normal help.
 
 use super::{
-    filter_input_help, filter_prompt_title, render_action_bar, render_loading_bar, render_table,
-    split_content_area,
+    filter_input_help, filter_prompt_title, list_footer_help, render_action_bar,
+    render_loading_bar, render_table, split_content_area,
 };
 use ratatui::{
     layout::{Constraint, Rect},
@@ -26,7 +26,8 @@ pub struct ListViewSpec<'frame> {
     pub title: &'frame str,
     pub headers: Vec<&'frame str>,
     pub widths: Vec<Constraint>,
-    pub help_text: &'frame str,
+    /// Label of the Enter action ("Details", "Drill-down"); used both by the
+    /// reduced footer bar and by the filter-input help.
     pub filter_enter_label: &'frame str,
 }
 
@@ -72,7 +73,7 @@ pub fn render_list<'frame, TItem>(
     } else {
         let help = match active_filter {
             Some(_) => filter_input_help(spec.filter_enter_label),
-            None => spec.help_text.to_string(),
+            None => list_footer_help(spec.filter_enter_label),
         };
         render_action_bar(frame, help_area, &help);
     }
@@ -100,7 +101,6 @@ mod tests {
             title: "Items",
             headers: vec!["Name"],
             widths: vec![Constraint::Percentage(100)],
-            help_text: " q: Quit | /: Filter ",
             filter_enter_label: "Details",
         }
     }
@@ -169,6 +169,24 @@ mod tests {
         assert!(text.contains("Type: Filter"));
         assert!(text.contains("Enter: Details"));
         assert!(!text.contains("Quit"));
+    }
+
+    #[test]
+    fn test_render_list_shows_reduced_footer_with_space_hint() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let items = vec![Row_ {
+            name: "alpha".to_string(),
+        }];
+
+        draw_list(&mut terminal, &items, None, false, "|");
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("j/k: Navigate"));
+        assert!(text.contains("Enter: Details"));
+        assert!(text.contains("Space: All commands"));
+        assert!(!text.contains("Start/Stop"));
+        assert!(!text.contains("Delete"));
     }
 
     #[test]

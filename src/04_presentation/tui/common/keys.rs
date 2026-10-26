@@ -33,6 +33,7 @@ pub enum AppAction {
     ExportLogs,
     CopyLogLine,
     DisconnectContainer,
+    ToggleHelp,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -71,6 +72,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('P') => Some(AppAction::PullImages),
         KeyCode::Char('A') => Some(AppAction::Add),
         KeyCode::Char('o') => Some(AppAction::ToggleSort),
+        KeyCode::Char(' ') => Some(AppAction::ToggleHelp),
         _ => None,
     }
 }
@@ -344,6 +346,22 @@ mod tests {
         assert_eq!(
             map_key_to_action_for_context(key_event(KeyCode::Char('o')), KeyContext::Global),
             Some(AppAction::ToggleSort)
+        );
+    }
+
+    #[test]
+    fn test_toggle_help_space_key() {
+        assert_eq!(
+            map_key_to_action(key_event(KeyCode::Char(' '))),
+            Some(AppAction::ToggleHelp)
+        );
+    }
+
+    #[test]
+    fn test_toggle_help_allowed_in_global_context() {
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char(' ')), KeyContext::Global),
+            Some(AppAction::ToggleHelp)
         );
     }
 

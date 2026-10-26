@@ -19,7 +19,7 @@ pub use action_bar::{action_bar_line, render_action_bar, render_loading_bar};
 pub use breadcrumb::{breadcrumb_text, render_breadcrumb, BREADCRUMB_BAR_HEIGHT};
 pub use clipboard::copy_text;
 pub use filter::FilterState;
-pub use help_popup::{help_popup_lines, render_help_popup};
+pub use help_popup::{help_popup_lines, render_help_popup, HelpPopupState};
 pub use input::render_input_dialog;
 pub use input::{InputDialogState, InputField, TextInputState};
 pub use keys::{map_key_to_action, map_key_to_action_for_context, AppAction, KeyContext};

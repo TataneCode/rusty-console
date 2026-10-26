@@ -72,6 +72,20 @@ impl App {
                 AppAction::ToggleHelp | AppAction::Back | AppAction::Quit => {
                     self.help_popup_open = false;
                 }
+                AppAction::NavigateUp | AppAction::ScrollUp => self.help_popup_state.scroll_up(),
+                AppAction::NavigateDown | AppAction::ScrollDown => {
+                    self.help_popup_state.scroll_down();
+                }
+                AppAction::PageUp => {
+                    for _ in 0..10 {
+                        self.help_popup_state.scroll_up();
+                    }
+                }
+                AppAction::PageDown => {
+                    for _ in 0..10 {
+                        self.help_popup_state.scroll_down();
+                    }
+                }
                 _ => {}
             }
             return;
@@ -81,6 +95,7 @@ impl App {
             AppAction::ToggleHelp => {
                 if self.current_help_text().is_some() {
                     self.help_popup_open = true;
+                    self.help_popup_state = Default::default();
                 }
             }
             _ => match &self.screen {

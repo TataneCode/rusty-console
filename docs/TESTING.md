@@ -29,7 +29,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 |---|---|
 | `tests/stack_containers_ui.rs` | Homogeneity of the two container screens: Stacks > Containers has the same 7-column layout and the same container actions as Containers (logs, details, exec, start/stop, delete, pause, restart, prune, add, filter, sort, loading spinner); stack-level actions (Start All, Stop All, Remove All) live only on the stack list; filter shows the contextual help bar and narrows rows; `Esc` clears the filter; sort cycles A→Z → Z→A → default |
 | `tests/action_bar_ui.rs` | Action bar content (reduced footer + `Space: All commands` hint) and key highlighting on list screens and the main menu |
-| `tests/help_popup_ui.rs` | `Space` opens the keybindings popup with the full command list of the current screen; popup is modal and closes on `Esc`/`q`/`Space`; does not open over another modal; details screens list their own commands in the popup |
+| `tests/help_popup_ui.rs` | `Space` opens the keybindings popup with the full command list of the current screen; popup is modal and closes on `Esc`/`q`/`Space`; does not open over another modal; long lists scroll with `j`/`k` on short terminals; details screens list their own commands in the popup |
 | `tests/breadcrumb_ui.rs` | Breadcrumb path on the main menu, container logs and container list screens |
 | `tests/integration_docker.rs` | Real Docker daemon: pull images, create/start/stop/delete containers, inspect — skipped when no daemon is available |
 
@@ -45,7 +45,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 | Stack list: drill-down, start/stop/remove all, filter, sort | `stack/presenter.rs`, `app.rs` | `stack_containers_ui.rs` |
 | Stack containers == container list features | `stack/presenter.rs`, `stack/view.rs`, `app.rs` | `stack_containers_ui.rs` (7 tests) |
 | Logs/details return to their origin screen | `app.rs` | `stack_containers_ui.rs` |
-| Help popup: reduced footer, `Space` opens full keybinding list, modal, per-screen commands | `common/help_popup.rs`, `common/keys.rs` (`Space` mapping), `common/resources.rs` (`list_footer_help`), `app.rs`/`router.rs` (open/close state) | `help_popup_ui.rs` (5 tests) |
+| Help popup: reduced footer, `Space` opens full keybinding list, modal, scrollable on short terminals, per-screen commands | `common/help_popup.rs` (`HelpPopupState` scroll), `common/keys.rs` (`Space` mapping), `common/resources.rs` (`list_footer_help`), `app.rs`/`router.rs` (open/close/scroll state) | `help_popup_ui.rs` (6 tests) |
 | Exec shell (dialog, external terminal, inline fallback) | `exec.rs`, `app.rs` | — |
 | Image pull with progress bar, up-to-date skip | `app.rs` (pull workflow) | `integration_docker.rs` |
 | Real daemon end-to-end (create, run, stop, remove) | — | `integration_docker.rs` |

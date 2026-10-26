@@ -11,7 +11,7 @@ use crate::presentation::tui::common::{
     dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
     render_expanded_log_line, render_help_popup, render_input_dialog, render_main_menu,
     render_popup_message, render_selection_dialog, resources, split_app_area, AppAction,
-    InputDialogState, InputField, KeyContext, PopupMessage, Spinner,
+    HelpPopupState, InputDialogState, InputField, KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -92,6 +92,7 @@ pub struct App {
     pub expanded_log_line: Option<usize>,
     pub popup_message: Option<PopupMessage>,
     pub help_popup_open: bool,
+    pub help_popup_state: HelpPopupState,
     pub spinner: Spinner,
     exec_command_config: ExecCommandConfig,
     pub(crate) exec_shell_dialog: Option<ExecShellDialog>,
@@ -159,6 +160,7 @@ impl App {
             expanded_log_line: None,
             popup_message: None,
             help_popup_open: false,
+            help_popup_state: HelpPopupState::new(),
             spinner: Spinner::new(),
             exec_command_config,
             exec_shell_dialog: None,
@@ -453,7 +455,7 @@ impl App {
         }
         if self.help_popup_open {
             if let Some(help_text) = self.current_help_text() {
-                render_help_popup(frame, help_text);
+                render_help_popup(frame, help_text, &mut self.help_popup_state);
             }
         }
         if let Some(line) = self.container_presenter.logs.as_ref().and_then(|logs| {
@@ -2666,6 +2668,47 @@ mod tests {
 
         let rendered = render_app(&mut app);
         assert!(!rendered.contains("Keybindings"));
+    }
+
+    #[tokio::test]
+    async fn test_help_popup_scrolls_with_navigation_keys() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerList;
+
+        app.handle_action(AppAction::ToggleHelp).await;
+        assert!(app.help_popup_open);
+        assert_eq!(app.help_popup_state.scroll, 0);
+
+        app.handle_action(AppAction::NavigateUp).await;
+        assert_eq!(
+            app.help_popup_state.scroll, 0,
+            "scroll_up at top stays at 0"
+        );
+
+        for _ in 0..3 {
+            app.handle_action(AppAction::NavigateDown).await;
+        }
+        // Viewport length is set at render time; without a render it is 0,
+        // so scrolling is unbounded until the next draw. Render to bind it.
+        let _ = render_app(&mut app);
+        let viewport = app.help_popup_state.viewport_length;
+        let content = app.help_popup_state.content_length;
+        assert!(
+            viewport > 0 && content > viewport,
+            "test needs a scrollable popup"
+        );
+
+        for _ in 0..content {
+            app.handle_action(AppAction::NavigateDown).await;
+        }
+        let max_scroll = content - viewport;
+        assert_eq!(
+            app.help_popup_state.scroll, max_scroll,
+            "scroll_down clamps at content - viewport"
+        );
+
+        app.handle_action(AppAction::PageUp).await;
+        assert_eq!(app.help_popup_state.scroll, 0, "PageUp scrolls back to top");
     }
 
     #[test]

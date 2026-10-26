@@ -52,9 +52,17 @@ Transverse : listes Containers, Volumes, Images, Networks, Stacks (+ Stack Conta
 - **D8 : Tests** — UT co-localisés (`keys.rs`, `resources.rs`, `help_popup.rs`,
   `list_view.rs`, `app.rs`) + nouvelle suite IT `tests/help_popup_ui.rs` (footer réduit,
   ouverture/fermeture, modale, non-ouverture au-dessus d'un autre modal, écran de
-  détails). `tests/action_bar_ui.rs` et `tests/stack_containers_ui.rs` mis à jour sur le
-  footer réduit. Entrées ajoutées à la matrice de `docs/TESTING.md` ; `MANUAL.md` documente
-  la touche Espace.
+  détails, scroll sur terminal court). `tests/action_bar_ui.rs` et
+  `tests/stack_containers_ui.rs` mis à jour sur le footer réduit. Entrées ajoutées à la
+  matrice de `docs/TESTING.md` ; `MANUAL.md` documente la touche Espace.
+- **D9 : Popup scrollable (review PR #44)** — quand la liste de commandes dépasse la
+  hauteur utile (80 % du terminal − bordures − barre de fermeture), la popup scrolle
+  avec `j`/`k`/↑/↓ (1 ligne) et PgUp/PgDn (10 lignes), avec une scrollbar verticale à
+  droite (`ScrollbarOrientation::VerticalRight`, n'apparaît que si scrollable). L'état
+  `HelpPopupState` (scroll, content_length, viewport_length) est mis à jour à chaque
+  rendu et clampé ; il est remis à zéro à l'ouverture. Raison : sur un terminal < ~22
+  lignes, les 14 commandes de `CONTAINER_LIST_HELP` dépassaient la hauteur utile et
+  ratatui tronquait silencieusement sans indication.
 
 ## Étapes réalisées
 
@@ -67,14 +75,17 @@ Transverse : listes Containers, Volumes, Images, Networks, Stacks (+ Stack Conta
    suppression de `ListViewSpec.help_text` + UT.
 6. **app.rs / router.rs** — état `help_popup_open`, `current_help_text`, dispatch
    transverse, rendu pop-up + overlay, `has_modal_overlay` pub + UT.
-7. **Tests IT** — `tests/help_popup_ui.rs` (nouveau, 5 tests), mise à jour
+7. **Tests IT** — `tests/help_popup_ui.rs` (nouveau, 6 tests), mise à jour
    `action_bar_ui.rs` / `stack_containers_ui.rs`.
-8. **Docs** — `MANUAL.md` (touche Espace + pop-up), `docs/TESTING.md` (matrice).
+8. **Docs** — `MANUAL.md` (touche Espace + pop-up + scroll), `docs/TESTING.md` (matrice).
+9. **Scroll (review)** — `HelpPopupState` + `Paragraph::scroll` + `Scrollbar` vertical,
+   touches `j`/`k`/↑/↓/PgUp/PgDn dans la popup, UT (bornes de scroll) + IT (scroll sur
+   terminal 60x12).
 
 ## Vérification
 
 ```bash
 cargo fmt --check          # OK
 cargo clippy --all-targets -- -D warnings   # OK
-cargo test                 # 518 UT + 27 IT, 0 failed
+cargo test                 # 523 UT + 28 IT, 0 failed
 ```

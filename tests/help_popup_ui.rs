@@ -134,6 +134,54 @@ async fn popup_does_not_open_over_another_modal() {
 }
 
 #[tokio::test]
+async fn popup_scrolls_long_command_list_on_short_terminal() {
+    let Some(mut app) = build_app() else {
+        return;
+    };
+    app.screen = Screen::ContainerList;
+
+    app.handle_action(AppAction::ToggleHelp).await;
+
+    // 60x12 terminal: popup is 9 rows, content area holds 4 lines, but the
+    // container list has 14 commands — the tail is hidden until scrolled.
+    let backend = TestBackend::new(60, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|frame| app.render(frame)).unwrap();
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(text.contains("q: Quit"), "first commands visible: {text}");
+    assert!(
+        !text.contains("A: Add"),
+        "last command hidden before scroll: {text}"
+    );
+
+    for _ in 0..20 {
+        app.handle_action(AppAction::NavigateDown).await;
+    }
+    terminal.draw(|frame| app.render(frame)).unwrap();
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(
+        text.contains("A: Add"),
+        "last command visible after scroll: {text}"
+    );
+    assert!(
+        !text.contains("q: Quit"),
+        "first command scrolled out of view: {text}"
+    );
+}
+
+#[tokio::test]
 async fn details_screen_popup_lists_its_own_commands() {
     let Some(mut app) = build_app() else {
         return;

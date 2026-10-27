@@ -38,28 +38,13 @@ The container list shows all containers regardless of state, with live CPU and m
 | `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container) |
 | `p` | Pause or unpause the selected container |
 | `R` | Restart the selected container |
-| `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` in an external terminal window when one is available, otherwise inline (TUI suspended) |
+| `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` |
 | `l` | View container logs |
 | `Enter` | View container details (including live network I/O) |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune all stopped containers |
 
-#
-### Exec in an external terminal
-
-When a terminal emulator is available, the exec shell opens in a new terminal window
-and the TUI stays running in the background. Detection order:
-
-1. `RUSTY_CONSOLE_TERMINAL` environment variable (binary name or absolute path)
-2. Common emulators on `PATH`: `x-terminal-emulator`, `gnome-terminal`, `konsole`,
-   `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `xterm` (Linux); `wt.exe`,
-   `cmd.exe`, `powershell.exe` (Windows)
-
-If no emulator is found (e.g. headless server over SSH), the previous inline
-behavior is used: the TUI is suspended and `docker exec -it` runs in the same
-terminal, then the TUI resumes when the shell exits.
-
-## Log view
+### Log view
 
 The selected log line is highlighted. Copying copies the line as displayed
 (timestamp included when present) to the system clipboard (cross-platform).

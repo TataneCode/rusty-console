@@ -46,7 +46,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 | Stack containers == container list features | `stack/presenter.rs`, `stack/view.rs`, `app.rs` | `stack_containers_ui.rs` (7 tests) |
 | Logs/details return to their origin screen | `app.rs` | `stack_containers_ui.rs` |
 | Help popup: reduced footer, `Space` opens full keybinding list, modal, scrollable on short terminals, per-screen commands | `common/help_popup.rs` (`HelpPopupState` scroll), `common/keys.rs` (`Space` mapping), `common/resources.rs` (`list_footer_help`), `app.rs`/`router.rs` (open/close/scroll state) | `help_popup_ui.rs` (6 tests) |
-| Exec shell (dialog, external terminal, inline fallback) | `exec.rs`, `app.rs` | — |
+| Exec shell (dialog, inline suspend/resume in the same terminal) | `exec.rs`, `app.rs` | — |
 | Image pull with progress bar, up-to-date skip | `app.rs` (pull workflow) | `integration_docker.rs` |
 | Real daemon end-to-end (create, run, stop, remove) | — | `integration_docker.rs` |
 

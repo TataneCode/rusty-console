@@ -1,5 +1,5 @@
 use crate::application::error::AppError;
-use crate::domain::container::ContainerState;
+use crate::domain::container::{ContainerState, FileKind};
 use crate::domain::shared::ByteSize;
 use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
@@ -191,6 +191,103 @@ impl Drop for ContainerStatsSubscription {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileEntryDto {
+    pub name: String,
+    pub path: String,
+    pub kind: FileKind,
+    pub size: u64,
+    pub modified: Option<DateTime<Utc>>,
+    pub permissions: String,
+    pub link_target: Option<String>,
+}
+
+impl FileEntryDto {
+    /// Display name: directories and symlinks are suffixed, mirroring `ls`.
+    pub fn display_name(&self) -> String {
+        match self.kind {
+            FileKind::Directory => format!("{}/", self.name),
+            FileKind::Symlink => format!(
+                "{} -> {}",
+                self.name,
+                self.link_target.as_deref().unwrap_or("?")
+            ),
+            _ => self.name.clone(),
+        }
+    }
+
+    pub fn is_dir(&self) -> bool {
+        self.kind == FileKind::Directory
+    }
+
+    pub fn size_display(&self) -> String {
+        if self.is_dir() {
+            return String::new();
+        }
+        ByteSize::new(self.size as i64).human_readable()
+    }
+
+    pub fn modified_display(&self) -> String {
+        self.modified
+            .map(|ts| ts.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default()
+    }
+
+    pub fn permissions_display(&self) -> String {
+        if self.permissions.is_empty() {
+            String::from("-")
+        } else {
+            self.permissions.clone()
+        }
+    }
+}
+
+/// A file download fetched from a container: raw bytes plus the real file
+/// size (bytes may be truncated to a read limit).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileContentDto {
+    pub data: Vec<u8>,
+    pub total_size: u64,
+    pub truncated: bool,
+}
+
+impl FileContentDto {
+    pub fn text(&self) -> Option<String> {
+        if self.data.contains(&0) {
+            return None;
+        }
+        String::from_utf8(self.data.clone()).ok()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileListingDto {
+    pub container_id: String,
+    pub container_name: String,
+    pub path: String,
+    pub entries: Vec<FileEntryDto>,
+}
+
+impl FileListingDto {
+    pub fn parent_path(&self) -> Option<String> {
+        parent_path(&self.path)
+    }
+}
+
+/// Parent path of an absolute container path: `/a/b` -> `/a`, `/a` -> `/`,
+/// `/` -> `None`.
+pub fn parent_path(path: &str) -> Option<String> {
+    let trimmed = path.trim_end_matches('/');
+    if trimmed.is_empty() || trimmed == "/" {
+        return None;
+    }
+    match trimmed.rfind('/') {
+        Some(0) => Some("/".to_string()),
+        Some(index) => Some(trimmed[..index].to_string()),
+        None => None,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortMappingSpec {
     pub host_port: u16,
     pub container_port: u16,
@@ -255,6 +352,7 @@ fn invalid_port_mapping(entry: &str, reason: &str) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     fn make_runtime_stats() -> ContainerRuntimeStatsDto {
         ContainerRuntimeStatsDto {
@@ -345,7 +443,6 @@ mod tests {
 
     #[test]
     fn log_line_display_line_prefixes_timestamp_when_present() {
-        use chrono::TimeZone;
         let line = LogLineDto {
             timestamp: Some(Utc.with_ymd_and_hms(2026, 10, 26, 10, 30, 0).unwrap()),
             message: "hello".to_string(),
@@ -360,6 +457,82 @@ mod tests {
             message: "hello".to_string(),
         };
         assert_eq!(line.display_line(), "hello");
+    }
+
+    fn make_entry(kind: FileKind, name: &str) -> FileEntryDto {
+        FileEntryDto {
+            name: name.to_string(),
+            path: format!("/dir/{name}"),
+            kind,
+            size: 1536,
+            modified: Some(Utc.with_ymd_and_hms(2026, 10, 26, 10, 30, 0).unwrap()),
+            permissions: "-rw-r--r--".to_string(),
+            link_target: None,
+        }
+    }
+
+    #[test]
+    fn file_entry_display_name_suffixes_directories_and_symlinks() {
+        let dir = make_entry(FileKind::Directory, "etc");
+        assert_eq!(dir.display_name(), "etc/");
+
+        let mut link = make_entry(FileKind::Symlink, "lib64");
+        link.link_target = Some("/usr/lib64".to_string());
+        assert_eq!(link.display_name(), "lib64 -> /usr/lib64");
+
+        let file = make_entry(FileKind::File, "app.conf");
+        assert_eq!(file.display_name(), "app.conf");
+    }
+
+    #[test]
+    fn file_entry_size_display_is_empty_for_directories() {
+        assert_eq!(make_entry(FileKind::Directory, "etc").size_display(), "");
+        assert_eq!(
+            make_entry(FileKind::File, "app.conf").size_display(),
+            "1.50 KB"
+        );
+    }
+
+    #[test]
+    fn file_entry_modified_and_permissions_display_fallbacks() {
+        let mut entry = make_entry(FileKind::File, "app.conf");
+        assert_eq!(entry.modified_display(), "2026-10-26 10:30:00");
+        entry.modified = None;
+        assert_eq!(entry.modified_display(), "");
+        entry.permissions = String::new();
+        assert_eq!(entry.permissions_display(), "-");
+    }
+
+    #[test]
+    fn parent_path_walks_up_to_root() {
+        assert_eq!(parent_path("/a/b/c"), Some("/a/b".to_string()));
+        assert_eq!(parent_path("/a"), Some("/".to_string()));
+        assert_eq!(parent_path("/"), None);
+        assert_eq!(parent_path("/a/"), Some("/".to_string()));
+    }
+
+    #[test]
+    fn file_content_text_rejects_binary_and_invalid_utf8() {
+        let text = FileContentDto {
+            data: b"hello".to_vec(),
+            total_size: 5,
+            truncated: false,
+        };
+        assert_eq!(text.text(), Some("hello".to_string()));
+
+        let binary = FileContentDto {
+            data: vec![0, 1, 2],
+            total_size: 3,
+            truncated: false,
+        };
+        assert_eq!(binary.text(), None);
+
+        let invalid = FileContentDto {
+            data: vec![0xff, 0xfe],
+            total_size: 2,
+            truncated: false,
+        };
+        assert_eq!(invalid.text(), None);
     }
 
     #[test]

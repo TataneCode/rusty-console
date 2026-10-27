@@ -31,6 +31,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 | `tests/action_bar_ui.rs` | Action bar content (reduced footer + `Space: All commands` hint) and key highlighting on list screens and the main menu |
 | `tests/help_popup_ui.rs` | `Space` opens the keybindings popup with the full command list of the current screen; popup is modal and closes on `Esc`/`q`/`Space`; does not open over another modal; long lists scroll with `j`/`k` on short terminals; details screens list their own commands in the popup |
 | `tests/breadcrumb_ui.rs` | Breadcrumb path on the main menu, container logs and container list screens |
+| `tests/container_explorer_ui.rs` | File explorer screen: columns (name/size/modified/permissions), directory color, selection highlight, breadcrumb, `Space` help popup with explorer commands, `Esc` return, sort 3-state cycle, filter contextual help bar |
 | `tests/integration_docker.rs` | Real Docker daemon: pull images, create/start/stop/delete containers, inspect — skipped when no daemon is available |
 
 ## Scenario matrix (user-facing behavior)
@@ -40,6 +41,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 | Container list: filter / sort / selection bounds | `container/presenter.rs`, `common/list.rs` | — |
 | Container list: start/stop, pause, restart, delete, prune, add | `app.rs` (confirm-action paths) | — |
 | Logs: navigation, search, export | `container/presenter.rs`, `container/view.rs` | `breadcrumb_ui.rs` (breadcrumb) |
+| File explorer (`b`): listing, navigation, parent, filter, sort, view file, copy to host, help popup | `container/explorer_presenter.rs`, `container/view.rs` (explorer + file view), `container/actions.rs`, `container/dto.rs`, `container/mapper.rs`, `container/service.rs`, `container/archive.rs` (extract), `infrastructure/docker/container/archive.rs` (parse), `common/keys.rs` (`b`/`c`/`v`/`h` context), `app.rs` (explorer handlers) | `container_explorer_ui.rs` (8 tests) |
 | Logs: selected line highlighted, `y` copies it to clipboard (popup feedback) | `container/view.rs` (highlight style), `common/keys.rs` (`y` context), `app.rs` (copy handler), `container/dto.rs` (`display_line`) | `logs_copy_ui.rs` |
 | Live CPU/memory stats streaming | `app.rs` (`drain_container_stats`), `container/presenter.rs` | — |
 | Stack list: drill-down, start/stop/remove all, filter, sort | `stack/presenter.rs`, `app.rs` | `stack_containers_ui.rs` |

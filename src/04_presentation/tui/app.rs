@@ -15,8 +15,9 @@ use crate::presentation::tui::common::{
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
-    render_container_details, render_container_list, render_container_logs, ContainerActions,
-    ContainerPresenter, LogSearchView,
+    render_container_details, render_container_explorer, render_container_list,
+    render_container_logs, render_file_view, ContainerActions, ContainerExplorerPresenter,
+    ContainerPresenter, ExplorerView, LogSearchView,
 };
 use crate::presentation::tui::event::{AppEvent, EventHandler};
 use crate::presentation::tui::exec::{
@@ -50,6 +51,7 @@ pub enum Screen {
     ContainerList,
     ContainerLogs,
     ContainerDetails,
+    ContainerExplorer,
     VolumeList,
     VolumeDetails,
     ImageList,
@@ -75,9 +77,11 @@ pub struct App {
     pub previous_screen: Option<Screen>,
     pub(crate) logs_return_screen: Option<Screen>,
     pub(crate) details_return_screen: Option<Screen>,
+    pub(crate) explorer_return_screen: Option<Screen>,
     pub should_quit: bool,
     pub menu_state: ListState,
     pub container_presenter: ContainerPresenter,
+    pub container_explorer: ContainerExplorerPresenter,
     pub volume_presenter: VolumePresenter,
     pub image_presenter: ImagePresenter,
     pub stack_presenter: StackPresenter,
@@ -143,9 +147,11 @@ impl App {
             previous_screen: None,
             logs_return_screen: None,
             details_return_screen: None,
+            explorer_return_screen: None,
             should_quit: false,
             menu_state,
             container_presenter: ContainerPresenter::new(),
+            container_explorer: ContainerExplorerPresenter::new(),
             volume_presenter: VolumePresenter::new(),
             image_presenter: ImagePresenter::new(),
             stack_presenter: StackPresenter::new(),
@@ -218,6 +224,7 @@ impl App {
                         key,
                         match self.screen {
                             Screen::ContainerLogs => KeyContext::ContainerLogs,
+                            Screen::ContainerExplorer => KeyContext::ContainerExplorer,
                             Screen::NetworkDetails => KeyContext::NetworkDetails,
                             _ => KeyContext::Global,
                         },
@@ -308,6 +315,27 @@ impl App {
                 if let Some(container) = &self.container_presenter.selected_container {
                     render_container_details(frame, content_area, container);
                 }
+            }
+            Screen::ContainerExplorer => {
+                let explorer = &mut self.container_explorer;
+                let is_loading = explorer.is_loading();
+                let active_filter = explorer.active_filter().map(str::to_string);
+                let entries: Vec<_> = explorer.filtered_items().into_iter().cloned().collect();
+                let container_name = explorer.container_name.clone();
+                let path = explorer.current_path();
+                render_container_explorer(
+                    frame,
+                    content_area,
+                    ExplorerView {
+                        entries: &entries,
+                        state: &mut explorer.selection.state,
+                        container_name: &container_name,
+                        path: &path,
+                        active_filter: active_filter.as_deref(),
+                        is_loading,
+                        spinner_char,
+                    },
+                );
             }
             Screen::VolumeList => {
                 let presenter = &mut self.volume_presenter;
@@ -448,7 +476,8 @@ impl App {
             || self.popup_message.is_some()
             || self.exec_shell_dialog.is_some()
             || self.add_dialog.is_some()
-            || self.help_popup_open;
+            || self.help_popup_open
+            || self.container_explorer.file_view.is_some();
         if has_overlay {
             dim_background(frame);
         }
@@ -462,6 +491,13 @@ impl App {
                 .and_then(|index| logs.lines.get(index))
         }) {
             render_expanded_log_line(frame, &line.timestamp_display(), &line.message);
+        }
+        if let (Some(content), Some(path)) = (
+            self.container_explorer.file_view.as_ref(),
+            self.container_explorer.file_view_path.as_deref(),
+        ) {
+            let scroll = self.container_explorer.file_view_scroll;
+            render_file_view(frame, path, content, scroll);
         }
         if let Some((action, selected_yes)) = &self.confirm_dialog {
             render_confirm_dialog(frame, confirm_message(*action), *selected_yes);
@@ -557,6 +593,25 @@ impl App {
                         "{} {}",
                         container.name,
                         resources::BREADCRUMB_DETAILS_LABEL
+                    ));
+                }
+            }
+            Screen::ContainerExplorer => {
+                segments.push(resources::CONTAINER_TITLE.to_string());
+                let name = if self.container_explorer.container_name.is_empty() {
+                    self.container_presenter
+                        .selected_container
+                        .as_ref()
+                        .map(|container| container.name.clone())
+                } else {
+                    Some(self.container_explorer.container_name.clone())
+                };
+                if let Some(name) = name {
+                    segments.push(format!(
+                        "{} {} {}",
+                        name,
+                        resources::BREADCRUMB_FILES_LABEL,
+                        self.container_explorer.current_path()
                     ));
                 }
             }
@@ -3508,5 +3563,306 @@ mod tests {
             Some(PopupMessage::Error(msg)) => assert!(msg.contains("name taken")),
             other => panic!("expected error popup, got {other:?}"),
         }
+    }
+
+    fn make_file_entry_domain(
+        name: &str,
+        path: &str,
+        is_dir: bool,
+    ) -> crate::domain::container::FileEntry {
+        use crate::domain::container::{FileKind, FilePermissions};
+        crate::domain::container::FileEntry::new(
+            name,
+            path,
+            if is_dir {
+                FileKind::Directory
+            } else {
+                FileKind::File
+            },
+            if is_dir { 0 } else { 1536 },
+            Some(1_700_000_000),
+            FilePermissions::new(if is_dir { 0o040755 } else { 0o100644 }),
+        )
+        .unwrap()
+    }
+
+    fn make_file_listing_domain(path: &str) -> crate::domain::container::FileListing {
+        let child = |name: &str, is_dir: bool| {
+            let full = if path == "/" {
+                format!("/{name}")
+            } else {
+                format!("{path}/{name}")
+            };
+            make_file_entry_domain(name, &full, is_dir)
+        };
+        crate::domain::container::FileListing::new(
+            path,
+            vec![child("etc", true), child("app.conf", false)],
+        )
+        .unwrap()
+    }
+
+    fn explorer_app() -> App {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo
+            .expect_list_files()
+            .returning(|_, path| Ok(make_file_listing_domain(path)));
+        container_repo
+            .expect_read_file()
+            .returning(|_, _, _| Ok((b"hello world\n".to_vec(), 12)));
+        container_repo.expect_download_archive().returning(|_, _| {
+            let mut builder = tar::Builder::new(Vec::new());
+            let mut header = tar::Header::new_gnu();
+            header.set_size(5);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, "app.conf", &b"hello"[..])
+                .unwrap();
+            Ok(builder.into_inner().unwrap())
+        });
+        build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_browse_files_opens_explorer_on_container_root() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        assert_eq!(app.screen, Screen::ContainerExplorer);
+        assert_eq!(app.explorer_return_screen, Some(Screen::ContainerList));
+        assert_eq!(app.container_explorer.current_path(), "/");
+        assert_eq!(app.container_explorer.list.items.len(), 2);
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("Files: web /"));
+        assert!(rendered.contains("etc/"));
+        assert!(rendered.contains("app.conf"));
+    }
+
+    #[tokio::test]
+    async fn test_explorer_navigation_enter_parent_and_back() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        // Enter selects the first directory (etc).
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.container_explorer.current_path(), "/etc");
+        assert!(app.container_explorer.can_go_up());
+
+        // h goes back to the parent.
+        app.handle_action(AppAction::GoToParent).await;
+        assert_eq!(app.container_explorer.current_path(), "/");
+
+        // Esc leaves the explorer and returns to the container list.
+        app.handle_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::ContainerList);
+        assert!(app.container_explorer.listing.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_explorer_enter_on_file_does_not_navigate() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        app.handle_action(AppAction::NavigateDown).await;
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.container_explorer.current_path(), "/");
+        assert_eq!(app.screen, Screen::ContainerExplorer);
+    }
+
+    #[tokio::test]
+    async fn test_explorer_view_file_opens_and_closes_popup() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        app.handle_action(AppAction::NavigateDown).await;
+        app.handle_action(AppAction::ViewFile).await;
+        assert!(app.container_explorer.file_view.is_some());
+        assert_eq!(
+            app.container_explorer.file_view_path.as_deref(),
+            Some("/app.conf")
+        );
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("File content /app.conf"));
+        assert!(rendered.contains("hello world"));
+
+        // Navigation scrolls the popup, Esc closes it.
+        app.handle_action(AppAction::NavigateDown).await;
+        app.handle_action(AppAction::Back).await;
+        assert!(app.container_explorer.file_view.is_none());
+        assert_eq!(app.screen, Screen::ContainerExplorer);
+    }
+
+    #[tokio::test]
+    async fn test_explorer_view_file_inert_on_directories() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        app.handle_action(AppAction::ViewFile).await;
+        assert!(app.container_explorer.file_view.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_explorer_copy_file_shows_success_popup() {
+        let dir =
+            std::env::temp_dir().join(format!("rusty_console_explorer_app_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let guard = CwdGuard::new(&dir);
+
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        app.handle_action(AppAction::NavigateDown).await;
+        app.handle_action(AppAction::CopyFile).await;
+
+        match &app.popup_message {
+            Some(PopupMessage::Info(msg)) => assert!(msg.contains("Copied to")),
+            other => panic!("expected info popup, got {other:?}"),
+        }
+        assert!(dir.join("app.conf").exists());
+
+        drop(guard);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn test_explorer_filter_and_sort() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        app.handle_action(AppAction::ActivateFilter).await;
+        assert!(app.container_explorer.is_filter_active());
+        assert!(app.handle_filter_key(KeyCode::Char('a')));
+        assert!(app.handle_filter_key(KeyCode::Char('p')));
+        assert_eq!(app.container_explorer.filtered_items().len(), 1);
+        assert!(app.handle_filter_key(KeyCode::Esc));
+        assert!(!app.container_explorer.is_filter_active());
+        assert_eq!(app.container_explorer.filtered_items().len(), 2);
+
+        app.handle_action(AppAction::ToggleSort).await;
+        let names: Vec<&str> = app
+            .container_explorer
+            .filtered_items()
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["app.conf", "etc"]);
+    }
+
+    #[tokio::test]
+    async fn test_explorer_help_popup_lists_explorer_commands() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        app.handle_action(AppAction::ToggleHelp).await;
+        assert!(app.help_popup_open);
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("Keybindings"));
+        assert!(rendered.contains("c: Copy"));
+        assert!(rendered.contains("v: View"));
+        assert!(rendered.contains("h: Up"));
+    }
+
+    #[tokio::test]
+    async fn test_explorer_listing_error_shows_popup_and_stays() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo
+            .expect_list_files()
+            .returning(|_, _| Err(crate::application::error::AppError::repository("boom")));
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            MockImageRepository::new(),
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("boom")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_render_container_explorer_screen_and_file_view_overlay() {
+        let mut app = empty_app();
+        app.container_explorer.open("abc123", "web");
+        app.container_explorer
+            .set_listing(crate::application::container::FileListingDto {
+                container_id: "abc123".to_string(),
+                container_name: "web".to_string(),
+                path: "/".to_string(),
+                entries: vec![crate::application::container::FileEntryDto {
+                    name: "app.conf".to_string(),
+                    path: "/app.conf".to_string(),
+                    kind: crate::domain::container::FileKind::File,
+                    size: 1536,
+                    modified: None,
+                    permissions: "-rw-r--r--".to_string(),
+                    link_target: None,
+                }],
+            });
+        app.screen = Screen::ContainerExplorer;
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("Files: web /"));
+        assert!(rendered.contains("app.conf"));
+        assert!(rendered.contains("files /"));
+
+        app.container_explorer.show_file(
+            "/app.conf",
+            crate::application::container::FileContentDto {
+                data: b"content".to_vec(),
+                total_size: 7,
+                truncated: false,
+            },
+        );
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("File content /app.conf"));
+        assert!(rendered.contains("content"));
     }
 }

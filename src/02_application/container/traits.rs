@@ -2,7 +2,7 @@
 use crate::application::container::dto::{ContainerStatsSubscription, CreateContainerRequest};
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
-use crate::domain::container::Container;
+use crate::domain::container::{Container, FileListing};
 use async_trait::async_trait;
 
 #[cfg_attr(test, mockall::automock)]
@@ -24,4 +24,14 @@ pub trait ContainerRepository: Send + Sync {
         &self,
         container_ids: Vec<String>,
     ) -> Result<ContainerStatsSubscription, AppError>;
+    async fn list_files(&self, id: &str, path: &str) -> Result<FileListing, AppError>;
+    /// Downloads up to `max_bytes` of the file; returns the bytes read and
+    /// the real file size (which may exceed `max_bytes`).
+    async fn read_file(
+        &self,
+        id: &str,
+        path: &str,
+        max_bytes: u64,
+    ) -> Result<(Vec<u8>, u64), AppError>;
+    async fn download_archive(&self, id: &str, path: &str) -> Result<Vec<u8>, AppError>;
 }

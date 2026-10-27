@@ -1,5 +1,6 @@
-use crate::application::container::dto::ContainerDto;
-use crate::domain::container::Container;
+use crate::application::container::dto::{ContainerDto, FileEntryDto, FileListingDto};
+use crate::domain::container::{Container, FileListing};
+use chrono::{TimeZone, Utc};
 
 pub struct ContainerMapper;
 
@@ -33,6 +34,39 @@ impl ContainerMapper {
 
     pub fn to_dto_list(containers: &[Container]) -> Vec<ContainerDto> {
         containers.iter().map(Self::to_dto).collect()
+    }
+
+    pub fn file_listing_to_dto(
+        listing: &FileListing,
+        container_id: &str,
+        container_name: &str,
+    ) -> FileListingDto {
+        FileListingDto {
+            container_id: container_id.to_string(),
+            container_name: container_name.to_string(),
+            path: listing.path().to_string(),
+            entries: listing
+                .entries()
+                .iter()
+                .map(Self::file_entry_to_dto)
+                .collect(),
+        }
+    }
+
+    fn file_entry_to_dto(entry: &crate::domain::container::FileEntry) -> FileEntryDto {
+        FileEntryDto {
+            name: entry.name().to_string(),
+            path: entry.path().to_string(),
+            kind: entry.kind(),
+            size: entry.size(),
+            modified: entry.modified().map(|ts| {
+                Utc.timestamp_opt(ts, 0)
+                    .single()
+                    .unwrap_or_else(|| Utc.timestamp_opt(0, 0).unwrap())
+            }),
+            permissions: entry.permissions().display(),
+            link_target: entry.link_target().map(str::to_string),
+        }
     }
 }
 
@@ -176,5 +210,46 @@ mod tests {
     fn to_dto_list_empty_input() {
         let dtos = ContainerMapper::to_dto_list(&[]);
         assert!(dtos.is_empty());
+    }
+
+    fn make_file_listing() -> crate::domain::container::FileListing {
+        use crate::domain::container::{FileEntry, FileKind, FilePermissions};
+        let entries = vec![
+            FileEntry::new(
+                "etc",
+                "/etc",
+                FileKind::Directory,
+                0,
+                Some(1_700_000_000),
+                FilePermissions::new(0o040755),
+            )
+            .unwrap(),
+            FileEntry::new(
+                "app.conf",
+                "/app.conf",
+                FileKind::File,
+                1536,
+                None,
+                FilePermissions::new(0o100644),
+            )
+            .unwrap(),
+        ];
+        crate::domain::container::FileListing::new("/", entries).unwrap()
+    }
+
+    #[test]
+    fn file_listing_to_dto_maps_entries_and_metadata() {
+        let listing = make_file_listing();
+        let dto = ContainerMapper::file_listing_to_dto(&listing, "abc123", "web");
+
+        assert_eq!(dto.container_id, "abc123");
+        assert_eq!(dto.container_name, "web");
+        assert_eq!(dto.path, "/");
+        assert_eq!(dto.entries.len(), 2);
+        assert_eq!(dto.entries[0].display_name(), "etc/");
+        assert_eq!(dto.entries[0].permissions, "drwxr-xr-x");
+        assert_eq!(dto.entries[0].modified_display(), "2023-11-14 22:13:20");
+        assert_eq!(dto.entries[1].size_display(), "1.50 KB");
+        assert_eq!(dto.entries[1].permissions, "-rw-r--r--");
     }
 }

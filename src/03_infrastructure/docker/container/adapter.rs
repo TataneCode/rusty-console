@@ -3,16 +3,17 @@ use crate::application::container::{
 };
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
-use crate::domain::container::Container;
+use crate::domain::container::{Container, FileListing};
 use crate::infrastructure::docker::client::DockerClient;
+use crate::infrastructure::docker::container::archive;
 use crate::infrastructure::docker::container::mapper::ContainerInfraMapper;
 use crate::infrastructure::error::InfraError;
 use async_trait::async_trait;
 use bollard::models::{ContainerCreateBody, HostConfig, PortBinding};
 use bollard::query_parameters::{
-    CreateContainerOptions, ListContainersOptions, LogsOptions, PruneContainersOptions,
-    RemoveContainerOptions, RestartContainerOptions, StartContainerOptions, StatsOptions,
-    StopContainerOptions,
+    CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions,
+    PruneContainersOptions, RemoveContainerOptions, RestartContainerOptions, StartContainerOptions,
+    StatsOptions, StopContainerOptions,
 };
 use futures_util::StreamExt;
 use std::collections::HashMap;
@@ -27,6 +28,26 @@ pub struct ContainerAdapter {
 impl ContainerAdapter {
     pub fn new(docker: DockerClient) -> Self {
         ContainerAdapter { docker }
+    }
+
+    async fn download_archive_bytes(&self, id: &str, path: &str) -> Result<Vec<u8>, AppError> {
+        let options = DownloadFromContainerOptions {
+            path: path.to_string(),
+        };
+        let mut stream = self
+            .docker
+            .inner()
+            .download_from_container(id, Some(options));
+        let mut archive = Vec::new();
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(chunk) => archive.extend_from_slice(&chunk),
+                Err(e) => {
+                    return Err(AppError::from(InfraError::from(e)));
+                }
+            }
+        }
+        Ok(archive)
     }
 
     async fn collect_logs(&self, id: &str, tail: Option<usize>) -> Result<String, AppError> {
@@ -304,5 +325,24 @@ impl ContainerRepository for ContainerAdapter {
         drop(sender);
 
         Ok(ContainerStatsSubscription::new(receiver, tasks))
+    }
+
+    async fn list_files(&self, id: &str, path: &str) -> Result<FileListing, AppError> {
+        let archive = self.download_archive_bytes(id, path).await?;
+        archive::parse_listing(&archive, path)
+    }
+
+    async fn read_file(
+        &self,
+        id: &str,
+        path: &str,
+        max_bytes: u64,
+    ) -> Result<(Vec<u8>, u64), AppError> {
+        let archive = self.download_archive_bytes(id, path).await?;
+        archive::parse_file_content(&archive, max_bytes)
+    }
+
+    async fn download_archive(&self, id: &str, path: &str) -> Result<Vec<u8>, AppError> {
+        self.download_archive_bytes(id, path).await
     }
 }

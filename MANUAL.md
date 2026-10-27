@@ -40,9 +40,34 @@ The container list shows all containers regardless of state, with live CPU and m
 | `R` | Restart the selected container |
 | `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` |
 | `l` | View container logs |
+| `b` | Browse the container filesystem (file explorer) |
 | `Enter` | View container details (including live network I/O) |
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune all stopped containers |
+
+### File explorer
+
+Pressing `b` on a container opens a file explorer on the container's filesystem,
+starting at `/`. Directories are suffixed with `/` and shown in their own color
+(cyan); symlinks are magenta. Each row shows the size (empty for directories),
+the last modification date, and the Unix permissions (`-rw-r--r--` style).
+The selected entry is highlighted like the log view. Copying extracts the file
+or directory into the directory the binary was launched from (same result as
+`docker cp <container>:<path> .`), via the Docker archive API.
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` or arrows | Move selection (highlighted) |
+| `Enter` | Enter the selected directory (no-op on a file) |
+| `h` or `←` | Go to the parent directory |
+| `/` | Search entries by name (case-insensitive, `Esc` to clear) |
+| `o` | Cycle sort by name: A→Z → Z→A → default |
+| `c` | Copy the selected file/directory to the host (current directory) |
+| `v` | View the selected file (text; binary files show a notice; limited to 1 MB) |
+| `r` | Refresh the current directory |
+| `Esc` / `q` | Back to the container list |
+
+In the file view, scroll with `j`/`k` and close with `Esc`/`q`/`v`.
 
 ### Log view
 

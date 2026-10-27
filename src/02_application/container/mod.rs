@@ -1,3 +1,4 @@
+pub mod archive;
 pub mod dto;
 pub mod log_parser;
 pub mod mapper;
@@ -5,9 +6,9 @@ pub mod service;
 pub mod traits;
 
 pub use dto::{
-    parse_port_mappings, ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto,
+    parent_path, parse_port_mappings, ContainerDto, ContainerLogsDto, ContainerRuntimeStatsDto,
     ContainerStatsEvent, ContainerStatsSubscription, ContainerStatsUpdate, CreateContainerRequest,
-    LogLineDto, PortMappingSpec,
+    FileContentDto, FileEntryDto, FileListingDto, LogLineDto, PortMappingSpec,
 };
-pub use service::ContainerService;
+pub use service::{ContainerService, FILE_VIEW_MAX_BYTES};
 pub use traits::ContainerRepository;

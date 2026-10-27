@@ -42,6 +42,16 @@ impl Theme {
         Style::default().fg(Color::Yellow)
     }
 
+    /// File explorer: directories get their own color, distinct from files.
+    pub fn directory_style() -> Style {
+        Style::default().fg(Color::Cyan)
+    }
+
+    /// File explorer: symlinks get their own color.
+    pub fn symlink_style() -> Style {
+        Style::default().fg(Color::Magenta)
+    }
+
     pub fn in_use_style() -> Style {
         Style::default().fg(Color::Yellow)
     }
@@ -151,6 +161,8 @@ mod tests {
         assert_eq!(Theme::error_style().fg, Some(Color::Red));
         assert_eq!(Theme::info_style().fg, Some(Color::Cyan));
         assert_eq!(Theme::success_style().fg, Some(Color::Green));
+        assert_eq!(Theme::directory_style().fg, Some(Color::Cyan));
+        assert_eq!(Theme::symlink_style().fg, Some(Color::Magenta));
     }
 
     #[test]

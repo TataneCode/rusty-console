@@ -1,6 +1,6 @@
 use crate::application::container::{
     ContainerDto, ContainerLogsDto, ContainerService, ContainerStatsSubscription,
-    CreateContainerRequest,
+    CreateContainerRequest, FileContentDto, FileListingDto,
 };
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
@@ -93,6 +93,32 @@ impl ContainerActions {
     ) -> Result<ContainerStatsSubscription, AppError> {
         self.service.subscribe_stats(container_ids).await
     }
+
+    pub async fn list_files(
+        &self,
+        container_id: &str,
+        container_name: &str,
+        path: &str,
+    ) -> Result<FileListingDto, AppError> {
+        self.service
+            .list_container_files(container_id, container_name, path)
+            .await
+    }
+
+    pub async fn read_file(
+        &self,
+        container_id: &str,
+        path: &str,
+        max_bytes: u64,
+    ) -> Result<FileContentDto, AppError> {
+        self.service
+            .read_container_file(container_id, path, max_bytes)
+            .await
+    }
+
+    pub async fn copy_to_host(&self, container_id: &str, path: &str) -> Result<PathBuf, AppError> {
+        self.service.copy_to_current_dir(container_id, path).await
+    }
 }
 
 #[cfg(test)]
@@ -169,5 +195,60 @@ mod tests {
             .subscribe_stats(vec![container.id.clone()])
             .await
             .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_container_actions_delegate_file_operations() {
+        use crate::application::container::{FileEntryDto, FileListingDto};
+        use crate::domain::container::FileKind;
+
+        let mut mock = MockContainerRepository::new();
+        mock.expect_list_files().returning(|_, _| {
+            use crate::domain::container::{FileEntry, FileListing, FilePermissions};
+            Ok(FileListing::new(
+                "/etc",
+                vec![FileEntry::new(
+                    "nginx",
+                    "/etc/nginx",
+                    FileKind::Directory,
+                    0,
+                    None,
+                    FilePermissions::new(0o040755),
+                )
+                .unwrap()],
+            )
+            .unwrap())
+        });
+        mock.expect_read_file()
+            .returning(|_, _, _| Ok((b"hello".to_vec(), 5)));
+        mock.expect_download_archive()
+            .returning(|_, _| Ok(vec![0x1f, 0x8b]));
+
+        let actions = make_action(mock);
+        let listing: FileListingDto = actions.list_files("abc123", "web", "/etc").await.unwrap();
+        assert_eq!(listing.path, "/etc");
+        assert_eq!(listing.entries.len(), 1);
+        assert_eq!(
+            listing.entries[0],
+            FileEntryDto {
+                name: "nginx".to_string(),
+                path: "/etc/nginx".to_string(),
+                kind: FileKind::Directory,
+                size: 0,
+                modified: None,
+                permissions: "drwxr-xr-x".to_string(),
+                link_target: None,
+            }
+        );
+
+        let content = actions
+            .read_file("abc123", "/etc/app.conf", 1024)
+            .await
+            .unwrap();
+        assert_eq!(content.text(), Some("hello".to_string()));
+        assert!(!content.truncated);
+
+        // The archive fixture is not a valid tar: copy must surface the error.
+        assert!(actions.copy_to_host("abc123", "/etc/nginx").await.is_err());
     }
 }

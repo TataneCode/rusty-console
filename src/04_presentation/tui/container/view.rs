@@ -1,13 +1,13 @@
-use crate::application::container::{ContainerDto, ContainerLogsDto};
-use crate::domain::container::ContainerState;
+use crate::application::container::{ContainerDto, ContainerLogsDto, FileContentDto, FileEntryDto};
+use crate::domain::container::{ContainerState, FileKind};
 use crate::presentation::tui::common::{
-    render_action_bar, render_list, resources, split_content_area, truncate_text, ListHelpBar,
-    ListRenderInput, ListViewSpec, Theme,
+    centered_rect, render_action_bar, render_list, resources, split_content_area, truncate_text,
+    ListHelpBar, ListRenderInput, ListViewSpec, Theme,
 };
 use ratatui::{
     layout::{Constraint, Rect},
     text::{Line, Span},
-    widgets::{Cell, List, ListItem, ListState, Paragraph, Row, TableState, Wrap},
+    widgets::{Cell, Clear, List, ListItem, ListState, Paragraph, Row, TableState, Wrap},
     Frame,
 };
 
@@ -135,6 +135,115 @@ pub fn render_container_logs(
     }
 }
 
+/// Inputs of the container file explorer view: the entries of the current
+/// directory, the container identity, the current path and the UI state.
+pub struct ExplorerView<'a> {
+    pub entries: &'a [FileEntryDto],
+    pub state: &'a mut TableState,
+    pub container_name: &'a str,
+    pub path: &'a str,
+    pub active_filter: Option<&'a str>,
+    pub is_loading: bool,
+    pub spinner_char: &'a str,
+}
+
+/// Renders the container file explorer: a table of the current directory with
+/// directories highlighted in their own color, plus the contextual action bar
+/// (loading / filter input / full help, same behavior as the list screens).
+pub fn render_container_explorer(frame: &mut Frame, area: Rect, view: ExplorerView) {
+    let ExplorerView {
+        entries,
+        state,
+        container_name,
+        path,
+        active_filter,
+        is_loading,
+        spinner_char,
+    } = view;
+    let [content_area, help_area] = split_content_area(area);
+    let title = resources::filter_prompt_title(
+        &resources::container_explorer_title(container_name, path),
+        active_filter,
+    );
+
+    let widths = vec![
+        Constraint::Percentage(40),
+        Constraint::Percentage(15),
+        Constraint::Percentage(25),
+        Constraint::Percentage(20),
+    ];
+
+    let rows: Vec<Row> = entries
+        .iter()
+        .map(|entry| {
+            let name_style = match entry.kind {
+                FileKind::Directory => Theme::directory_style(),
+                FileKind::Symlink => Theme::symlink_style(),
+                _ => Theme::default_style(),
+            };
+            Row::new(vec![
+                Cell::from(Span::styled(entry.display_name(), name_style)),
+                Cell::from(entry.size_display()),
+                Cell::from(entry.modified_display()).style(Theme::help_style()),
+                Cell::from(entry.permissions_display()).style(Theme::help_style()),
+            ])
+        })
+        .collect();
+
+    let headers: Vec<&str> = resources::CONTAINER_EXPLORER_HEADERS.to_vec();
+    let table = ratatui::widgets::Table::new(rows, widths)
+        .header(
+            Row::new(
+                headers
+                    .into_iter()
+                    .map(|h| Cell::from(h).style(Theme::header_style())),
+            )
+            .height(1),
+        )
+        .block(Theme::section_block(Some(&title)))
+        .row_highlight_style(Theme::highlight_style());
+    frame.render_stateful_widget(table, content_area, state);
+
+    if is_loading {
+        render_action_bar(frame, help_area, &format!(" {spinner_char} Loading... "));
+    } else if active_filter.is_some() {
+        render_action_bar(frame, help_area, &resources::filter_input_help("Open"));
+    } else {
+        render_action_bar(frame, help_area, &resources::list_footer_help("Open"));
+    }
+}
+
+/// Scrollable popup showing the raw text content of a file from a container.
+/// Binary content is reported as a message instead of raw bytes.
+pub fn render_file_view(frame: &mut Frame, path: &str, content: &FileContentDto, scroll: usize) {
+    let area = centered_rect(80, 80, frame.area());
+    frame.render_widget(Clear, area);
+
+    let title = format!("{}{} ", resources::FILE_VIEW_TITLE, path);
+    let text = match content.text() {
+        Some(text) => text,
+        None => resources::file_view_binary_message(content.total_size),
+    };
+    let text = if content.truncated {
+        format!(
+            "{text}\n{}",
+            resources::file_view_truncated_message(content.total_size)
+        )
+    } else {
+        text
+    };
+
+    let content_height = area.height.saturating_sub(2) as usize;
+    let max_scroll = text.lines().count().saturating_sub(content_height);
+    let scroll = scroll.min(max_scroll);
+
+    let popup = Paragraph::new(text)
+        .block(Theme::section_block(Some(&title)))
+        .wrap(Wrap { trim: false })
+        .scroll((scroll as u16, 0));
+    frame.render_widget(popup, area);
+}
+
 pub fn render_container_details(frame: &mut Frame, area: Rect, container: &ContainerDto) {
     let [content_area, help_area] = split_content_area(area);
 
@@ -205,10 +314,13 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        render_container_details, render_container_list, render_container_logs, LogSearchView,
+        render_container_details, render_container_explorer, render_container_list,
+        render_container_logs, render_file_view, ExplorerView, LogSearchView,
     };
-    use crate::application::container::{ContainerDto, ContainerLogsDto, LogLineDto};
-    use crate::domain::container::ContainerState;
+    use crate::application::container::{
+        ContainerDto, ContainerLogsDto, FileContentDto, FileEntryDto, LogLineDto,
+    };
+    use crate::domain::container::{ContainerState, FileKind};
     use crate::presentation::tui::common::Theme;
     use ratatui::{
         backend::TestBackend,
@@ -445,6 +557,256 @@ mod tests {
                 "{label} line bold modifier mismatch"
             );
         }
+    }
+
+    fn make_file_entry(name: &str, kind: FileKind) -> FileEntryDto {
+        FileEntryDto {
+            name: name.to_string(),
+            path: format!("/etc/{name}"),
+            kind,
+            size: 1536,
+            modified: Some(Utc.with_ymd_and_hms(2026, 10, 26, 10, 30, 0).unwrap()),
+            permissions: if kind == FileKind::Directory {
+                "drwxr-xr-x".to_string()
+            } else {
+                "-rw-r--r--".to_string()
+            },
+            link_target: None,
+        }
+    }
+
+    #[test]
+    fn test_render_container_explorer_shows_columns_and_help() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let entries = vec![
+            make_file_entry("nginx", FileKind::Directory),
+            make_file_entry("app.conf", FileKind::File),
+        ];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_container_explorer(
+                    frame,
+                    frame.area(),
+                    ExplorerView {
+                        entries: &entries,
+                        state: &mut state,
+                        container_name: "web",
+                        path: "/etc",
+                        active_filter: None,
+                        is_loading: false,
+                        spinner_char: "|",
+                    },
+                )
+            })
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Files: web /etc"));
+        assert!(text.contains("Name"));
+        assert!(text.contains("Size"));
+        assert!(text.contains("Modified"));
+        assert!(text.contains("Permissions"));
+        assert!(text.contains("nginx/"));
+        assert!(text.contains("app.conf"));
+        assert!(text.contains("1.50 KB"));
+        assert!(text.contains("2026-10-26 10:30:00"));
+        assert!(text.contains("drwxr-xr-x"));
+        assert!(text.contains("-rw-r--r--"));
+        assert!(
+            text.contains("Space: All commands"),
+            "help bar missing space hint: {text}"
+        );
+    }
+
+    #[test]
+    fn test_render_container_explorer_directory_has_its_own_color() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let entries = vec![
+            make_file_entry("nginx", FileKind::Directory),
+            make_file_entry("app.conf", FileKind::File),
+        ];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_container_explorer(
+                    frame,
+                    frame.area(),
+                    ExplorerView {
+                        entries: &entries,
+                        state: &mut state,
+                        container_name: "web",
+                        path: "/",
+                        active_filter: None,
+                        is_loading: false,
+                        spinner_char: "|",
+                    },
+                )
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let dir_style = Theme::directory_style();
+        let file_style = Theme::default_style();
+        let dir_index = find_text_index(buffer, "nginx/").expect("dir name present");
+        let file_index = find_text_index(buffer, "app.conf").expect("file name present");
+        assert_eq!(buffer.content[dir_index].fg, dir_style.fg.unwrap());
+        assert_eq!(buffer.content[file_index].fg, file_style.fg.unwrap());
+        assert_ne!(dir_style.fg, file_style.fg);
+    }
+
+    #[test]
+    fn test_render_container_explorer_selected_row_is_highlighted() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let entries = vec![
+            make_file_entry("nginx", FileKind::Directory),
+            make_file_entry("app.conf", FileKind::File),
+        ];
+        let mut state = TableState::default();
+        state.select(Some(1));
+
+        terminal
+            .draw(|frame| {
+                render_container_explorer(
+                    frame,
+                    frame.area(),
+                    ExplorerView {
+                        entries: &entries,
+                        state: &mut state,
+                        container_name: "web",
+                        path: "/",
+                        active_filter: None,
+                        is_loading: false,
+                        spinner_char: "|",
+                    },
+                )
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let highlight = Theme::highlight_style();
+        for (label, selected) in [("nginx/", false), ("app.conf", true)] {
+            let index = find_text_index(buffer, label).expect("entry name present");
+            let cell = &buffer.content[index];
+            assert_eq!(
+                Some(cell.bg) == highlight.bg,
+                selected,
+                "{label} row highlight background mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn test_render_container_explorer_filter_and_loading_bars() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let entries = vec![make_file_entry("app.conf", FileKind::File)];
+        let mut state = TableState::default();
+
+        terminal
+            .draw(|frame| {
+                render_container_explorer(
+                    frame,
+                    frame.area(),
+                    ExplorerView {
+                        entries: &entries,
+                        state: &mut state,
+                        container_name: "web",
+                        path: "/",
+                        active_filter: Some("app"),
+                        is_loading: false,
+                        spinner_char: "|",
+                    },
+                )
+            })
+            .unwrap();
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("[/: app"));
+        assert!(text.contains("Type: Filter"));
+        assert!(!text.contains("Quit"));
+
+        terminal
+            .draw(|frame| {
+                render_container_explorer(
+                    frame,
+                    frame.area(),
+                    ExplorerView {
+                        entries: &entries,
+                        state: &mut state,
+                        container_name: "web",
+                        path: "/",
+                        active_filter: None,
+                        is_loading: true,
+                        spinner_char: "/",
+                    },
+                )
+            })
+            .unwrap();
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Loading..."));
+    }
+
+    #[test]
+    fn test_render_file_view_shows_text_content() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let content = FileContentDto {
+            data: b"line1\nline2\n".to_vec(),
+            total_size: 12,
+            truncated: false,
+        };
+
+        terminal
+            .draw(|frame| render_file_view(frame, "/etc/app.conf", &content, 0))
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("File content /etc/app.conf"));
+        assert!(text.contains("line1"));
+        assert!(text.contains("line2"));
+        assert!(!text.contains("truncated"));
+    }
+
+    #[test]
+    fn test_render_file_view_reports_binary_content() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let content = FileContentDto {
+            data: vec![0x00, 0x01, 0x02, 0x03],
+            total_size: 4,
+            truncated: false,
+        };
+
+        terminal
+            .draw(|frame| render_file_view(frame, "/bin/app", &content, 0))
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("Binary file, 4 B"));
+    }
+
+    #[test]
+    fn test_render_file_view_marks_truncated_content() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let content = FileContentDto {
+            data: b"partial".to_vec(),
+            total_size: 1_048_576,
+            truncated: true,
+        };
+
+        terminal
+            .draw(|frame| render_file_view(frame, "/var/log/app.log", &content, 0))
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("partial"));
+        assert!(text.contains("truncated, 1.00 MB total"));
     }
 
     #[test]

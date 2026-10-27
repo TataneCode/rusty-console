@@ -1,7 +1,9 @@
 //! Screen routing: maps user actions to screen-specific handlers.
 
 use crate::application::container::ContainerStatsEvent;
-use crate::application::container::{parse_port_mappings, CreateContainerRequest};
+use crate::application::container::{
+    parse_port_mappings, CreateContainerRequest, FILE_VIEW_MAX_BYTES,
+};
 use crate::presentation::tui::app::{
     format_bytes, AddDialog, AddDialogKind, App, PendingImagePull, Screen,
 };
@@ -62,6 +64,21 @@ impl App {
             self.handle_exec_shell_action(action);
             return;
         }
+        if self.screen == Screen::ContainerExplorer && self.container_explorer.file_view.is_some() {
+            match action {
+                AppAction::Back | AppAction::Quit | AppAction::ViewFile => {
+                    self.container_explorer.close_file_view();
+                }
+                AppAction::NavigateDown | AppAction::ScrollDown => {
+                    self.container_explorer.scroll_file_view_down(10);
+                }
+                AppAction::NavigateUp | AppAction::ScrollUp => {
+                    self.container_explorer.scroll_file_view_up();
+                }
+                _ => {}
+            }
+            return;
+        }
         if self.add_dialog.is_some() {
             self.handle_add_dialog_action(action).await;
             return;
@@ -103,6 +120,7 @@ impl App {
                 Screen::ContainerList => self.handle_container_list_action(action).await,
                 Screen::ContainerLogs => self.handle_container_logs_action(action).await,
                 Screen::ContainerDetails => self.handle_details_action(action),
+                Screen::ContainerExplorer => self.handle_container_explorer_action(action).await,
                 Screen::VolumeList => self.handle_volume_list_action(action).await,
                 Screen::VolumeDetails => self.handle_details_action(action),
                 Screen::ImageList => self.handle_image_list_action(action).await,
@@ -121,6 +139,7 @@ impl App {
             Screen::ContainerList => Some(resources::CONTAINER_LIST_HELP),
             Screen::ContainerLogs => Some(resources::CONTAINER_LOGS_HELP),
             Screen::ContainerDetails => Some(resources::CONTAINER_DETAILS_HELP),
+            Screen::ContainerExplorer => Some(resources::CONTAINER_EXPLORER_HELP),
             Screen::VolumeList => Some(resources::VOLUME_LIST_HELP),
             Screen::VolumeDetails => Some(resources::VOLUME_DETAILS_HELP),
             Screen::ImageList => Some(resources::IMAGE_LIST_HELP),
@@ -249,6 +268,12 @@ impl App {
             AppAction::Exec => self.open_exec_shell_dialog(),
             AppAction::Add => self.open_add_dialog(),
             AppAction::ToggleSort => self.container_presenter.toggle_sort(),
+            AppAction::BrowseFiles => {
+                if let Some(container) = self.container_presenter.selected_container().cloned() {
+                    self.open_container_explorer(&container.id, &container.name)
+                        .await;
+                }
+            }
             _ => {}
         }
     }
@@ -321,6 +346,152 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    pub(crate) async fn handle_container_explorer_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::Quit => self.should_quit = true,
+            AppAction::Back => {
+                if self.container_explorer.is_filter_active() {
+                    self.container_explorer.deactivate_filter();
+                } else {
+                    self.container_explorer.clear();
+                    self.screen = self
+                        .explorer_return_screen
+                        .take()
+                        .unwrap_or(Screen::ContainerList);
+                }
+            }
+            AppAction::NavigateUp => self.container_explorer.navigate_up(),
+            AppAction::NavigateDown => self.container_explorer.navigate_down(),
+            AppAction::PageUp => {
+                for _ in 0..10 {
+                    self.container_explorer.navigate_up();
+                }
+            }
+            AppAction::PageDown => {
+                for _ in 0..10 {
+                    self.container_explorer.navigate_down();
+                }
+            }
+            AppAction::Select => {
+                if let Some(dir_path) = self.container_explorer.selected_dir_path() {
+                    self.load_explorer_listing(&dir_path).await;
+                }
+            }
+            AppAction::GoToParent => {
+                if self.container_explorer.can_go_up() {
+                    let parent = self.container_explorer.current_path();
+                    let parent = crate::application::container::parent_path(&parent);
+                    self.container_explorer.go_to_parent();
+                    if let Some(parent) = parent {
+                        self.load_explorer_listing(&parent).await;
+                    }
+                }
+            }
+            AppAction::ActivateFilter => self.container_explorer.activate_filter(),
+            AppAction::ToggleSort => self.container_explorer.toggle_sort(),
+            AppAction::Refresh => {
+                let path = self.container_explorer.current_path();
+                self.refresh_explorer_listing(&path).await;
+            }
+            AppAction::ViewFile => {
+                if let Some(entry) = self.container_explorer.selected_entry().cloned() {
+                    if !entry.is_dir() {
+                        self.load_file_view(&entry.path).await;
+                    }
+                }
+            }
+            AppAction::CopyFile => {
+                if let Some(entry) = self.container_explorer.selected_entry().cloned() {
+                    self.copy_entry_to_host(&entry.path).await;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) async fn open_container_explorer(
+        &mut self,
+        container_id: &str,
+        container_name: &str,
+    ) {
+        self.container_explorer.open(container_id, container_name);
+        self.explorer_return_screen = Some(match self.screen {
+            Screen::StackContainers => Screen::StackContainers,
+            _ => Screen::ContainerList,
+        });
+        self.screen = Screen::ContainerExplorer;
+        self.load_explorer_listing("/").await;
+    }
+
+    async fn load_explorer_listing(&mut self, path: &str) {
+        self.container_explorer.set_loading(true);
+        let container_id = self.container_explorer.container_id.clone();
+        let container_name = self.container_explorer.container_name.clone();
+        match self
+            .container_actions
+            .list_files(&container_id, &container_name, path)
+            .await
+        {
+            Ok(listing) => self.container_explorer.set_listing(listing),
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                self.container_explorer.go_to_parent();
+            }
+        }
+        self.container_explorer.set_loading(false);
+    }
+
+    async fn refresh_explorer_listing(&mut self, path: &str) {
+        self.container_explorer.set_loading(true);
+        let container_id = self.container_explorer.container_id.clone();
+        let container_name = self.container_explorer.container_name.clone();
+        match self
+            .container_actions
+            .list_files(&container_id, &container_name, path)
+            .await
+        {
+            Ok(listing) => self.container_explorer.refresh_listing(listing),
+            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+        }
+        self.container_explorer.set_loading(false);
+    }
+
+    async fn load_file_view(&mut self, path: &str) {
+        self.container_explorer.set_loading(true);
+        let container_id = self.container_explorer.container_id.clone();
+        match self
+            .container_actions
+            .read_file(&container_id, path, FILE_VIEW_MAX_BYTES)
+            .await
+        {
+            Ok(content) => self.container_explorer.show_file(path, content),
+            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+        }
+        self.container_explorer.set_loading(false);
+    }
+
+    async fn copy_entry_to_host(&mut self, path: &str) {
+        self.container_explorer.set_loading(true);
+        let container_id = self.container_explorer.container_id.clone();
+        match self
+            .container_actions
+            .copy_to_host(&container_id, path)
+            .await
+        {
+            Ok(dest) => {
+                self.popup_message = Some(PopupMessage::Info(
+                    resources::file_copy_success_message(&dest.to_string_lossy()),
+                ));
+            }
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(resources::file_copy_error_message(
+                    &e.to_string(),
+                )));
+            }
+        }
+        self.container_explorer.set_loading(false);
     }
 
     pub(crate) fn handle_details_action(&mut self, action: AppAction) {
@@ -779,6 +950,7 @@ impl App {
             Screen::StackList => self.stack_presenter.is_filter_active(),
             Screen::StackContainers => self.stack_presenter.containers.is_filter_active(),
             Screen::ContainerLogs => self.container_presenter.is_log_search_active(),
+            Screen::ContainerExplorer => self.container_explorer.is_filter_active(),
             _ => false,
         }
     }
@@ -795,6 +967,7 @@ impl App {
                     Screen::StackList => self.stack_presenter.deactivate_filter(),
                     Screen::StackContainers => self.stack_presenter.containers.deactivate_filter(),
                     Screen::ContainerLogs => self.container_presenter.deactivate_log_search(),
+                    Screen::ContainerExplorer => self.container_explorer.deactivate_filter(),
                     _ => {}
                 }
                 true
@@ -808,6 +981,7 @@ impl App {
                     Screen::StackList => self.stack_presenter.pop_filter_char(),
                     Screen::StackContainers => self.stack_presenter.containers.pop_filter_char(),
                     Screen::ContainerLogs => self.container_presenter.pop_log_search_char(),
+                    Screen::ContainerExplorer => self.container_explorer.pop_filter_char(),
                     _ => {}
                 }
                 true
@@ -821,6 +995,7 @@ impl App {
                     Screen::StackList => self.stack_presenter.push_filter_char(c),
                     Screen::StackContainers => self.stack_presenter.containers.push_filter_char(c),
                     Screen::ContainerLogs => self.container_presenter.push_log_search_char(c),
+                    Screen::ContainerExplorer => self.container_explorer.push_filter_char(c),
                     _ => {}
                 }
                 true
@@ -1014,6 +1189,12 @@ impl App {
             AppAction::Exec => self.open_exec_shell_dialog(),
             AppAction::Add => self.open_add_dialog(),
             AppAction::ToggleSort => self.stack_presenter.containers.toggle_sort(),
+            AppAction::BrowseFiles => {
+                if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
+                    self.open_container_explorer(&container.id, &container.name)
+                        .await;
+                }
+            }
             _ => {}
         }
     }

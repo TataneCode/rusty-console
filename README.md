@@ -4,7 +4,7 @@ A terminal user interface (TUI) for managing Docker containers, volumes, images,
 
 ## Features
 
-- **Containers** — list all containers regardless of state, with live CPU and memory usage; start/stop, pause/unpause, restart, interactive exec shell, real-time logs, inspect details, delete, prune, filter by name, sort by name
+- **Containers** — list all containers regardless of state, with live CPU and memory usage; start/stop, pause/unpause, restart, interactive exec shell, real-time logs, inspect details, browse the container filesystem (navigate, search, sort, view files, copy to host), delete, prune, filter by name, sort by name
 - **Create containers** — press `A` on the Containers screen to create and start a container from a 3-field dialog (image pulled automatically if missing)
 - **Volumes** — list, detect in-use volumes, delete, prune, filter by name
 - **Networks** — list with subnet and connected container count, inspect details, disconnect containers, delete, prune, filter by name

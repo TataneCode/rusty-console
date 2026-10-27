@@ -34,6 +34,10 @@ pub enum AppAction {
     CopyLogLine,
     DisconnectContainer,
     ToggleHelp,
+    BrowseFiles,
+    CopyFile,
+    ViewFile,
+    GoToParent,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
@@ -73,6 +77,10 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('A') => Some(AppAction::Add),
         KeyCode::Char('o') => Some(AppAction::ToggleSort),
         KeyCode::Char(' ') => Some(AppAction::ToggleHelp),
+        KeyCode::Char('b') => Some(AppAction::BrowseFiles),
+        KeyCode::Char('c') => Some(AppAction::CopyFile),
+        KeyCode::Char('v') => Some(AppAction::ViewFile),
+        KeyCode::Char('h') | KeyCode::Left => Some(AppAction::GoToParent),
         _ => None,
     }
 }
@@ -81,6 +89,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
 pub enum KeyContext {
     Global,
     ContainerLogs,
+    ContainerExplorer,
     NetworkDetails,
 }
 
@@ -89,6 +98,10 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
     match context {
         KeyContext::ContainerLogs => match action {
             AppAction::ActivateFilter => Some(AppAction::ActivateLogSearch),
+            other => Some(other),
+        },
+        KeyContext::ContainerExplorer => match action {
+            AppAction::BrowseFiles => None,
             other => Some(other),
         },
         KeyContext::NetworkDetails => match action {
@@ -101,6 +114,7 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
             AppAction::ExportLogs => None,
             AppAction::CopyLogLine => None,
             AppAction::DisconnectContainer => None,
+            AppAction::CopyFile | AppAction::ViewFile | AppAction::GoToParent => None,
             other => Some(other),
         },
     }
@@ -216,8 +230,11 @@ mod tests {
     }
 
     #[test]
-    fn test_char_c_no_longer_maps_to_view_details() {
-        assert_eq!(map_key_to_action(key_event(KeyCode::Char('c'))), None);
+    fn test_char_c_maps_to_copy_file_not_view_details() {
+        assert_eq!(
+            map_key_to_action(key_event(KeyCode::Char('c'))),
+            Some(AppAction::CopyFile)
+        );
     }
 
     #[test]
@@ -407,6 +424,70 @@ mod tests {
         assert_eq!(
             map_key_to_action_for_context(key_event(KeyCode::Char('n')), KeyContext::ContainerLogs),
             Some(AppAction::NextLogMatch)
+        );
+    }
+
+    #[test]
+    fn test_browse_files_key_b() {
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('b')), KeyContext::Global),
+            Some(AppAction::BrowseFiles)
+        );
+    }
+
+    #[test]
+    fn test_copy_and_view_file_keys_c_and_v() {
+        assert_eq!(
+            map_key_to_action_for_context(
+                key_event(KeyCode::Char('c')),
+                KeyContext::ContainerExplorer
+            ),
+            Some(AppAction::CopyFile)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(
+                key_event(KeyCode::Char('v')),
+                KeyContext::ContainerExplorer
+            ),
+            Some(AppAction::ViewFile)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('c')), KeyContext::Global),
+            None
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('v')), KeyContext::Global),
+            None
+        );
+    }
+
+    #[test]
+    fn test_go_to_parent_keys_h_and_left_arrow() {
+        assert_eq!(
+            map_key_to_action_for_context(
+                key_event(KeyCode::Char('h')),
+                KeyContext::ContainerExplorer
+            ),
+            Some(AppAction::GoToParent)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Left), KeyContext::ContainerExplorer),
+            Some(AppAction::GoToParent)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(key_event(KeyCode::Char('h')), KeyContext::Global),
+            None
+        );
+    }
+
+    #[test]
+    fn test_browse_files_inert_on_explorer_screen() {
+        assert_eq!(
+            map_key_to_action_for_context(
+                key_event(KeyCode::Char('b')),
+                KeyContext::ContainerExplorer
+            ),
+            None
         );
     }
 

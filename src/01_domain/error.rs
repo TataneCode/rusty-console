@@ -22,4 +22,10 @@ pub enum DomainError {
         action: String,
         current_state: String,
     },
+
+    #[error("Invalid file entry: {0}")]
+    InvalidFileEntry(String),
+
+    #[error("Invalid file listing: {0}")]
+    InvalidFileListing(String),
 }

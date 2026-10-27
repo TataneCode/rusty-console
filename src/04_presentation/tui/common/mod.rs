@@ -32,7 +32,7 @@ pub use sort::{apply_name_sort, SortOrder};
 pub use spinner::Spinner;
 pub use theme::Theme;
 pub use widgets::{
-    dim_background, render_confirm_dialog, render_expanded_log_line, render_popup_message,
-    render_selection_dialog, render_table, split_app_area, split_content_area, split_menu_area,
-    truncate_text, PopupMessage, TableSelection,
+    centered_rect, dim_background, render_confirm_dialog, render_expanded_log_line,
+    render_popup_message, render_selection_dialog, render_table, split_app_area,
+    split_content_area, split_menu_area, truncate_text, PopupMessage, TableSelection,
 };

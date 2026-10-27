@@ -6,6 +6,7 @@ pub const BREADCRUMB_SEPARATOR: &str = " > ";
 pub const BREADCRUMB_LOGS_LABEL: &str = "logs";
 pub const BREADCRUMB_DETAILS_LABEL: &str = "details";
 pub const BREADCRUMB_CONTAINERS_LABEL: &str = "containers";
+pub const BREADCRUMB_FILES_LABEL: &str = "files";
 pub const MAIN_MENU_BLOCK_TITLE: &str = " Menu ";
 pub const MAIN_MENU_HELP: &str = " j/k: Navigate | Enter: Select | q: Quit | Space: All commands ";
 pub const MAIN_MENU_HIGHLIGHT_SYMBOL: &str = "> ";
@@ -41,6 +42,37 @@ pub const CONTAINER_LOGS_HELP: &str =
 pub const EXPANDED_LOG_LINE_TITLE: &str = " Expanded log line ";
 pub const CONTAINER_DETAILS_ENV_VARS_LABEL: &str = "Environment Variables";
 pub const CONTAINER_DETAILS_NETWORK_IO_LABEL: &str = "Network I/O";
+
+pub const CONTAINER_EXPLORER_HEADERS: [&str; 4] = ["Name", "Size", "Modified", "Permissions"];
+pub const CONTAINER_EXPLORER_HELP: &str =
+    " Esc/q: Back | Enter: Open | h: Up | j/k: Navigate | /: Search | o: Sort | c: Copy | v: View | r: Refresh | Space: All commands ";
+pub const FILE_VIEW_TITLE: &str = " File content ";
+pub const FILE_VIEW_CLOSE_HELP: &str = " j/k: Scroll | Esc/q: Close ";
+pub fn container_explorer_title(container_name: &str, path: &str) -> String {
+    format!(" Files: {container_name} {path} ")
+}
+
+pub fn file_copy_success_message(path: &str) -> String {
+    format!("Copied to {path}")
+}
+
+pub fn file_copy_error_message(error: &str) -> String {
+    format!("Copy failed: {error}")
+}
+
+pub fn file_view_binary_message(size: u64) -> String {
+    format!(
+        "Binary file, {}",
+        crate::domain::shared::ByteSize::new(size as i64).human_readable()
+    )
+}
+
+pub fn file_view_truncated_message(total_size: u64) -> String {
+    format!(
+        "... truncated, {} total",
+        crate::domain::shared::ByteSize::new(total_size as i64).human_readable()
+    )
+}
 pub const EXEC_SHELL_DIALOG_TITLE: &str = " Exec Shell ";
 pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc/q: Cancel ";
 pub const INPUT_EMPTY: &str = " ";
@@ -318,5 +350,29 @@ mod tests {
     #[test]
     fn test_prune_networks_result_message_omits_freed_space() {
         assert_eq!(prune_networks_result_message(2), "Pruned 2 network(s)");
+    }
+
+    #[test]
+    fn test_container_explorer_title_formats_name_and_path() {
+        assert_eq!(container_explorer_title("web", "/etc"), " Files: web /etc ");
+    }
+
+    #[test]
+    fn test_file_copy_messages_format_path_and_error() {
+        assert_eq!(
+            file_copy_success_message("./app.conf"),
+            "Copied to ./app.conf"
+        );
+        assert_eq!(file_copy_error_message("boom"), "Copy failed: boom");
+    }
+
+    #[test]
+    fn test_file_view_binary_and_truncated_messages() {
+        assert_eq!(file_view_binary_message(2048), "Binary file, 2.00 KB");
+        assert_eq!(
+            file_view_truncated_message(5_242_880),
+            "... truncated, 5.00 MB total"
+        );
+        assert_eq!(file_view_binary_message(4), "Binary file, 4 B");
     }
 }

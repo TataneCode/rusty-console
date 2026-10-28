@@ -93,8 +93,8 @@ fn logs_screen_selected_line_is_highlighted() {
     );
     assert_eq!(
         cell.fg,
-        Color::White,
-        "selected log line should have the highlight foreground"
+        Color::Reset,
+        "selected log line keeps the default foreground (highlight sets no fg)"
     );
 
     let cell = &buffer.content[other];

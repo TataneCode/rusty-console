@@ -11,10 +11,12 @@ impl Theme {
         Style::default().fg(Color::White)
     }
 
+    /// Selection highlight: background + bold only. No explicit fg so that
+    /// cells with their own color (directories, symlinks, state badges) keep
+    /// it on the selected row; unstyled cells fall back to the terminal default.
     pub fn highlight_style() -> Style {
         Style::default()
             .bg(Color::DarkGray)
-            .fg(Color::White)
             .add_modifier(Modifier::BOLD)
     }
 
@@ -178,7 +180,7 @@ mod tests {
     #[test]
     fn test_highlight_header_and_title_styles() {
         let highlight = Theme::highlight_style();
-        assert_eq!(highlight.fg, Some(Color::White));
+        assert_eq!(highlight.fg, None);
         assert_eq!(highlight.bg, Some(Color::DarkGray));
         assert!(highlight.add_modifier.contains(Modifier::BOLD));
 

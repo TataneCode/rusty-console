@@ -702,6 +702,54 @@ mod tests {
     }
 
     #[test]
+    fn test_render_container_explorer_selected_directory_keeps_its_color() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let entries = vec![
+            make_file_entry("nginx", FileKind::Directory),
+            make_file_entry("app.conf", FileKind::File),
+        ];
+        let mut state = TableState::default();
+        state.select(Some(0));
+
+        terminal
+            .draw(|frame| {
+                render_container_explorer(
+                    frame,
+                    frame.area(),
+                    ExplorerView {
+                        entries: &entries,
+                        state: &mut state,
+                        container_name: "web",
+                        path: "/",
+                        active_filter: None,
+                        is_loading: false,
+                        spinner_char: "|",
+                    },
+                )
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let dir_index = find_text_index(buffer, "nginx/").expect("dir name present");
+        let cell = &buffer.content[dir_index];
+        assert_eq!(
+            cell.bg,
+            Theme::highlight_style().bg.unwrap(),
+            "selected row keeps the highlight background"
+        );
+        assert!(
+            cell.modifier.contains(Modifier::BOLD),
+            "selected row is bold"
+        );
+        assert_eq!(
+            cell.fg,
+            Theme::directory_style().fg.unwrap(),
+            "selected directory keeps its own color"
+        );
+    }
+
+    #[test]
     fn test_render_container_explorer_filter_and_loading_bars() {
         let backend = TestBackend::new(100, 20);
         let mut terminal = Terminal::new(backend).unwrap();

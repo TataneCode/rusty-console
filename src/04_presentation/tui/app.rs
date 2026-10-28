@@ -1,5 +1,6 @@
 use crate::application::container::{
-    ContainerDto, ContainerStatsSubscription, CreateContainerRequest,
+    ContainerDto, ContainerStatsSubscription, CreateContainerRequest, FileOpEvent,
+    FileOpSubscription,
 };
 use crate::application::image::{
     ImageDto, ImagePullEvent, ImagePullOutcome, ImagePullSubscription,
@@ -102,12 +103,31 @@ pub struct App {
     pending_exec: Option<PendingExec>,
     pub(crate) container_stats_subscription: Option<ContainerStatsSubscription>,
     pub(crate) pending_image_pull: Option<PendingImagePull>,
+    pub(crate) pending_file_op: Option<PendingFileOp>,
+    pub(crate) pending_file_copy: Option<FileOpSubscription>,
     pub(crate) add_dialog: Option<AddDialog>,
     pub(crate) pending_create_after_pull: Option<CreateContainerRequest>,
 }
 
 pub(crate) struct PendingImagePull {
     pub(crate) subscription: ImagePullSubscription,
+}
+
+pub(crate) struct PendingFileOp {
+    pub(crate) subscription: FileOpSubscription,
+    pub(crate) kind: PendingFileOpKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PendingFileOpKind {
+    /// Listing that replaces the current directory (initial open, Enter into
+    /// a directory, `h` to parent): on error the explorer steps back.
+    Navigate,
+    /// Listing that refreshes the current directory: on error the current
+    /// listing stays on screen.
+    Refresh,
+    /// Background file read shown in the file view popup.
+    Read,
 }
 
 fn record_cleanup_error(cleanup_error: &mut Option<io::Error>, result: io::Result<()>) {
@@ -172,6 +192,8 @@ impl App {
             pending_exec: None,
             container_stats_subscription: None,
             pending_image_pull: None,
+            pending_file_op: None,
+            pending_file_copy: None,
             add_dialog: None,
             pending_create_after_pull: None,
         }
@@ -241,6 +263,8 @@ impl App {
 
             self.drain_container_stats();
             self.drain_image_pull().await;
+            self.drain_file_ops().await;
+            self.drain_file_copy().await;
 
             if self.should_quit {
                 break;
@@ -972,6 +996,99 @@ impl App {
         self.image_presenter.set_loading(false);
     }
 
+    /// Polls the pending background file operation (explorer listing, file
+    /// read) and applies its result once it completes.
+    pub(crate) async fn drain_file_ops(&mut self) {
+        let Some(pending) = self.pending_file_op.as_mut() else {
+            return;
+        };
+        let is_navigation = matches!(pending.kind, PendingFileOpKind::Navigate);
+        let event = match pending.subscription.try_recv() {
+            Ok(event) => event,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                self.take_pending_file_op();
+                self.container_explorer.set_loading(false);
+                self.popup_message = Some(PopupMessage::Error(
+                    crate::application::error::AppError::operation_failed(
+                        "File operation ended unexpectedly".to_string(),
+                    )
+                    .to_string(),
+                ));
+                return;
+            }
+        };
+        self.take_pending_file_op();
+        self.container_explorer.set_loading(false);
+        match event {
+            FileOpEvent::ListingCompleted { result } => match result {
+                Ok(listing) => {
+                    if is_navigation {
+                        self.container_explorer.set_listing(listing);
+                    } else {
+                        self.container_explorer.refresh_listing(listing);
+                    }
+                }
+                Err(e) => {
+                    self.popup_message = Some(PopupMessage::Error(e.to_string()));
+                    if is_navigation {
+                        self.container_explorer.go_to_parent();
+                    }
+                }
+            },
+            FileOpEvent::FileReadCompleted { path, result } => match result {
+                Ok(content) => self.container_explorer.show_file(&path, content),
+                Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
+            },
+            FileOpEvent::CopyCompleted { .. } => {}
+        }
+    }
+
+    /// Polls the pending background host copy (if any) and shows the result
+    /// popup once it finishes. A copy is never cancelled by leaving the
+    /// explorer, so it runs to completion even when the user navigates away.
+    pub(crate) async fn drain_file_copy(&mut self) {
+        let Some(subscription) = self.pending_file_copy.as_mut() else {
+            return;
+        };
+        let event = match subscription.try_recv() {
+            Ok(event) => event,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                self.pending_file_copy = None;
+                self.popup_message = Some(PopupMessage::Error(resources::file_copy_error_message(
+                    "file operation ended unexpectedly",
+                )));
+                return;
+            }
+        };
+        let FileOpEvent::CopyCompleted { result } = event else {
+            return;
+        };
+        self.pending_file_copy = None;
+        if self.pending_file_op.is_none() {
+            self.container_explorer.set_loading(false);
+        }
+        match result {
+            Ok(dest) => {
+                self.popup_message = Some(PopupMessage::Info(
+                    resources::file_copy_success_message(&dest.to_string_lossy()),
+                ));
+            }
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(resources::file_copy_error_message(
+                    &e.to_string(),
+                )));
+            }
+        }
+    }
+
+    pub(crate) fn take_pending_file_op(&mut self) {
+        if let Some(mut pending) = self.pending_file_op.take() {
+            pending.subscription.abort();
+        }
+    }
+
     fn selected_exec_target(&self) -> Option<(String, ExecRefreshTarget)> {
         match self.screen {
             Screen::ContainerList => self
@@ -1122,12 +1239,12 @@ mod tests {
 
     use super::{
         finalize_exec_command_result, finalize_run_result, format_bytes, App, ExecCommandConfig,
-        ExecCommandResult, ExecRefreshTarget, Screen,
+        ExecCommandResult, ExecRefreshTarget, PendingFileOp, PendingFileOpKind, Screen,
     };
     use crate::application::container::traits::MockContainerRepository;
     use crate::application::container::{
         ContainerDto, ContainerRuntimeStatsDto, ContainerService, ContainerStatsEvent,
-        ContainerStatsSubscription, ContainerStatsUpdate,
+        ContainerStatsSubscription, ContainerStatsUpdate, FileOpEvent, FileOpSubscription,
     };
     use crate::application::image::traits::MockImageRepository;
     use crate::application::image::{
@@ -3602,6 +3719,43 @@ mod tests {
         .unwrap()
     }
 
+    /// Lets a spawned background file operation run and applies its result,
+    /// mimicking one iteration of the UI event loop.
+    async fn drain_pending_file_ops(app: &mut App) {
+        for _ in 0..1000 {
+            app.drain_file_ops().await;
+            if app.pending_file_op.is_none() {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        panic!("background file operation did not complete");
+    }
+
+    /// Waits for the background host copy (its tar extraction runs on the
+    /// blocking thread pool) and applies its result popup.
+    async fn drain_pending_file_copy(app: &mut App) {
+        for _ in 0..1000 {
+            app.drain_file_copy().await;
+            if app.pending_file_copy.is_none() {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        panic!("background file copy did not complete");
+    }
+
+    /// A subscription whose task never completes, to exercise the pending
+    /// state and the cancellation paths.
+    fn never_completing_file_op(kind: PendingFileOpKind) -> PendingFileOp {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        let task = tokio::spawn(std::future::pending::<()>());
+        PendingFileOp {
+            subscription: FileOpSubscription::new(receiver, task),
+            kind,
+        }
+    }
+
     fn explorer_app() -> App {
         let mut container_repo = MockContainerRepository::new();
         container_repo
@@ -3640,9 +3794,20 @@ mod tests {
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
 
+        // The screen switches immediately and shows the loading bar while
+        // the listing runs in the background.
         assert_eq!(app.screen, Screen::ContainerExplorer);
         assert_eq!(app.explorer_return_screen, Some(Screen::ContainerList));
         assert_eq!(app.container_explorer.current_path(), "/");
+        assert!(app.pending_file_op.is_some());
+        assert!(app.container_explorer.is_loading());
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains("Files: web /"));
+        assert!(rendered.contains("Loading..."));
+
+        drain_pending_file_ops(&mut app).await;
+        assert!(app.pending_file_op.is_none());
+        assert!(!app.container_explorer.is_loading());
         assert_eq!(app.container_explorer.list.items.len(), 2);
         let rendered = render_app(&mut app);
         assert!(rendered.contains("Files: web /"));
@@ -3658,14 +3823,19 @@ mod tests {
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        drain_pending_file_ops(&mut app).await;
 
         // Enter selects the first directory (etc).
         app.handle_action(AppAction::Select).await;
+        assert!(app.pending_file_op.is_some());
+        assert!(app.container_explorer.is_loading());
+        drain_pending_file_ops(&mut app).await;
         assert_eq!(app.container_explorer.current_path(), "/etc");
         assert!(app.container_explorer.can_go_up());
 
         // h goes back to the parent.
         app.handle_action(AppAction::GoToParent).await;
+        drain_pending_file_ops(&mut app).await;
         assert_eq!(app.container_explorer.current_path(), "/");
 
         // Esc leaves the explorer and returns to the container list.
@@ -3682,6 +3852,7 @@ mod tests {
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        drain_pending_file_ops(&mut app).await;
 
         app.handle_action(AppAction::NavigateDown).await;
         app.handle_action(AppAction::Select).await;
@@ -3697,9 +3868,13 @@ mod tests {
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        drain_pending_file_ops(&mut app).await;
 
         app.handle_action(AppAction::NavigateDown).await;
         app.handle_action(AppAction::ViewFile).await;
+        assert!(app.pending_file_op.is_some());
+        assert!(app.container_explorer.is_loading());
+        drain_pending_file_ops(&mut app).await;
         assert!(app.container_explorer.file_view.is_some());
         assert_eq!(
             app.container_explorer.file_view_path.as_deref(),
@@ -3724,6 +3899,7 @@ mod tests {
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        drain_pending_file_ops(&mut app).await;
 
         app.handle_action(AppAction::ViewFile).await;
         assert!(app.container_explorer.file_view.is_none());
@@ -3731,30 +3907,32 @@ mod tests {
 
     #[tokio::test]
     async fn test_explorer_copy_file_shows_success_popup() {
-        let dir =
-            std::env::temp_dir().join(format!("rusty_console_explorer_app_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let guard = CwdGuard::new(&dir);
-
+        // Completed subscription: the copy result drives the info popup and
+        // clears the loading state. Extraction into a real directory is
+        // covered by the service-level test.
         let mut app = explorer_app();
         app.screen = Screen::ContainerList;
         app.container_presenter
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        drain_pending_file_ops(&mut app).await;
 
         app.handle_action(AppAction::NavigateDown).await;
         app.handle_action(AppAction::CopyFile).await;
+        assert!(app.pending_file_copy.is_some());
+        assert!(app.container_explorer.is_loading());
 
+        app.pending_file_copy = Some(FileOpSubscription::completed(FileOpEvent::CopyCompleted {
+            result: Ok(std::path::PathBuf::from("/tmp/app.conf")),
+        }));
+        drain_pending_file_copy(&mut app).await;
+        assert!(app.pending_file_copy.is_none());
+        assert!(!app.container_explorer.is_loading());
         match &app.popup_message {
             Some(PopupMessage::Info(msg)) => assert!(msg.contains("Copied to")),
             other => panic!("expected info popup, got {other:?}"),
         }
-        assert!(dir.join("app.conf").exists());
-
-        drop(guard);
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[tokio::test]
@@ -3765,6 +3943,7 @@ mod tests {
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        drain_pending_file_ops(&mut app).await;
 
         app.handle_action(AppAction::ActivateFilter).await;
         assert!(app.container_explorer.is_filter_active());
@@ -3793,6 +3972,7 @@ mod tests {
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        drain_pending_file_ops(&mut app).await;
 
         app.handle_action(AppAction::ToggleHelp).await;
         assert!(app.help_popup_open);
@@ -3821,9 +4001,140 @@ mod tests {
             .set_containers(vec![make_container_dto()]);
         app.handle_container_list_action(AppAction::BrowseFiles)
             .await;
+        assert_eq!(app.screen, Screen::ContainerExplorer);
+        assert!(app.container_explorer.is_loading());
 
+        drain_pending_file_ops(&mut app).await;
+        assert!(!app.container_explorer.is_loading());
         match &app.popup_message {
             Some(PopupMessage::Error(msg)) => assert!(msg.contains("boom")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
+        // The initial listing failed: the explorer steps back to the caller.
+        assert_eq!(app.container_explorer.current_path(), "/");
+        assert!(app.container_explorer.listing.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_explorer_file_ops_ignored_while_one_is_pending() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        // Replace the spawned listing with one that never completes.
+        app.take_pending_file_op();
+        app.pending_file_op = Some(never_completing_file_op(PendingFileOpKind::Navigate));
+        assert!(app.container_explorer.is_loading());
+
+        // Navigation actions are ignored while an operation is pending.
+        app.handle_action(AppAction::Select).await;
+        assert!(app.pending_file_op.is_some());
+        app.handle_action(AppAction::GoToParent).await;
+        assert!(!app.container_explorer.can_go_up());
+        app.handle_action(AppAction::Refresh).await;
+        app.handle_action(AppAction::ViewFile).await;
+        assert!(app.container_explorer.file_view.is_none());
+        app.handle_action(AppAction::CopyFile).await;
+        assert!(app.pending_file_copy.is_none());
+
+        // Esc cancels the pending operation and leaves the explorer.
+        app.handle_action(AppAction::Back).await;
+        assert!(app.pending_file_op.is_none());
+        assert!(!app.container_explorer.is_loading());
+        assert_eq!(app.screen, Screen::ContainerList);
+    }
+
+    #[tokio::test]
+    async fn test_explorer_copy_survives_leaving_the_explorer() {
+        // A completed-copy subscription proves the popup shows even when the
+        // user left the explorer before the copy finished.
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+        drain_pending_file_ops(&mut app).await;
+
+        // Start a copy, then leave the explorer before it completes.
+        app.handle_action(AppAction::CopyFile).await;
+        assert!(app.pending_file_copy.is_some());
+        app.handle_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::ContainerList);
+        assert!(
+            app.pending_file_copy.is_some(),
+            "copy must keep running in the background"
+        );
+
+        // Replace the pending subscription with a completed one: the next
+        // drain must show the result popup even outside the explorer screen.
+        app.pending_file_copy = Some(FileOpSubscription::completed(FileOpEvent::CopyCompleted {
+            result: Ok(std::path::PathBuf::from("/tmp/app.conf")),
+        }));
+        drain_pending_file_copy(&mut app).await;
+        assert!(app.pending_file_copy.is_none());
+        match &app.popup_message {
+            Some(PopupMessage::Info(msg)) => assert!(msg.contains("Copied to")),
+            other => panic!("expected info popup, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_explorer_read_error_shows_popup() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        app.take_pending_file_op();
+        app.pending_file_op = Some(PendingFileOp {
+            subscription: FileOpSubscription::completed(FileOpEvent::FileReadCompleted {
+                path: "/x".to_string(),
+                result: Err(crate::application::error::AppError::repository("gone")),
+            }),
+            kind: PendingFileOpKind::Read,
+        });
+        drain_pending_file_ops(&mut app).await;
+        assert!(app.pending_file_op.is_none());
+        assert!(!app.container_explorer.is_loading());
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("gone")),
+            other => panic!("expected error popup, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_drain_file_ops_disconnected_shows_error_popup() {
+        let mut app = explorer_app();
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.handle_container_list_action(AppAction::BrowseFiles)
+            .await;
+
+        // Drop the sender side without sending: the channel disconnects.
+        app.take_pending_file_op();
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        drop(sender);
+        app.pending_file_op = Some(PendingFileOp {
+            subscription: FileOpSubscription::new(
+                receiver,
+                tokio::spawn(std::future::pending::<()>()),
+            ),
+            kind: PendingFileOpKind::Navigate,
+        });
+        drain_pending_file_ops(&mut app).await;
+        assert!(app.pending_file_op.is_none());
+        assert!(!app.container_explorer.is_loading());
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => {
+                assert!(msg.contains("ended unexpectedly"), "got: {msg}")
+            }
             other => panic!("expected error popup, got {other:?}"),
         }
     }

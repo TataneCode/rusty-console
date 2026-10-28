@@ -5,7 +5,8 @@ use crate::application::container::{
     parse_port_mappings, CreateContainerRequest, FILE_VIEW_MAX_BYTES, FILE_VIEW_PAGE_SCROLL,
 };
 use crate::presentation::tui::app::{
-    format_bytes, AddDialog, AddDialogKind, App, PendingImagePull, Screen,
+    format_bytes, AddDialog, AddDialogKind, App, PendingFileOp, PendingFileOpKind,
+    PendingImagePull, Screen,
 };
 use crate::presentation::tui::common::{
     copy_text, resources, AppAction, InputDialogState, PopupMessage,
@@ -121,7 +122,7 @@ impl App {
                 Screen::ContainerList => self.handle_container_list_action(action).await,
                 Screen::ContainerLogs => self.handle_container_logs_action(action).await,
                 Screen::ContainerDetails => self.handle_details_action(action),
-                Screen::ContainerExplorer => self.handle_container_explorer_action(action).await,
+                Screen::ContainerExplorer => self.handle_container_explorer_action(action),
                 Screen::VolumeList => self.handle_volume_list_action(action).await,
                 Screen::VolumeDetails => self.handle_details_action(action),
                 Screen::ImageList => self.handle_image_list_action(action).await,
@@ -271,8 +272,7 @@ impl App {
             AppAction::ToggleSort => self.container_presenter.toggle_sort(),
             AppAction::BrowseFiles => {
                 if let Some(container) = self.container_presenter.selected_container().cloned() {
-                    self.open_container_explorer(&container.id, &container.name)
-                        .await;
+                    self.open_container_explorer(&container.id, &container.name);
                 }
             }
             _ => {}
@@ -349,12 +349,17 @@ impl App {
         }
     }
 
-    pub(crate) async fn handle_container_explorer_action(&mut self, action: AppAction) {
+    pub(crate) fn handle_container_explorer_action(&mut self, action: AppAction) {
         match action {
             AppAction::Quit | AppAction::Back => {
                 if self.container_explorer.is_filter_active() {
                     self.container_explorer.deactivate_filter();
                 } else {
+                    // A pending listing/read is cancelled; a pending copy
+                    // keeps running in the background and reports its result
+                    // popup when it finishes.
+                    self.take_pending_file_op();
+                    self.container_explorer.set_loading(false);
                     self.container_explorer.clear();
                     self.screen = self
                         .explorer_return_screen
@@ -376,7 +381,7 @@ impl App {
             }
             AppAction::Select => {
                 if let Some(dir_path) = self.container_explorer.selected_dir_path() {
-                    self.load_explorer_listing(&dir_path).await;
+                    self.start_explorer_listing(&dir_path, PendingFileOpKind::Navigate);
                 }
             }
             AppAction::GoToParent => {
@@ -385,113 +390,90 @@ impl App {
                     let parent = crate::application::container::parent_path(&parent);
                     self.container_explorer.go_to_parent();
                     if let Some(parent) = parent {
-                        self.load_explorer_listing(&parent).await;
+                        self.start_explorer_listing(&parent, PendingFileOpKind::Navigate);
                     }
                 }
             }
             AppAction::ActivateFilter => self.container_explorer.activate_filter(),
             AppAction::ToggleSort => self.container_explorer.toggle_sort(),
             AppAction::Refresh => {
-                let path = self.container_explorer.current_path();
-                self.refresh_explorer_listing(&path).await;
+                if self.container_explorer.listing.is_some() {
+                    let path = self.container_explorer.current_path();
+                    self.start_explorer_listing(&path, PendingFileOpKind::Refresh);
+                }
             }
             AppAction::ViewFile => {
                 if let Some(entry) = self.container_explorer.selected_entry().cloned() {
                     if !entry.is_dir() {
-                        self.load_file_view(&entry.path).await;
+                        self.start_file_view(&entry.path);
                     }
                 }
             }
             AppAction::CopyFile => {
                 if let Some(entry) = self.container_explorer.selected_entry().cloned() {
-                    self.copy_entry_to_host(&entry.path).await;
+                    self.start_copy_to_host(&entry.path);
                 }
             }
             _ => {}
         }
     }
 
-    pub(crate) async fn open_container_explorer(
-        &mut self,
-        container_id: &str,
-        container_name: &str,
-    ) {
+    pub(crate) fn open_container_explorer(&mut self, container_id: &str, container_name: &str) {
+        // Switch to the explorer screen first so the loading bar is visible
+        // while the initial listing runs in the background.
         self.container_explorer.open(container_id, container_name);
         self.explorer_return_screen = Some(match self.screen {
             Screen::StackContainers => Screen::StackContainers,
             _ => Screen::ContainerList,
         });
         self.screen = Screen::ContainerExplorer;
-        self.load_explorer_listing("/").await;
+        self.start_explorer_listing("/", PendingFileOpKind::Navigate);
     }
 
-    async fn load_explorer_listing(&mut self, path: &str) {
+    /// Spawns a background listing of `path`. Ignored while another listing
+    /// or read is pending (same guard as the image pull); a background copy
+    /// does not block navigation.
+    fn start_explorer_listing(&mut self, path: &str, kind: PendingFileOpKind) {
+        if self.pending_file_op.is_some() {
+            return;
+        }
         self.container_explorer.set_loading(true);
         let container_id = self.container_explorer.container_id.clone();
         let container_name = self.container_explorer.container_name.clone();
-        match self
-            .container_actions
-            .list_files(&container_id, &container_name, path)
-            .await
-        {
-            Ok(listing) => self.container_explorer.set_listing(listing),
-            Err(e) => {
-                self.popup_message = Some(PopupMessage::Error(e.to_string()));
-                self.container_explorer.go_to_parent();
-            }
-        }
-        self.container_explorer.set_loading(false);
+        let subscription =
+            self.container_actions
+                .spawn_list_files(&container_id, &container_name, path);
+        self.pending_file_op = Some(PendingFileOp { subscription, kind });
     }
 
-    async fn refresh_explorer_listing(&mut self, path: &str) {
+    fn start_file_view(&mut self, path: &str) {
+        if self.pending_file_op.is_some() {
+            return;
+        }
         self.container_explorer.set_loading(true);
         let container_id = self.container_explorer.container_id.clone();
-        let container_name = self.container_explorer.container_name.clone();
-        match self
-            .container_actions
-            .list_files(&container_id, &container_name, path)
-            .await
-        {
-            Ok(listing) => self.container_explorer.refresh_listing(listing),
-            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
-        }
-        self.container_explorer.set_loading(false);
+        let subscription =
+            self.container_actions
+                .spawn_read_file(&container_id, path, FILE_VIEW_MAX_BYTES);
+        self.pending_file_op = Some(PendingFileOp {
+            subscription,
+            kind: PendingFileOpKind::Read,
+        });
     }
 
-    async fn load_file_view(&mut self, path: &str) {
+    /// Spawns a background copy to the host. Unlike listing and read, the
+    /// copy survives leaving the explorer screen: it runs to completion and
+    /// reports its result popup via [`App::drain_file_copy`].
+    fn start_copy_to_host(&mut self, path: &str) {
+        if self.pending_file_op.is_some() || self.pending_file_copy.is_some() {
+            return;
+        }
         self.container_explorer.set_loading(true);
         let container_id = self.container_explorer.container_id.clone();
-        match self
+        let subscription = self
             .container_actions
-            .read_file(&container_id, path, FILE_VIEW_MAX_BYTES)
-            .await
-        {
-            Ok(content) => self.container_explorer.show_file(path, content),
-            Err(e) => self.popup_message = Some(PopupMessage::Error(e.to_string())),
-        }
-        self.container_explorer.set_loading(false);
-    }
-
-    async fn copy_entry_to_host(&mut self, path: &str) {
-        self.container_explorer.set_loading(true);
-        let container_id = self.container_explorer.container_id.clone();
-        match self
-            .container_actions
-            .copy_to_host(&container_id, path)
-            .await
-        {
-            Ok(dest) => {
-                self.popup_message = Some(PopupMessage::Info(
-                    resources::file_copy_success_message(&dest.to_string_lossy()),
-                ));
-            }
-            Err(e) => {
-                self.popup_message = Some(PopupMessage::Error(resources::file_copy_error_message(
-                    &e.to_string(),
-                )));
-            }
-        }
-        self.container_explorer.set_loading(false);
+            .spawn_copy_to_host(&container_id, path);
+        self.pending_file_copy = Some(subscription);
     }
 
     pub(crate) fn handle_details_action(&mut self, action: AppAction) {
@@ -1191,8 +1173,7 @@ impl App {
             AppAction::ToggleSort => self.stack_presenter.containers.toggle_sort(),
             AppAction::BrowseFiles => {
                 if let Some(container) = self.stack_presenter.selected_stack_container().cloned() {
-                    self.open_container_explorer(&container.id, &container.name)
-                        .await;
+                    self.open_container_explorer(&container.id, &container.name);
                 }
             }
             _ => {}

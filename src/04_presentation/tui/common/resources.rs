@@ -34,7 +34,7 @@ pub const CONTAINER_TITLE: &str = "Containers";
 pub const CONTAINER_HEADERS: [&str; 7] =
     ["Name", "Image", "State", "CPU", "Memory", "Status", "Ports"];
 pub const CONTAINER_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | b: Browse | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
 pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back | Space: All commands ";
 pub const CONTAINER_LOGS_HELP: &str =

@@ -1,6 +1,6 @@
 use crate::application::container::{
     ContainerDto, ContainerLogsDto, ContainerService, ContainerStatsSubscription,
-    CreateContainerRequest, FileContentDto, FileListingDto,
+    CreateContainerRequest, FileOpSubscription,
 };
 use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
@@ -94,30 +94,34 @@ impl ContainerActions {
         self.service.subscribe_stats(container_ids).await
     }
 
-    pub async fn list_files(
+    /// Spawns a background listing; the result arrives on the subscription as
+    /// a [`FileOpEvent::ListingCompleted`](crate::application::container::FileOpEvent).
+    pub fn spawn_list_files(
         &self,
         container_id: &str,
         container_name: &str,
         path: &str,
-    ) -> Result<FileListingDto, AppError> {
+    ) -> FileOpSubscription {
         self.service
-            .list_container_files(container_id, container_name, path)
-            .await
+            .spawn_list_files(container_id, container_name, path)
     }
 
-    pub async fn read_file(
+    /// Spawns a background file read; the result arrives on the subscription
+    /// as a [`FileOpEvent::FileReadCompleted`](crate::application::container::FileOpEvent).
+    pub fn spawn_read_file(
         &self,
         container_id: &str,
         path: &str,
         max_bytes: u64,
-    ) -> Result<FileContentDto, AppError> {
-        self.service
-            .read_container_file(container_id, path, max_bytes)
-            .await
+    ) -> FileOpSubscription {
+        self.service.spawn_read_file(container_id, path, max_bytes)
     }
 
-    pub async fn copy_to_host(&self, container_id: &str, path: &str) -> Result<PathBuf, AppError> {
-        self.service.copy_to_current_dir(container_id, path).await
+    /// Spawns a background copy to the current working directory; the result
+    /// arrives on the subscription as a
+    /// [`FileOpEvent::CopyCompleted`](crate::application::container::FileOpEvent).
+    pub fn spawn_copy_to_host(&self, container_id: &str, path: &str) -> FileOpSubscription {
+        self.service.spawn_copy_to_host(container_id, path)
     }
 }
 
@@ -198,8 +202,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_container_actions_delegate_file_operations() {
-        use crate::application::container::{FileEntryDto, FileListingDto};
+    async fn test_container_actions_spawn_file_operations() {
+        use crate::application::container::{
+            FileEntryDto, FileListingDto, FileOpEvent, FILE_VIEW_MAX_BYTES,
+        };
         use crate::domain::container::FileKind;
 
         let mut mock = MockContainerRepository::new();
@@ -225,7 +231,18 @@ mod tests {
             .returning(|_, _| Ok(vec![0x1f, 0x8b]));
 
         let actions = make_action(mock);
-        let listing: FileListingDto = actions.list_files("abc123", "web", "/etc").await.unwrap();
+
+        let mut listing_sub = actions.spawn_list_files("abc123", "web", "/etc");
+        let listing_event = loop {
+            match listing_sub.try_recv() {
+                Ok(event) => break event,
+                Err(_) => tokio::task::yield_now().await,
+            }
+        };
+        let FileOpEvent::ListingCompleted { result } = listing_event else {
+            panic!("expected ListingCompleted event, got {listing_event:?}");
+        };
+        let listing: FileListingDto = result.unwrap();
         assert_eq!(listing.path, "/etc");
         assert_eq!(listing.entries.len(), 1);
         assert_eq!(
@@ -241,14 +258,32 @@ mod tests {
             }
         );
 
-        let content = actions
-            .read_file("abc123", "/etc/app.conf", 1024)
-            .await
-            .unwrap();
+        let mut read_sub = actions.spawn_read_file("abc123", "/etc/app.conf", FILE_VIEW_MAX_BYTES);
+        let read_event = loop {
+            match read_sub.try_recv() {
+                Ok(event) => break event,
+                Err(_) => tokio::task::yield_now().await,
+            }
+        };
+        let FileOpEvent::FileReadCompleted { path, result } = read_event else {
+            panic!("expected FileReadCompleted event, got {read_event:?}");
+        };
+        assert_eq!(path, "/etc/app.conf");
+        let content = result.unwrap();
         assert_eq!(content.text(), Some("hello".to_string()));
         assert!(!content.truncated);
 
         // The archive fixture is not a valid tar: copy must surface the error.
-        assert!(actions.copy_to_host("abc123", "/etc/nginx").await.is_err());
+        let mut copy_sub = actions.spawn_copy_to_host("abc123", "/etc/nginx");
+        let copy_event = loop {
+            match copy_sub.try_recv() {
+                Ok(event) => break event,
+                Err(_) => tokio::task::yield_now().await,
+            }
+        };
+        let FileOpEvent::CopyCompleted { result } = copy_event else {
+            panic!("expected CopyCompleted event, got {copy_event:?}");
+        };
+        assert!(result.is_err());
     }
 }

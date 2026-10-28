@@ -190,6 +190,77 @@ impl Drop for ContainerStatsSubscription {
     }
 }
 
+/// Terminal event of a background file operation spawned by the container
+/// file explorer (listing, file read, host copy). Only one operation runs at
+/// a time: the presentation layer drains the subscription after each key.
+#[derive(Debug)]
+pub enum FileOpEvent {
+    ListingCompleted {
+        result: Result<FileListingDto, AppError>,
+    },
+    FileReadCompleted {
+        path: String,
+        result: Result<FileContentDto, AppError>,
+    },
+    CopyCompleted {
+        result: Result<std::path::PathBuf, AppError>,
+    },
+}
+
+/// Subscription to a background file operation on a container: the spawned
+/// task sends exactly one [`FileOpEvent`] before finishing.
+///
+/// Mirrors [`crate::application::image::ImagePullSubscription`]: the receiver
+/// is polled with [`FileOpSubscription::try_recv`] from the UI event loop,
+/// and dropping or calling [`FileOpSubscription::abort`] cancels the task.
+#[derive(Debug)]
+pub struct FileOpSubscription {
+    receiver: mpsc::Receiver<FileOpEvent>,
+    task: Option<JoinHandle<()>>,
+    pending_completed: Option<FileOpEvent>,
+}
+
+impl FileOpSubscription {
+    pub fn new(receiver: mpsc::Receiver<FileOpEvent>, task: JoinHandle<()>) -> Self {
+        FileOpSubscription {
+            receiver,
+            task: Some(task),
+            pending_completed: None,
+        }
+    }
+
+    /// Subscription whose result is already known; used when the operation
+    /// cannot even start (e.g. unresolvable destination directory) and in
+    /// tests.
+    pub fn completed(event: FileOpEvent) -> Self {
+        let (_sender, receiver) = mpsc::channel(1);
+        FileOpSubscription {
+            receiver,
+            task: None,
+            pending_completed: Some(event),
+        }
+    }
+
+    pub fn try_recv(&mut self) -> Result<FileOpEvent, mpsc::error::TryRecvError> {
+        if let Some(event) = self.pending_completed.take() {
+            return Ok(event);
+        }
+        self.receiver.try_recv()
+    }
+
+    pub fn abort(&mut self) {
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+}
+
+impl Drop for FileOpSubscription {
+    fn drop(&mut self) {
+        self.abort();
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileEntryDto {
     pub name: String,
@@ -352,6 +423,7 @@ fn invalid_port_mapping(entry: &str, reason: &str) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::container::{FileEntry, FileKind, FileListing, FilePermissions};
     use chrono::TimeZone;
 
     fn make_runtime_stats() -> ContainerRuntimeStatsDto {
@@ -533,6 +605,84 @@ mod tests {
             truncated: false,
         };
         assert_eq!(invalid.text(), None);
+    }
+
+    #[test]
+    fn file_op_subscription_completed_delivers_event_without_task() {
+        let listing = FileListingDto {
+            container_id: "abc123".to_string(),
+            container_name: "web".to_string(),
+            path: "/".to_string(),
+            entries: vec![FileEntryDto {
+                name: "etc".to_string(),
+                path: "/etc".to_string(),
+                kind: FileKind::Directory,
+                size: 0,
+                modified: None,
+                permissions: "drwxr-xr-x".to_string(),
+                link_target: None,
+            }],
+        };
+        let mut subscription = FileOpSubscription::completed(FileOpEvent::ListingCompleted {
+            result: Ok(listing),
+        });
+        let event = subscription.try_recv().expect("completed event delivered");
+        match event {
+            FileOpEvent::ListingCompleted { result } => {
+                assert_eq!(result.unwrap().path, "/");
+            }
+            other => panic!("expected ListingCompleted, got {other:?}"),
+        }
+        // The pending event is consumed exactly once.
+        assert!(subscription.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn file_op_subscription_abort_cancels_task() {
+        let (sender, receiver) = mpsc::channel(1);
+        let task = tokio::spawn(async move {
+            let send = sender.send(FileOpEvent::CopyCompleted {
+                result: Ok(std::path::PathBuf::from("/tmp/x")),
+            });
+            send.await.ok();
+            std::future::pending::<()>().await;
+        });
+        let mut subscription = FileOpSubscription::new(receiver, task);
+        subscription.abort();
+        // A second abort is a no-op.
+        subscription.abort();
+    }
+
+    #[test]
+    fn file_op_event_debug_and_file_listing_dto_fields() {
+        let listing = FileListing::new(
+            "/",
+            vec![FileEntry::new(
+                "a",
+                "/a",
+                FileKind::File,
+                1,
+                None,
+                FilePermissions::new(0o100644),
+            )
+            .unwrap()],
+        )
+        .unwrap();
+        assert_eq!(listing.path(), "/");
+        let event = FileOpEvent::ListingCompleted {
+            result: Ok(listing_dto(&listing)),
+        };
+        let debug = format!("{event:?}");
+        assert!(debug.contains("ListingCompleted"));
+    }
+
+    fn listing_dto(listing: &FileListing) -> FileListingDto {
+        FileListingDto {
+            container_id: "abc123".to_string(),
+            container_name: "web".to_string(),
+            path: listing.path().to_string(),
+            entries: vec![],
+        }
     }
 
     #[test]

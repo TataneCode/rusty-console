@@ -84,6 +84,7 @@ async fn space_opens_popup_with_full_command_list_and_escape_closes_it() {
         "R: Restart",
         "X: Prune",
         "A: Add",
+        "b: Browse",
         "q: Quit",
     ] {
         assert!(

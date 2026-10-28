@@ -1,7 +1,7 @@
 use crate::application::container::archive::extract_archive;
 use crate::application::container::dto::{
     ContainerDto, ContainerLogsDto, ContainerStatsSubscription, CreateContainerRequest,
-    FileContentDto, FileListingDto,
+    FileContentDto, FileListingDto, FileOpEvent, FileOpSubscription,
 };
 use crate::application::container::log_parser;
 use crate::application::container::mapper::ContainerMapper;
@@ -10,6 +10,7 @@ use crate::application::error::AppError;
 use crate::application::shared::PruneResultDto;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 /// Maximum number of bytes read when viewing a file inside a container.
 pub const FILE_VIEW_MAX_BYTES: u64 = 1024 * 1024;
@@ -155,6 +156,86 @@ impl ContainerService {
             .map_err(|e| AppError::operation_failed(format!("cannot resolve current dir: {e}")))?;
         self.copy_to_host(id, path, &dest_dir).await
     }
+
+    /// Spawns a background listing of `path`; the result is delivered as a
+    /// [`FileOpEvent::ListingCompleted`] on the returned subscription, so the
+    /// UI event loop keeps rendering while Docker answers.
+    pub fn spawn_list_files(&self, id: &str, name: &str, path: &str) -> FileOpSubscription {
+        let repository = Arc::clone(&self.repository);
+        let id = id.to_string();
+        let name = name.to_string();
+        let path = path.to_string();
+        let (sender, receiver) = mpsc::channel(1);
+        let task = tokio::spawn(async move {
+            let result = repository
+                .list_files(&id, &path)
+                .await
+                .map(|listing| ContainerMapper::file_listing_to_dto(&listing, &id, &name));
+            let _ = sender.send(FileOpEvent::ListingCompleted { result }).await;
+        });
+        FileOpSubscription::new(receiver, task)
+    }
+
+    /// Spawns a background read of a container file (capped at `max_bytes`);
+    /// the result is delivered as a [`FileOpEvent::FileReadCompleted`].
+    pub fn spawn_read_file(&self, id: &str, path: &str, max_bytes: u64) -> FileOpSubscription {
+        let repository = Arc::clone(&self.repository);
+        let id = id.to_string();
+        let path = path.to_string();
+        let (sender, receiver) = mpsc::channel(1);
+        let task = tokio::spawn(async move {
+            let result =
+                repository
+                    .read_file(&id, &path, max_bytes)
+                    .await
+                    .map(|(data, total_size)| FileContentDto {
+                        truncated: total_size > max_bytes,
+                        data,
+                        total_size,
+                    });
+            let _ = sender
+                .send(FileOpEvent::FileReadCompleted { path, result })
+                .await;
+        });
+        FileOpSubscription::new(receiver, task)
+    }
+
+    /// Spawns a background copy of a container file or directory into the
+    /// current working directory; the result is delivered as a
+    /// [`FileOpEvent::CopyCompleted`].
+    pub fn spawn_copy_to_host(&self, id: &str, path: &str) -> FileOpSubscription {
+        let dest_dir = match std::env::current_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                let error = AppError::operation_failed(format!("cannot resolve current dir: {e}"));
+                return FileOpSubscription::completed(FileOpEvent::CopyCompleted {
+                    result: Err(error),
+                });
+            }
+        };
+        let repository = Arc::clone(&self.repository);
+        let id = id.to_string();
+        let path = path.to_string();
+        let (sender, receiver) = mpsc::channel(1);
+        let task = tokio::spawn(async move {
+            let result = copy_archive_to(repository, id, path, dest_dir).await;
+            let _ = sender.send(FileOpEvent::CopyCompleted { result }).await;
+        });
+        FileOpSubscription::new(receiver, task)
+    }
+}
+
+async fn copy_archive_to(
+    repository: Arc<dyn ContainerRepository>,
+    id: String,
+    path: String,
+    dest_dir: PathBuf,
+) -> Result<PathBuf, AppError> {
+    let archive = repository.download_archive(&id, &path).await?;
+    // Tar extraction is blocking I/O: keep it off the async worker threads.
+    tokio::task::spawn_blocking(move || extract_archive(&archive, &dest_dir))
+        .await
+        .map_err(|e| AppError::operation_failed(format!("copy task failed: {e}")))?
 }
 
 #[cfg(test)]
@@ -533,5 +614,140 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("no such file"));
+    }
+
+    /// Receives the single event of a spawned file operation. The task may
+    /// block on the thread pool (tar extraction), so poll with a small sleep.
+    async fn recv_file_op_event(
+        subscription: &mut FileOpSubscription,
+    ) -> crate::application::container::dto::FileOpEvent {
+        for _ in 0..1000 {
+            match subscription.try_recv() {
+                Ok(event) => return event,
+                Err(_) => tokio::time::sleep(std::time::Duration::from_millis(1)).await,
+            }
+        }
+        panic!("spawned file operation did not deliver its event");
+    }
+
+    #[tokio::test]
+    async fn test_spawn_list_files_delivers_listing_event() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_list_files()
+            .withf(|id, path| id == "abc123" && path == "/etc")
+            .returning(|_, _| Ok(make_file_listing("/etc")));
+
+        let service = ContainerService::new(Arc::new(mock));
+        let mut subscription = service.spawn_list_files("abc123", "web", "/etc");
+        let event = recv_file_op_event(&mut subscription).await;
+        let FileOpEvent::ListingCompleted { result } = event else {
+            panic!("expected ListingCompleted, got {event:?}");
+        };
+        let dto = result.unwrap();
+        assert_eq!(dto.container_id, "abc123");
+        assert_eq!(dto.container_name, "web");
+        assert_eq!(dto.path, "/etc");
+        assert_eq!(dto.entries.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_spawn_list_files_delivers_error_event() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_list_files()
+            .returning(|_, _| Err(AppError::repository("container stopped")));
+
+        let service = ContainerService::new(Arc::new(mock));
+        let mut subscription = service.spawn_list_files("abc123", "web", "/");
+        let event = recv_file_op_event(&mut subscription).await;
+        let FileOpEvent::ListingCompleted { result } = event else {
+            panic!("expected ListingCompleted, got {event:?}");
+        };
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("container stopped"));
+    }
+
+    #[tokio::test]
+    async fn test_spawn_read_file_delivers_content_event() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_read_file()
+            .withf(|id, path, max| id == "abc123" && path == "/f" && *max == 100)
+            .returning(|_, _, _| Ok((b"hello".to_vec(), 5)));
+
+        let service = ContainerService::new(Arc::new(mock));
+        let mut subscription = service.spawn_read_file("abc123", "/f", 100);
+        let event = recv_file_op_event(&mut subscription).await;
+        let FileOpEvent::FileReadCompleted { path, result } = event else {
+            panic!("expected FileReadCompleted, got {event:?}");
+        };
+        assert_eq!(path, "/f");
+        let content = result.unwrap();
+        assert!(!content.truncated);
+        assert_eq!(content.text(), Some("hello".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_spawn_copy_to_host_extracts_archive_into_current_dir() {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(5);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "app.conf", &b"hello"[..])
+            .unwrap();
+        let archive = builder.into_inner().unwrap();
+
+        let dir = std::env::temp_dir().join(format!(
+            "rusty_console_spawn_copy_{}_{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut mock = MockContainerRepository::new();
+        mock.expect_download_archive()
+            .withf(|id, path| id == "abc123" && path == "/app.conf")
+            .returning(move |_, _| Ok(archive.clone()));
+
+        let service = ContainerService::new(Arc::new(mock));
+        let mut subscription = service.spawn_copy_to_host("abc123", "/app.conf");
+        let event = recv_file_op_event(&mut subscription).await;
+        let FileOpEvent::CopyCompleted { result } = event else {
+            panic!("expected CopyCompleted, got {event:?}");
+        };
+        // The mock resolves the current dir; only assert success here — the
+        // cwd race with parallel tests makes the exact path nondeterministic.
+        assert!(result.is_ok());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_spawn_copy_to_host_delivers_error_event() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_download_archive()
+            .returning(|_, _| Err(AppError::repository("no such file")));
+
+        let service = ContainerService::new(Arc::new(mock));
+        let mut subscription = service.spawn_copy_to_host("abc123", "/missing");
+        let event = recv_file_op_event(&mut subscription).await;
+        let FileOpEvent::CopyCompleted { result } = event else {
+            panic!("expected CopyCompleted, got {event:?}");
+        };
+        assert!(result.unwrap_err().to_string().contains("no such file"));
+    }
+
+    #[tokio::test]
+    async fn test_spawned_subscription_aborts_task_on_drop() {
+        let mut mock = MockContainerRepository::new();
+        mock.expect_list_files()
+            .returning(|_, _| Ok(make_file_listing("/")));
+
+        let service = ContainerService::new(Arc::new(mock));
+        let subscription = service.spawn_list_files("abc123", "web", "/");
+        drop(subscription);
     }
 }

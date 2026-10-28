@@ -118,6 +118,7 @@ This screen offers the same features as the Containers list (same columns, live 
 | `Enter` | View container details (including live network I/O) |
 | `e` | Open the exec shell picker for the selected container |
 | `d` | Delete the selected container (opens confirmation dialog) |
+| `b` | Browse the container filesystem (file explorer) |
 | `/` | Filter containers by name or image |
 | `o` | Cycle list sort by name (A→Z → Z→A → default) |
 | `X` | Prune all stopped containers |

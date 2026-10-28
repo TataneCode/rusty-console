@@ -10,5 +10,5 @@ pub use dto::{
     ContainerStatsEvent, ContainerStatsSubscription, ContainerStatsUpdate, CreateContainerRequest,
     FileContentDto, FileEntryDto, FileListingDto, LogLineDto, PortMappingSpec,
 };
-pub use service::{ContainerService, FILE_VIEW_MAX_BYTES};
+pub use service::{ContainerService, FILE_VIEW_MAX_BYTES, FILE_VIEW_PAGE_SCROLL};
 pub use traits::ContainerRepository;

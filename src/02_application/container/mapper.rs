@@ -59,11 +59,9 @@ impl ContainerMapper {
             path: entry.path().to_string(),
             kind: entry.kind(),
             size: entry.size(),
-            modified: entry.modified().map(|ts| {
-                Utc.timestamp_opt(ts, 0)
-                    .single()
-                    .unwrap_or_else(|| Utc.timestamp_opt(0, 0).unwrap())
-            }),
+            modified: entry
+                .modified()
+                .map(|ts| Utc.timestamp_opt(ts, 0).single().unwrap_or_default()),
             permissions: entry.permissions().display(),
             link_target: entry.link_target().map(str::to_string),
         }

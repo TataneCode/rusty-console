@@ -114,7 +114,7 @@ pub const STACK_HEADERS: [&str; 3] = ["Stack", "Containers", "Running"];
 pub const STACK_LIST_HELP: &str =
     " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | D: Remove All | r: Refresh | Esc: Back ";
 pub const STACK_CONTAINERS_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
+    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | b: Browse | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 
 pub const LABEL_ID: &str = "ID:";
 pub const LABEL_NAME: &str = "Name:";

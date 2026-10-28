@@ -2,7 +2,7 @@
 
 use crate::application::container::ContainerStatsEvent;
 use crate::application::container::{
-    parse_port_mappings, CreateContainerRequest, FILE_VIEW_MAX_BYTES,
+    parse_port_mappings, CreateContainerRequest, FILE_VIEW_MAX_BYTES, FILE_VIEW_PAGE_SCROLL,
 };
 use crate::presentation::tui::app::{
     format_bytes, AddDialog, AddDialogKind, App, PendingImagePull, Screen,
@@ -70,7 +70,8 @@ impl App {
                     self.container_explorer.close_file_view();
                 }
                 AppAction::NavigateDown | AppAction::ScrollDown => {
-                    self.container_explorer.scroll_file_view_down(10);
+                    self.container_explorer
+                        .scroll_file_view_down(FILE_VIEW_PAGE_SCROLL);
                 }
                 AppAction::NavigateUp | AppAction::ScrollUp => {
                     self.container_explorer.scroll_file_view_up();
@@ -350,8 +351,7 @@ impl App {
 
     pub(crate) async fn handle_container_explorer_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
-            AppAction::Back => {
+            AppAction::Quit | AppAction::Back => {
                 if self.container_explorer.is_filter_active() {
                     self.container_explorer.deactivate_filter();
                 } else {

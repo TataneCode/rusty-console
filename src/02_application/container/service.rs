@@ -14,6 +14,9 @@ use std::sync::Arc;
 /// Maximum number of bytes read when viewing a file inside a container.
 pub const FILE_VIEW_MAX_BYTES: u64 = 1024 * 1024;
 
+/// Number of lines the file view scrolls on a single PageDown key press.
+pub const FILE_VIEW_PAGE_SCROLL: usize = 10;
+
 pub struct ContainerService {
     repository: Arc<dyn ContainerRepository>,
 }

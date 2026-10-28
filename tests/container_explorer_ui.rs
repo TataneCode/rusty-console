@@ -174,6 +174,20 @@ async fn explorer_esc_returns_to_origin_screen() {
 }
 
 #[tokio::test]
+async fn explorer_q_returns_to_origin_screen_instead_of_quitting() {
+    let Some(mut app) = explorer_app() else {
+        return;
+    };
+    app.handle_action(AppAction::Quit).await;
+    assert!(
+        !app.should_quit,
+        "q must not quit the app from the explorer"
+    );
+    assert_eq!(app.screen, Screen::ContainerList);
+    assert!(app.container_explorer.listing.is_none());
+}
+
+#[tokio::test]
 async fn explorer_sort_cycles_three_states() {
     let Some(mut app) = explorer_app() else {
         return;

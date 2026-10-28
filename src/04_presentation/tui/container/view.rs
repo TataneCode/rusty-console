@@ -216,8 +216,9 @@ pub fn render_container_explorer(frame: &mut Frame, area: Rect, view: ExplorerVi
 /// Scrollable popup showing the raw text content of a file from a container.
 /// Binary content is reported as a message instead of raw bytes.
 pub fn render_file_view(frame: &mut Frame, path: &str, content: &FileContentDto, scroll: usize) {
-    let area = centered_rect(80, 80, frame.area());
-    frame.render_widget(Clear, area);
+    let popup_area = centered_rect(80, 80, frame.area());
+    let [content_area, help_area] = split_content_area(popup_area);
+    frame.render_widget(Clear, popup_area);
 
     let title = format!("{}{} ", resources::FILE_VIEW_TITLE, path);
     let text = match content.text() {
@@ -233,7 +234,7 @@ pub fn render_file_view(frame: &mut Frame, path: &str, content: &FileContentDto,
         text
     };
 
-    let content_height = area.height.saturating_sub(2) as usize;
+    let content_height = content_area.height.saturating_sub(2) as usize;
     let max_scroll = text.lines().count().saturating_sub(content_height);
     let scroll = scroll.min(max_scroll);
 
@@ -241,7 +242,8 @@ pub fn render_file_view(frame: &mut Frame, path: &str, content: &FileContentDto,
         .block(Theme::section_block(Some(&title)))
         .wrap(Wrap { trim: false })
         .scroll((scroll as u16, 0));
-    frame.render_widget(popup, area);
+    frame.render_widget(popup, content_area);
+    render_action_bar(frame, help_area, resources::FILE_VIEW_CLOSE_HELP);
 }
 
 pub fn render_container_details(frame: &mut Frame, area: Rect, container: &ContainerDto) {
@@ -855,6 +857,25 @@ mod tests {
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("partial"));
         assert!(text.contains("truncated, 1.00 MB total"));
+    }
+
+    #[test]
+    fn test_render_file_view_shows_close_help_bar() {
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let content = FileContentDto {
+            data: b"line1\n".to_vec(),
+            total_size: 6,
+            truncated: false,
+        };
+
+        terminal
+            .draw(|frame| render_file_view(frame, "/etc/app.conf", &content, 0))
+            .unwrap();
+
+        let text = buffer_text(terminal.backend().buffer());
+        assert!(text.contains("j/k: Scroll"));
+        assert!(text.contains("Esc/q: Close"));
     }
 
     #[test]

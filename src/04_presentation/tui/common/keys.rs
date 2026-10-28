@@ -101,8 +101,20 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
             other => Some(other),
         },
         KeyContext::ContainerExplorer => match action {
-            AppAction::BrowseFiles => None,
-            other => Some(other),
+            AppAction::Back
+            | AppAction::NavigateUp
+            | AppAction::NavigateDown
+            | AppAction::PageUp
+            | AppAction::PageDown
+            | AppAction::Select
+            | AppAction::ActivateFilter
+            | AppAction::ToggleSort
+            | AppAction::Refresh
+            | AppAction::ToggleHelp
+            | AppAction::CopyFile
+            | AppAction::ViewFile
+            | AppAction::GoToParent => Some(action),
+            _ => None,
         },
         KeyContext::NetworkDetails => match action {
             AppAction::Delete => Some(AppAction::DisconnectContainer),
@@ -489,6 +501,45 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn test_explorer_context_filters_unsupported_container_actions() {
+        // Container-level actions that do not apply to the file explorer are
+        // dropped: exec, delete, start/stop, logs, details, prune, add, quit.
+        for (key, label) in [
+            (KeyCode::Char('e'), "Exec"),
+            (KeyCode::Char('d'), "Delete"),
+            (KeyCode::Char('s'), "StartStop"),
+            (KeyCode::Char('l'), "ViewLogs"),
+            (KeyCode::Char('p'), "PauseUnpause"),
+            (KeyCode::Char('R'), "Restart"),
+            (KeyCode::Char('X'), "Prune"),
+            (KeyCode::Char('A'), "Add"),
+            (KeyCode::Char('q'), "Quit"),
+        ] {
+            assert_eq!(
+                map_key_to_action_for_context(key_event(key), KeyContext::ContainerExplorer),
+                None,
+                "{label} must be inert on the explorer screen"
+            );
+        }
+        // Supported explorer actions still pass through.
+        for (key, expected) in [
+            (KeyCode::Char('c'), AppAction::CopyFile),
+            (KeyCode::Char('v'), AppAction::ViewFile),
+            (KeyCode::Char('h'), AppAction::GoToParent),
+            (KeyCode::Char('o'), AppAction::ToggleSort),
+            (KeyCode::Char('r'), AppAction::Refresh),
+            (KeyCode::Char('/'), AppAction::ActivateFilter),
+            (KeyCode::Enter, AppAction::Select),
+            (KeyCode::Esc, AppAction::Back),
+        ] {
+            assert_eq!(
+                map_key_to_action_for_context(key_event(key), KeyContext::ContainerExplorer),
+                Some(expected)
+            );
+        }
     }
 
     #[test]

@@ -62,6 +62,17 @@ cargo llvm-cov             # couverture (min 70 %, courant ~91 %)
 
 Gate complet avant toute livraison : voir `rules/quality.md`.
 
+## Release (100 % automatisée)
+
+La release se déclenche **automatiquement** à la création d'un tag `v*` : build Linux + Windows, packaging RPM/DEB/zip, création de la release GitHub avec une note générée automatiquement (catégorisée par type de commit Conventional Commits) et upload des assets. Voir `.github/workflows/release.yml`.
+
+Deux façons de déclencher une release :
+
+1. **Recommandé** — onglet **Actions > Version Bump > Run workflow** : choisir `patch` / `minor` / `major`. Le workflow bumpe `Cargo.toml`, commit `chore(release): vX.Y.Z` sur `main`, pousse le tag `vX.Y.Z`, ce qui déclenche la release. Voir `.github/workflows/version-bump.yml`.
+2. **Manuellement** — `git tag vX.Y.Z && git push origin vX.Y.Z` (après avoir bumpé `Cargo.toml` soi-même).
+
+Aucune édition manuelle de la release note n'est nécessaire : le corps est entièrement généré depuis les commits entre le tag précédent et le nouveau tag.
+
 ## État connu (octobre 2026)
 
 - Coverage ≈ 91 % (min requis : 70 %), ~518 tests (500 lib + 18 IT UI).

@@ -1,0 +1,77 @@
+name: Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Type de bump semver'
+        required: true
+        type: choice
+        default: 'patch'
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute new version
+        id: compute
+        run: |
+          current="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml)"
+          base="${current%%-*}"
+          IFS='.' read -r major minor patch <<< "${base}"
+          case "${{ inputs.bump }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          new_version="${major}.${minor}.${patch}"
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+          echo "version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "Current version: ${current} -> new version: ${new_version}"
+
+      - name: Check tag does not already exist
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.compute.outputs.version }}"; then
+            echo "Tag v${{ steps.compute.outputs.version }} already exists on origin, aborting." >&2
+            exit 1
+          fi
+
+      - name: Bump version in Cargo.toml
+        run: |
+          sed -i 's/^version = ".*"$/version = "${{ steps.compute.outputs.version }}"/' Cargo.toml
+          grep '^version' Cargo.toml
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Regenerate Cargo.lock
+        run: cargo generate-lockfile
+
+      - name: Commit and push version bump
+        run: |
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore(release): v${{ steps.compute.outputs.version }}"
+          git push origin HEAD:main
+
+      - name: Create and push tag
+        run: |
+          git tag "v${{ steps.compute.outputs.version }}"
+          git push origin "v${{ steps.compute.outputs.version }}"

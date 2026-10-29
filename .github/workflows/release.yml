@@ -99,6 +99,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -113,10 +118,44 @@ jobs:
           chmod +x release/* 2>/dev/null || true
           ls -la release/
 
+      - name: Generate categorized release notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          prev_tag="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)"
+          if [ -n "$prev_tag" ]; then
+            range="${prev_tag}..${tag}"
+            changelog_url="https://github.com/${GITHUB_REPOSITORY}/compare/${prev_tag}...${tag}"
+          else
+            range="${tag}"
+            changelog_url="https://github.com/${GITHUB_REPOSITORY}/commits/${tag}"
+          fi
+
+          {
+            printf "## What's Changed\n"
+            git log --no-merges --format='%s' "${range}" | awk '
+              {
+                s = tolower($0)
+                if (s ~ /^feat(\(.+\))?!?:/)                                           { f[++nf] = "✨ " $0; next }
+                if (s ~ /^fix(\(.+\))?!?:/)                                            { b[++nb] = "🐛 " $0; next }
+                if (s ~ /^(refactor|perf|style|build|ci|docs|chore|test)(\(.+\))?!?:/) { r[++nr] = "🔧 " $0; next }
+                o[++no] = "• " $0
+              }
+              END {
+                if (nf) { print "\n### ✨ Features";                     for (i = 1; i <= nf; i++) print f[i] }
+                if (nb) { print "\n### 🐛 Bug Fixes";                    for (i = 1; i <= nb; i++) print b[i] }
+                if (nr) { print "\n### 🔧 Refactoring, CI & Chores";     for (i = 1; i <= nr; i++) print r[i] }
+                if (no) { print "\n### • Other";                        for (i = 1; i <= no; i++) print o[i] }
+              }
+            '
+            printf "\n**Full Changelog**: %s\n" "${changelog_url}"
+          } > release_notes.md
+          cat release_notes.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ github.ref_name }}
+          body-path: release_notes.md
           files: release/*
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

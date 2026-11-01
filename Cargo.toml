@@ -1,6 +1,6 @@
 [package]
 name = "rusty_console"
-version = "0.1.0"
+version = "3.4.0"
 edition = "2021"
 rust-version = "1.88"
 license = "MIT"

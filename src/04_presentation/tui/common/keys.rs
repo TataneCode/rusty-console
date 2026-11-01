@@ -42,7 +42,9 @@ pub enum AppAction {
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
     match key.code {
-        KeyCode::Char('q') => Some(AppAction::Quit),
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(AppAction::Quit)
+        }
         KeyCode::Esc => Some(AppAction::Back),
         KeyCode::Up | KeyCode::Char('k') => Some(AppAction::NavigateUp),
         KeyCode::Down | KeyCode::Char('j') => Some(AppAction::NavigateDown),
@@ -101,7 +103,8 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
             other => Some(other),
         },
         KeyContext::ContainerExplorer => match action {
-            AppAction::Back
+            AppAction::Quit
+            | AppAction::Back
             | AppAction::NavigateUp
             | AppAction::NavigateDown
             | AppAction::PageUp
@@ -146,11 +149,44 @@ mod tests {
     }
 
     #[test]
-    fn test_quit() {
+    fn test_quit_ctrl_c() {
         assert_eq!(
-            map_key_to_action(key_event(KeyCode::Char('q'))),
+            map_key_to_action(key_event_with_modifiers(
+                KeyCode::Char('c'),
+                KeyModifiers::CONTROL
+            )),
             Some(AppAction::Quit)
         );
+    }
+
+    #[test]
+    fn test_quit_ctrl_c_in_every_context() {
+        let key = key_event_with_modifiers(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        for context in [
+            KeyContext::Global,
+            KeyContext::ContainerLogs,
+            KeyContext::ContainerExplorer,
+            KeyContext::NetworkDetails,
+        ] {
+            assert_eq!(
+                map_key_to_action_for_context(key, context),
+                Some(AppAction::Quit)
+            );
+        }
+    }
+
+    #[test]
+    fn test_q_is_inert_everywhere() {
+        let key = key_event(KeyCode::Char('q'));
+        assert_eq!(map_key_to_action(key), None);
+        for context in [
+            KeyContext::Global,
+            KeyContext::ContainerLogs,
+            KeyContext::ContainerExplorer,
+            KeyContext::NetworkDetails,
+        ] {
+            assert_eq!(map_key_to_action_for_context(key, context), None);
+        }
     }
 
     #[test]
@@ -516,7 +552,6 @@ mod tests {
             (KeyCode::Char('R'), "Restart"),
             (KeyCode::Char('X'), "Prune"),
             (KeyCode::Char('A'), "Add"),
-            (KeyCode::Char('q'), "Quit"),
         ] {
             assert_eq!(
                 map_key_to_action_for_context(key_event(key), KeyContext::ContainerExplorer),

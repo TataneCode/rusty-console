@@ -8,7 +8,8 @@ pub const BREADCRUMB_DETAILS_LABEL: &str = "details";
 pub const BREADCRUMB_CONTAINERS_LABEL: &str = "containers";
 pub const BREADCRUMB_FILES_LABEL: &str = "files";
 pub const MAIN_MENU_BLOCK_TITLE: &str = " Menu ";
-pub const MAIN_MENU_HELP: &str = " j/k: Navigate | Enter: Select | q: Quit | Space: All commands ";
+pub const MAIN_MENU_HELP: &str =
+    " j/k: Navigate | Enter: Select | Ctrl+C: Quit | Space: All commands ";
 pub const MAIN_MENU_HIGHLIGHT_SYMBOL: &str = "> ";
 pub const MAIN_MENU_ITEMS: [&str; 6] = [
     "  Containers",
@@ -23,7 +24,7 @@ pub const CONFIRM_TITLE: &str = " Confirm ";
 pub const ERROR_TITLE: &str = " Error ";
 pub const INFO_TITLE: &str = " Info ";
 pub const HELP_POPUP_TITLE: &str = " Keybindings ";
-pub const HELP_POPUP_CLOSE_HELP: &str = " j/k: Scroll | Esc/q/Space: Close ";
+pub const HELP_POPUP_CLOSE_HELP: &str = " j/k: Scroll | Esc/Space: Close ";
 pub const CONFIRM_YES_LABEL: &str = "  [Yes]";
 pub const CONFIRM_NO_LABEL: &str = "  [No]";
 pub const CONFIRM_YES_BUTTON_WIDTH: u16 = 7;
@@ -34,20 +35,20 @@ pub const CONTAINER_TITLE: &str = "Containers";
 pub const CONTAINER_HEADERS: [&str; 7] =
     ["Name", "Image", "State", "CPU", "Memory", "Status", "Ports"];
 pub const CONTAINER_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | b: Browse | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
+    " Ctrl+C: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | b: Browse | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 pub const CONTAINER_DETAILS_TITLE: &str = " Container Details ";
-pub const CONTAINER_DETAILS_HELP: &str = " Esc/q: Back | Space: All commands ";
+pub const CONTAINER_DETAILS_HELP: &str = " Esc: Back | Space: All commands ";
 pub const CONTAINER_LOGS_HELP: &str =
-    " Esc/q: Back | j/k: Line | PgUp/PgDn: Page | Enter: Expand | /: Search | n/N: Match | y: Copy | E: Export | Space: All commands ";
+    " Esc: Back | j/k: Line | PgUp/PgDn: Page | Enter: Expand | /: Search | n/N: Match | y: Copy | E: Export | Space: All commands ";
 pub const EXPANDED_LOG_LINE_TITLE: &str = " Expanded log line ";
 pub const CONTAINER_DETAILS_ENV_VARS_LABEL: &str = "Environment Variables";
 pub const CONTAINER_DETAILS_NETWORK_IO_LABEL: &str = "Network I/O";
 
 pub const CONTAINER_EXPLORER_HEADERS: [&str; 4] = ["Name", "Size", "Modified", "Permissions"];
 pub const CONTAINER_EXPLORER_HELP: &str =
-    " Esc/q: Back | Enter: Open | h: Up | j/k: Navigate | /: Search | o: Sort | c: Copy | v: View | r: Refresh | Space: All commands ";
+    " Esc: Back | Enter: Open | h: Up | j/k: Navigate | /: Search | o: Sort | c: Copy | v: View | r: Refresh | Space: All commands ";
 pub const FILE_VIEW_TITLE: &str = " File content ";
-pub const FILE_VIEW_CLOSE_HELP: &str = " j/k: Scroll | Esc/q: Close ";
+pub const FILE_VIEW_CLOSE_HELP: &str = " j/k: Scroll | Esc: Close ";
 pub fn container_explorer_title(container_name: &str, path: &str) -> String {
     format!(" Files: {container_name} {path} ")
 }
@@ -74,7 +75,7 @@ pub fn file_view_truncated_message(total_size: u64) -> String {
     )
 }
 pub const EXEC_SHELL_DIALOG_TITLE: &str = " Exec Shell ";
-pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc/q: Cancel ";
+pub const EXEC_SHELL_DIALOG_HELP: &str = " j/k: Navigate | Enter: Select | Esc: Cancel ";
 pub const INPUT_EMPTY: &str = " ";
 pub const INPUT_DIALOG_WIDTH_PERCENT: u16 = 60;
 pub const ADD_IMAGE_DIALOG_TITLE: &str = " Download Image ";
@@ -89,32 +90,32 @@ pub const ADD_CONTAINER_PORTS_LABEL: &str = "Ports (<host>:<internal>;...)";
 pub const VOLUME_TITLE: &str = "Volumes";
 pub const VOLUME_HEADERS: [&str; 5] = ["Name", "Driver", "Size", "In Use", "Created"];
 pub const VOLUME_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
+    " Ctrl+C: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
 pub const VOLUME_DETAILS_TITLE: &str = " Volume Details ";
-pub const VOLUME_DETAILS_HELP: &str = " Esc/q: Back | Space: All commands ";
+pub const VOLUME_DETAILS_HELP: &str = " Esc: Back | Space: All commands ";
 
 pub const NETWORK_TITLE: &str = "Networks";
 pub const NETWORK_HEADERS: [&str; 5] = ["Name", "Driver", "Scope", "Subnet", "Containers"];
 pub const NETWORK_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
+    " Ctrl+C: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Details | d: Delete | r: Refresh | X: Prune | Esc: Back ";
 pub const NETWORK_DETAILS_TITLE: &str = " Network Details ";
 pub const NETWORK_DETAILS_HELP: &str =
-    " Esc/q: Back | j/k: Select container | d: Disconnect | r: Refresh | Space: All commands ";
+    " Esc: Back | j/k: Select container | d: Disconnect | r: Refresh | Space: All commands ";
 
 pub const IMAGE_TITLE: &str = "Images";
 pub const IMAGE_HEADERS: [&str; 6] = ["Repository", "Tag", "ID", "Size", "In Use", "Created"];
 pub const IMAGE_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | d: Delete | Enter: Details | r: Refresh | X: Prune | A: Add | Esc: Back ";
+    " Ctrl+C: Quit | /: Filter | o: Sort | j/k: Navigate | d: Delete | Enter: Details | r: Refresh | X: Prune | A: Add | Esc: Back ";
 pub const IMAGE_DETAILS_TITLE: &str = " Image Details ";
 pub const IMAGE_DETAILS_HELP: &str =
-    " Esc/q: Back | P: Pull Image | r: Refresh | Space: All commands ";
+    " Esc: Back | P: Pull Image | r: Refresh | Space: All commands ";
 
 pub const STACK_TITLE: &str = "Stacks";
 pub const STACK_HEADERS: [&str; 3] = ["Stack", "Containers", "Running"];
 pub const STACK_LIST_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | D: Remove All | r: Refresh | Esc: Back ";
+    " Ctrl+C: Quit | /: Filter | o: Sort | j/k: Navigate | Enter: Drill-down | s: Start All | S: Stop All | D: Remove All | r: Refresh | Esc: Back ";
 pub const STACK_CONTAINERS_HELP: &str =
-    " q: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | b: Browse | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
+    " Ctrl+C: Quit | /: Filter | o: Sort | j/k: Navigate | l: Logs | e: Exec | s: Start/Stop | d: Delete | Enter: Details | b: Browse | r: Refresh | p: Pause | R: Restart | X: Prune | A: Add";
 
 pub const LABEL_ID: &str = "ID:";
 pub const LABEL_NAME: &str = "Name:";
@@ -172,7 +173,7 @@ pub fn filter_prompt_title(base_title: &str, active_filter: Option<&str>) -> Str
 /// visible; the full list opens in the help popup with the Space key.
 pub fn list_footer_help(enter_label: &str) -> String {
     format!(
-        " j/k: Navigate | Enter: {enter_label} | /: Filter | r: Refresh | q: Quit | Space: All commands "
+        " j/k: Navigate | Enter: {enter_label} | /: Filter | r: Refresh | Ctrl+C: Quit | Space: All commands "
     )
 }
 
@@ -282,7 +283,7 @@ mod tests {
         assert!(footer.contains("Enter: Details"));
         assert!(footer.contains("/: Filter"));
         assert!(footer.contains("r: Refresh"));
-        assert!(footer.contains("q: Quit"));
+        assert!(footer.contains("Ctrl+C: Quit"));
         assert!(footer.contains("Space: All commands"));
         assert!(!footer.contains("Sort"));
         assert!(!footer.contains("Delete"));

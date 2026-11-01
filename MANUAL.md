@@ -6,7 +6,7 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 
 - **Breadcrumb bar** — shows the current location (e.g. `Rusty - docker manager > Containers > web logs`), truncating leading segments first when space runs out.
 - **Action bar** — the bottom bar shows the fundamental keys for the current screen (navigation, `Enter`, filter, refresh, quit); during long operations it is replaced by a loading spinner (`|/-\`, 200ms per frame).
-- **Help popup** — pressing `Space` opens a popup listing every keybinding of the current screen, one per line; close it with `Esc`, `q` or `Space`. When the list is taller than the popup, scroll it with `j`/`k` (or ↑/↓, PgUp/PgDn); a scrollbar appears on the right. The action bar always ends with `Space: All commands` as a reminder.
+- **Help popup** — pressing `Space` opens a popup listing every keybinding of the current screen, one per line; close it with `Esc` or `Space`. When the list is taller than the popup, scroll it with `j`/`k` (or ↑/↓, PgUp/PgDn); a scrollbar appears on the right. The action bar always ends with `Space: All commands` as a reminder.
 - **Confirmation dialogs** — every destructive action (delete, prune, stop all, …) opens a confirmation dialog first.
 - **Error popups** — errors are shown in a popup, dismissed on any keypress.
 - **Filter mode** — pressing `/` activates a name filter; type to search, press `Esc` to clear. While the filter is active, letter-key actions (start/stop, delete, sort, refresh, …) are disabled — only typing, `Esc`, navigation (`j`/`k`/arrows) and `Enter` (open details) remain available. The action bar is contextual: while the filter is active it shrinks to `Type: Filter | j/k: Navigate | Enter | Esc: Clear`, and returns to the full list of keys when the filter is cleared.
@@ -21,7 +21,8 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 | `j` / `↓` | Move selection down |
 | `k` / `↑` | Move selection up |
 | `Enter` | Select / open details / confirm |
-| `Esc` / `q` | Go back / quit |
+| `Esc` | Go back (close overlays, return to the previous screen) |
+| `Ctrl+C` | Quit the application (from any screen) |
 | `r` | Refresh list |
 | `/` | Activate filter (type to search, `Esc` to clear) |
 | `o` | Cycle list sort: A→Z → Z→A → default |
@@ -65,9 +66,9 @@ or directory into the directory the binary was launched from (same result as
 | `c` | Copy the selected file/directory to the host (current directory) |
 | `v` | View the selected file (text; binary files show a notice; limited to 1 MB) |
 | `r` | Refresh the current directory |
-| `Esc` / `q` | Back to the container list |
+| `Esc` | Back to the container list |
 
-In the file view, scroll with `j`/`k` and close with `Esc`/`q`/`v`.
+In the file view, scroll with `j`/`k` and close with `Esc` or `v`.
 
 ### Log view
 
@@ -85,13 +86,13 @@ The selected log line is highlighted. Copying copies the line as displayed
 | `/` | Search in logs (case-insensitive) |
 | `n` / `N` | Next / previous search match |
 | `E` | Export all logs to a `.log` file |
-| `Esc` / `q` | Back |
+| `Esc` | Back |
 
 ### Realtime stats
 
 - The **container list** and the **stack containers** screen show live **CPU** and **Memory** values for active containers.
 - **Network I/O** is shown only in **container details**.
-- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh. Logs and details opened from the stack containers screen return to that screen with `Esc`/`q`.
+- Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh. Logs and details opened from the stack containers screen return to that screen with `Esc`.
 
 ## Stacks
 
@@ -154,7 +155,7 @@ The image list shows all images with their usage status.
 |-----|--------|
 | `P` | Pull the latest version of this image (shows a `docker pull`-style progress bar with downloaded/total bytes) |
 | `r` | Refresh the image list and details |
-| `Esc` / `q` | Back to the image list |
+| `Esc` | Back to the image list |
 
 Notes on pulling:
 
@@ -185,4 +186,4 @@ Predefined networks (`bridge`, `host`, `none`) are protected and cannot be delet
 | `j` / `k` | Select a connected container |
 | `d` | Disconnect the selected container from the network (opens confirmation dialog) |
 | `r` | Refresh |
-| `Esc` / `q` | Back to the network list |
+| `Esc` | Back to the network list |

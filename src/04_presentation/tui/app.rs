@@ -9,10 +9,10 @@ use crate::application::network::NetworkDto;
 use crate::application::stack::{StackContainerDto, StackDto};
 use crate::application::volume::VolumeDto;
 use crate::presentation::tui::common::{
-    dim_background, map_key_to_action_for_context, render_breadcrumb, render_confirm_dialog,
-    render_expanded_log_line, render_help_popup, render_input_dialog, render_main_menu,
-    render_popup_message, render_selection_dialog, resources, split_app_area, AppAction,
-    HelpPopupState, InputDialogState, InputField, KeyContext, PopupMessage, Spinner,
+    dim_background, map_key_to_action, map_key_to_action_for_context, render_breadcrumb,
+    render_confirm_dialog, render_expanded_log_line, render_help_popup, render_input_dialog,
+    render_main_menu, render_popup_message, render_selection_dialog, resources, split_app_area,
+    AppAction, HelpPopupState, InputDialogState, InputField, KeyContext, PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -235,7 +235,10 @@ impl App {
 
             match event_handler.next()? {
                 AppEvent::Key(key) => {
-                    if self.add_dialog.is_some() && self.handle_add_dialog_key(key.code) {
+                    if map_key_to_action(key) == Some(AppAction::Quit) {
+                        // Ctrl+C quits from anywhere, even mid filter-input or dialog
+                        self.should_quit = true;
+                    } else if self.add_dialog.is_some() && self.handle_add_dialog_key(key.code) {
                         // Key consumed by add dialog input
                     } else if !self.has_modal_overlay()
                         && self.is_filter_active()
@@ -1122,7 +1125,7 @@ impl App {
                 self.exec_shell_dialog = None;
                 self.pending_exec = Some(request);
             }
-            AppAction::Back | AppAction::Quit => {
+            AppAction::Back => {
                 self.exec_shell_dialog = None;
             }
             _ => {}
@@ -1851,7 +1854,7 @@ mod tests {
     async fn test_handle_action_clears_popup_and_handles_confirm_dialog() {
         let mut app = empty_app();
         app.popup_message = Some(PopupMessage::Error("boom".to_string()));
-        app.handle_action(AppAction::Quit).await;
+        app.handle_action(AppAction::Back).await;
         assert!(app.popup_message.is_none());
         assert!(!app.should_quit);
 
@@ -1912,8 +1915,76 @@ mod tests {
         app.handle_main_menu_action(AppAction::NavigateDown).await;
         assert_eq!(app.menu_state.selected(), Some(0));
 
-        app.handle_main_menu_action(AppAction::Quit).await;
+        app.handle_action(AppAction::Quit).await;
         assert!(app.should_quit);
+    }
+
+    #[tokio::test]
+    async fn test_quit_action_quits_from_every_screen_and_overlay() {
+        let screens = [
+            Screen::MainMenu,
+            Screen::ContainerList,
+            Screen::ContainerLogs,
+            Screen::ContainerDetails,
+            Screen::ContainerExplorer,
+            Screen::VolumeList,
+            Screen::VolumeDetails,
+            Screen::ImageList,
+            Screen::ImageDetails,
+            Screen::NetworkList,
+            Screen::NetworkDetails,
+            Screen::StackList,
+            Screen::StackContainers,
+        ];
+        for screen in screens {
+            let mut app = empty_app();
+            app.screen = screen.clone();
+            app.handle_action(AppAction::Quit).await;
+            assert!(app.should_quit, "Quit must quit from {screen:?}");
+        }
+
+        for overlay in [
+            OverlayKind::Popup,
+            OverlayKind::Confirm,
+            OverlayKind::Help,
+            OverlayKind::ExpandedLogLine,
+            OverlayKind::ExecShellDialog,
+            OverlayKind::AddDialog,
+        ] {
+            let mut app = empty_app();
+            app.screen = Screen::ContainerList;
+            match overlay {
+                OverlayKind::Popup => {
+                    app.popup_message = Some(PopupMessage::Error("boom".to_string()));
+                }
+                OverlayKind::Confirm => {
+                    app.confirm_dialog = Some((ConfirmAction::VolumeDelete, true));
+                }
+                OverlayKind::Help => {
+                    app.handle_action(AppAction::ToggleHelp).await;
+                }
+                OverlayKind::ExpandedLogLine => app.expanded_log_line = Some(0),
+                OverlayKind::ExecShellDialog => {
+                    app.exec_shell_dialog = Some(ExecShellDialog::new(
+                        "abc123".to_string(),
+                        ExecRefreshTarget::Containers,
+                    ));
+                }
+                OverlayKind::AddDialog => app.open_add_dialog(),
+            }
+            app.handle_action(AppAction::Quit).await;
+            assert!(app.should_quit, "Quit must quit with {overlay:?} open");
+        }
+    }
+
+    #[derive(Debug)]
+    enum OverlayKind {
+        Popup,
+        Confirm,
+        Help,
+        ExpandedLogLine,
+        ExecShellDialog,
+        AddDialog,
     }
 
     #[tokio::test]
@@ -2170,13 +2241,13 @@ mod tests {
         app.handle_action(AppAction::Select).await;
         assert_eq!(app.expanded_log_line, None);
         app.expanded_log_line = Some(0);
-        app.handle_action(AppAction::Quit).await;
+        app.handle_action(AppAction::Back).await;
         assert_eq!(app.expanded_log_line, None);
         assert!(!app.should_quit);
 
         app.screen = Screen::ContainerDetails;
         app.container_presenter.set_details(make_container_dto());
-        app.handle_details_action(AppAction::Quit);
+        app.handle_details_action(AppAction::Back);
         assert_eq!(app.screen, Screen::ContainerList);
 
         app.screen = Screen::ImageDetails;
@@ -2542,7 +2613,7 @@ mod tests {
         ));
         app.pending_exec = None;
 
-        app.handle_action(AppAction::Quit).await;
+        app.handle_action(AppAction::Back).await;
         assert!(app.exec_shell_dialog.is_none());
         assert!(app.pending_exec.is_none());
         assert!(!app.should_quit);
@@ -2818,9 +2889,12 @@ mod tests {
         assert!(!app.help_popup_open);
 
         app.handle_action(AppAction::ToggleHelp).await;
-        app.handle_action(AppAction::Quit).await;
+        app.handle_action(AppAction::Back).await;
         assert!(!app.help_popup_open);
-        assert!(!app.should_quit, "q must close the popup, not quit the app");
+        assert!(
+            !app.should_quit,
+            "Esc must close the popup, not quit the app"
+        );
 
         let rendered = render_app(&mut app);
         assert!(!rendered.contains("Keybindings"));
@@ -2875,7 +2949,7 @@ mod tests {
 
         let rendered = render_app_wide(&mut app);
         assert!(rendered.contains("Keybindings"));
-        assert!(rendered.contains("Esc/q/Space: Close"));
+        assert!(rendered.contains("Esc/Space: Close"));
         for command in ["X: Prune", "d: Delete", "o: Sort", "Enter: Details"] {
             assert!(
                 rendered.contains(command),

@@ -29,7 +29,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 |---|---|
 | `tests/stack_containers_ui.rs` | Homogeneity of the two container screens: Stacks > Containers has the same 7-column layout and the same container actions as Containers (logs, details, exec, start/stop, delete, pause, restart, prune, add, filter, sort, loading spinner); stack-level actions (Start All, Stop All, Remove All) live only on the stack list; filter shows the contextual help bar and narrows rows; `Esc` clears the filter; sort cycles A→Z → Z→A → default |
 | `tests/action_bar_ui.rs` | Action bar content (reduced footer + `Space: All commands` hint) and key highlighting on list screens and the main menu |
-| `tests/help_popup_ui.rs` | `Space` opens the keybindings popup with the full command list of the current screen; popup is modal and closes on `Esc`/`q`/`Space`; does not open over another modal; long lists scroll with `j`/`k` on short terminals; details screens list their own commands in the popup |
+| `tests/help_popup_ui.rs` | `Space` opens the keybindings popup with the full command list of the current screen; popup is modal and closes on `Esc`/`Space`; does not open over another modal; long lists scroll with `j`/`k` on short terminals; details screens list their own commands in the popup |
 | `tests/breadcrumb_ui.rs` | Breadcrumb path on the main menu, container logs and container list screens |
 | `tests/container_explorer_ui.rs` | File explorer screen: columns (name/size/modified/permissions), directory color, selection highlight, breadcrumb, `Space` help popup with explorer commands, `Esc` return, sort 3-state cycle, filter contextual help bar |
 | `tests/integration_docker.rs` | Real Docker daemon: pull images, create/start/stop/delete containers, inspect — skipped when no daemon is available |
@@ -51,6 +51,7 @@ End-to-end-ish tests that build the real `App` with the real adapters wired exac
 | Exec shell (dialog, inline suspend/resume in the same terminal) | `exec.rs`, `app.rs` | — |
 | Image pull with progress bar, up-to-date skip | `app.rs` (pull workflow) | `integration_docker.rs` |
 | Real daemon end-to-end (create, run, stop, remove) | — | `integration_docker.rs` |
+| Global exit keys: `Esc` goes back / closes overlays on every screen, `Ctrl+C` quits from any screen or overlay, `q` is inert | `common/keys.rs` (`Ctrl+C`/`q` mappings), `app.rs` (all screens + overlays) | `container_explorer_ui.rs` (quit from explorer) |
 
 ## Conventions
 

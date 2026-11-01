@@ -412,7 +412,7 @@ mod tests {
                     " Exec Shell ",
                     &["sh", "bash"],
                     &mut state,
-                    " j/k: Navigate | Enter: Select | Esc/q: Cancel ",
+                    " j/k: Navigate | Enter: Select | Esc: Cancel ",
                 )
             })
             .unwrap();

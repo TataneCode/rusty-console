@@ -217,7 +217,7 @@ mod tests {
         assert!(text.contains("j/k: Navigate"));
         assert!(text.contains("Enter: Details"));
         assert!(text.contains("s: Start/Stop"));
-        assert!(text.contains("Esc/q/Space: Close"));
+        assert!(text.contains("Esc/Space: Close"));
     }
 
     #[test]

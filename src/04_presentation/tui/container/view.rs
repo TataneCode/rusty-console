@@ -875,7 +875,7 @@ mod tests {
 
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("j/k: Scroll"));
-        assert!(text.contains("Esc/q: Close"));
+        assert!(text.contains("Esc: Close"));
     }
 
     #[test]

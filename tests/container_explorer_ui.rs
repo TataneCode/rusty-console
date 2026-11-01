@@ -174,17 +174,15 @@ async fn explorer_esc_returns_to_origin_screen() {
 }
 
 #[tokio::test]
-async fn explorer_q_returns_to_origin_screen_instead_of_quitting() {
+async fn explorer_quit_action_quits_the_app() {
     let Some(mut app) = explorer_app() else {
         return;
     };
     app.handle_action(AppAction::Quit).await;
     assert!(
-        !app.should_quit,
-        "q must not quit the app from the explorer"
+        app.should_quit,
+        "Ctrl+C must quit the app from the explorer"
     );
-    assert_eq!(app.screen, Screen::ContainerList);
-    assert!(app.container_explorer.listing.is_none());
 }
 
 #[tokio::test]

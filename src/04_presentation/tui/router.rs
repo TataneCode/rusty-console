@@ -18,6 +18,11 @@ use tokio::sync::mpsc::error::TryRecvError;
 
 impl App {
     pub async fn handle_action(&mut self, action: AppAction) {
+        // Ctrl+C quits the app from any screen, even with a modal overlay open.
+        if matches!(action, AppAction::Quit) {
+            self.should_quit = true;
+            return;
+        }
         if matches!(action, AppAction::Select)
             && self.screen == Screen::ContainerLogs
             && self.container_presenter.is_log_search_active()
@@ -44,7 +49,7 @@ impl App {
                         self.confirm_dialog = None;
                     }
                 }
-                AppAction::Back | AppAction::Quit => {
+                AppAction::Back => {
                     self.confirm_dialog = None;
                 }
                 _ => {}
@@ -54,7 +59,7 @@ impl App {
 
         if self.expanded_log_line.is_some() {
             match action {
-                AppAction::Back | AppAction::Quit | AppAction::Select => {
+                AppAction::Back | AppAction::Select => {
                     self.expanded_log_line = None;
                 }
                 _ => {}
@@ -67,7 +72,7 @@ impl App {
         }
         if self.screen == Screen::ContainerExplorer && self.container_explorer.file_view.is_some() {
             match action {
-                AppAction::Back | AppAction::Quit | AppAction::ViewFile => {
+                AppAction::Back | AppAction::ViewFile => {
                     self.container_explorer.close_file_view();
                 }
                 AppAction::NavigateDown | AppAction::ScrollDown => {
@@ -88,7 +93,7 @@ impl App {
 
         if self.help_popup_open {
             match action {
-                AppAction::ToggleHelp | AppAction::Back | AppAction::Quit => {
+                AppAction::ToggleHelp | AppAction::Back => {
                     self.help_popup_open = false;
                 }
                 AppAction::NavigateUp | AppAction::ScrollUp => self.help_popup_state.scroll_up(),
@@ -155,7 +160,6 @@ impl App {
 
     pub(crate) async fn handle_main_menu_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
             AppAction::NavigateUp => {
                 if let Some(selected) = self.menu_state.selected() {
                     let last_index = resources::MAIN_MENU_ITEMS.len() - 1;
@@ -212,7 +216,6 @@ impl App {
 
     pub(crate) async fn handle_container_list_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
             AppAction::Back => {
                 self.stop_container_stats_subscription();
                 self.container_presenter.clear_runtime_stats();
@@ -281,7 +284,7 @@ impl App {
 
     pub(crate) async fn handle_container_logs_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit | AppAction::Back => {
+            AppAction::Back => {
                 self.container_presenter.deactivate_log_search();
                 self.container_presenter.clear_logs();
                 self.screen = self
@@ -351,7 +354,7 @@ impl App {
 
     pub(crate) fn handle_container_explorer_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit | AppAction::Back => {
+            AppAction::Back => {
                 if self.container_explorer.is_filter_active() {
                     self.container_explorer.deactivate_filter();
                 } else {
@@ -477,8 +480,8 @@ impl App {
     }
 
     pub(crate) fn handle_details_action(&mut self, action: AppAction) {
-        match action {
-            AppAction::Quit | AppAction::Back => match &self.screen {
+        if action == AppAction::Back {
+            match &self.screen {
                 Screen::ContainerDetails => {
                     self.container_presenter.clear_details();
                     self.screen = self
@@ -491,14 +494,13 @@ impl App {
                     self.screen = Screen::VolumeList;
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
 
     pub(crate) async fn handle_image_details_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit | AppAction::Back => {
+            AppAction::Back => {
                 self.image_presenter.clear_details();
                 self.image_presenter.clear_pull_progress();
                 self.screen = Screen::ImageList;
@@ -542,7 +544,6 @@ impl App {
 
     pub(crate) async fn handle_volume_list_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
             AppAction::Back => self.screen = Screen::MainMenu,
             AppAction::NavigateUp => self.volume_presenter.navigate_up(),
             AppAction::NavigateDown => self.volume_presenter.navigate_down(),
@@ -577,7 +578,6 @@ impl App {
 
     pub(crate) async fn handle_image_list_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
             AppAction::Back => self.screen = Screen::MainMenu,
             AppAction::NavigateUp => self.image_presenter.navigate_up(),
             AppAction::NavigateDown => self.image_presenter.navigate_down(),
@@ -625,7 +625,6 @@ impl App {
 
     pub(crate) async fn handle_network_list_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
             AppAction::Back => self.screen = Screen::MainMenu,
             AppAction::NavigateUp => self.network_presenter.navigate_up(),
             AppAction::NavigateDown => self.network_presenter.navigate_down(),
@@ -664,7 +663,7 @@ impl App {
 
     pub(crate) async fn handle_network_details_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit | AppAction::Back => {
+            AppAction::Back => {
                 self.network_presenter.clear_details();
                 self.screen = Screen::NetworkList;
             }
@@ -988,7 +987,6 @@ impl App {
 
     pub(crate) async fn handle_stack_list_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
             AppAction::Back => self.screen = Screen::MainMenu,
             AppAction::NavigateUp => self.stack_presenter.navigate_up(),
             AppAction::NavigateDown => self.stack_presenter.navigate_down(),
@@ -1064,7 +1062,6 @@ impl App {
 
     pub(crate) async fn handle_stack_containers_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Quit => self.should_quit = true,
             AppAction::Back => {
                 self.stop_container_stats_subscription();
                 self.stack_presenter.clear_runtime_stats();
@@ -1215,7 +1212,7 @@ impl App {
 
     pub(crate) async fn handle_add_dialog_action(&mut self, action: AppAction) {
         match action {
-            AppAction::Back | AppAction::Quit => self.add_dialog = None,
+            AppAction::Back => self.add_dialog = None,
             AppAction::NavigateUp => {
                 if let Some(dialog) = self.add_dialog.as_mut() {
                     dialog.state.focus_previous();

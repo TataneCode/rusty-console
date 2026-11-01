@@ -32,7 +32,7 @@ fn list_footer_shows_only_fundamental_commands_with_space_hint() {
         "Enter: Details",
         "/: Filter",
         "r: Refresh",
-        "q: Quit",
+        "Ctrl+C: Quit",
         "Space: All commands",
     ] {
         assert!(
@@ -69,7 +69,7 @@ async fn space_opens_popup_with_full_command_list_and_escape_closes_it() {
         rendered.contains("Keybindings"),
         "popup title missing: {rendered}"
     );
-    assert!(rendered.contains("Esc/q/Space: Close"));
+    assert!(rendered.contains("Esc/Space: Close"));
     for command in [
         "j/k: Navigate",
         "Enter: Details",
@@ -85,7 +85,7 @@ async fn space_opens_popup_with_full_command_list_and_escape_closes_it() {
         "X: Prune",
         "A: Add",
         "b: Browse",
-        "q: Quit",
+        "Ctrl+C: Quit",
     ] {
         assert!(
             rendered.contains(command),
@@ -155,7 +155,10 @@ async fn popup_scrolls_long_command_list_on_short_terminal() {
         .iter()
         .map(|cell| cell.symbol())
         .collect();
-    assert!(text.contains("q: Quit"), "first commands visible: {text}");
+    assert!(
+        text.contains("Ctrl+C: Quit"),
+        "first commands visible: {text}"
+    );
     assert!(
         !text.contains("A: Add"),
         "last command hidden before scroll: {text}"
@@ -177,7 +180,7 @@ async fn popup_scrolls_long_command_list_on_short_terminal() {
         "last command visible after scroll: {text}"
     );
     assert!(
-        !text.contains("q: Quit"),
+        !text.contains("Ctrl+C: Quit"),
         "first command scrolled out of view: {text}"
     );
 }
@@ -213,5 +216,5 @@ async fn details_screen_popup_lists_its_own_commands() {
     assert!(rendered.contains("Keybindings"));
     assert!(rendered.contains("d: Disconnect"));
     assert!(rendered.contains("r: Refresh"));
-    assert!(rendered.contains("Esc/q/Space: Close"));
+    assert!(rendered.contains("Esc/Space: Close"));
 }

@@ -30,7 +30,7 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 
 ### Text selection and clipboard
 
-- On the **details screens** (container, volume, image, network) the terminal's native text selection is enabled: select text with the mouse and copy it with your terminal's own shortcut (right-click on Windows, `Ctrl+Shift+C` on most Linux terminals). `y` (or `Ctrl+Shift+C`) also copies the whole details block to the system clipboard — on the network details screen, the selected container line (`name (IP)`) is copied instead.
+- On the **details screens** (container, volume, image, network), select text by dragging with the mouse (the selection is highlighted); `y` or `Ctrl+Shift+C` copies **only the selected text** to the system clipboard, with popup feedback. Without a mouse selection, `y` copies nothing — except on the network details screen, where it copies the container line selected with `j`/`k` (`name (IP)`).
 - In **text inputs** (list and file-explorer filter `/`, log search, add dialogs), `Ctrl+Shift+C` / `Ctrl+Shift+X` / `Ctrl+Shift+V` copy / cut / paste the current field (paste appends at the end of the field). `y`, `x` and `p` remain ordinary typeable letters there.
 - `Ctrl+C` always quits the application, from any screen.
 

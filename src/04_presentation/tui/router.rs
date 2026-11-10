@@ -13,11 +13,8 @@ use crate::presentation::tui::common::{
     PopupMessage,
 };
 use crate::presentation::tui::confirm::ConfirmAction;
-use crate::presentation::tui::container::container_details_text;
-use crate::presentation::tui::image::image_details_text;
 use crate::presentation::tui::network::{network_container_line, network_details_text};
-use crate::presentation::tui::volume::volume_details_text;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 
 use tokio::sync::mpsc::error::TryRecvError;
 
@@ -500,21 +497,7 @@ impl App {
                 }
                 _ => {}
             },
-            AppAction::Copy => match &self.screen {
-                Screen::ContainerDetails => {
-                    if let Some(container) = &self.container_presenter.selected_container {
-                        let text = container_details_text(container);
-                        self.copy_to_clipboard(&text);
-                    }
-                }
-                Screen::VolumeDetails => {
-                    if let Some(volume) = &self.volume_presenter.selected_volume {
-                        let text = volume_details_text(volume);
-                        self.copy_to_clipboard(&text);
-                    }
-                }
-                _ => {}
-            },
+            AppAction::Copy => self.copy_details_selection(),
             _ => {}
         }
     }
@@ -531,12 +514,7 @@ impl App {
                 self.restore_selected_image_details();
             }
             AppAction::PullImages => self.pull_selected_image().await,
-            AppAction::Copy => {
-                if let Some(image) = &self.image_presenter.selected_image {
-                    let text = image_details_text(image);
-                    self.copy_to_clipboard(&text);
-                }
-            }
+            AppAction::Copy => self.copy_details_selection(),
             _ => {}
         }
     }
@@ -697,8 +675,13 @@ impl App {
             AppAction::NavigateUp => self.network_presenter.navigate_container_up(),
             AppAction::NavigateDown => self.network_presenter.navigate_container_down(),
             AppAction::Copy => {
-                let text =
-                    self.network_presenter
+                if self.details_selection_text.is_some() {
+                    self.copy_details_selection();
+                } else {
+                    // No mouse selection: fall back to the container line
+                    // selected with j/k (network details only).
+                    let text = self
+                        .network_presenter
                         .selected_network
                         .as_ref()
                         .map(
@@ -707,8 +690,9 @@ impl App {
                                 None => network_details_text(network, None),
                             },
                         );
-                if let Some(text) = text {
-                    self.copy_to_clipboard(&text);
+                    if let Some(text) = text {
+                        self.copy_to_clipboard(&text);
+                    }
                 }
             }
             AppAction::DisconnectContainer => {
@@ -1024,6 +1008,43 @@ impl App {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Updates the in-app text selection on the details screens from a mouse
+    /// event: left-button down starts a selection, drag extends it. Other
+    /// screens and modal overlays ignore the mouse.
+    pub(crate) fn handle_details_mouse(&mut self, mouse: MouseEvent) {
+        let on_details = matches!(
+            self.screen,
+            Screen::ContainerDetails
+                | Screen::VolumeDetails
+                | Screen::ImageDetails
+                | Screen::NetworkDetails
+        );
+        if !on_details || self.has_modal_overlay() {
+            return;
+        }
+        let pos = (mouse.column, mouse.row);
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.details_selection = Some((pos, pos));
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some((start, _)) = self.details_selection {
+                    self.details_selection = Some((start, pos));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Copies the current in-app text selection of a details screen. Without a
+    /// selection this is a no-op (same as `CopyLogLine` without a selected
+    /// line).
+    pub(crate) fn copy_details_selection(&mut self) {
+        if let Some(text) = self.details_selection_text.clone() {
+            self.copy_to_clipboard(&text);
         }
     }
 

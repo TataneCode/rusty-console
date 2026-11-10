@@ -184,12 +184,20 @@ fn ctrl_shift_c_x_v_map_to_clipboard_actions_and_ctrl_c_still_quits() {
 }
 
 #[tokio::test]
-async fn copy_action_on_container_details_shows_feedback_popup() {
+async fn copy_action_on_container_details_copies_only_the_selection() {
     let Some(mut app) = build_app() else {
         return;
     };
     app.screen = Screen::ContainerDetails;
     app.container_presenter.set_details(make_container());
+    // No selection: copy is a no-op
+    app.handle_action(AppAction::Copy).await;
+    assert!(
+        app.popup_message.is_none(),
+        "copy without a text selection must be a no-op"
+    );
+    // With a selection: the selected text is copied (popup feedback)
+    app.details_selection_text = Some("abc123".to_string());
     app.handle_action(AppAction::Copy).await;
     assert!(
         app.popup_message.is_some(),
@@ -197,13 +205,34 @@ async fn copy_action_on_container_details_shows_feedback_popup() {
     );
 }
 
+#[test]
+fn render_extracts_mouse_selection_text_on_details_screen() {
+    let Some(mut app) = build_app() else {
+        return;
+    };
+    app.screen = Screen::ContainerDetails;
+    app.container_presenter.set_details(make_container());
+    // Select the first two text lines of the details block
+    // (120x24 terminal: breadcrumb 3 rows, help bar 3 rows, border 1 row).
+    app.details_selection = Some(((2, 4), (40, 5)));
+    let _ = render_app_text(&mut app);
+    let text = app
+        .details_selection_text
+        .clone()
+        .expect("selection text should be extracted on render");
+    assert!(text.contains("abc123"), "selected text: {text:?}");
+    assert!(text.contains("web"), "selected text: {text:?}");
+    assert_eq!(text.lines().count(), 2, "selected text: {text:?}");
+}
+
 #[tokio::test]
-async fn copy_action_on_network_details_shows_feedback_popup() {
+async fn copy_action_on_network_details_falls_back_to_selected_container() {
     let Some(mut app) = build_app() else {
         return;
     };
     app.screen = Screen::NetworkDetails;
     app.network_presenter.set_details(make_network());
+    // No mouse selection: falls back to the j/k-selected container line
     app.handle_action(AppAction::Copy).await;
     assert!(
         app.popup_message.is_some(),

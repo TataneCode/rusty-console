@@ -42,7 +42,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{backend::CrosstermBackend, widgets::ListState, Frame, Terminal};
+use ratatui::{
+    backend::CrosstermBackend, layout::Rect, style::Modifier, widgets::ListState, Frame, Terminal,
+};
 use std::{collections::HashSet, io};
 use tokio::sync::mpsc::error::TryRecvError;
 
@@ -107,9 +109,12 @@ pub struct App {
     pub(crate) pending_file_copy: Option<FileOpSubscription>,
     pub(crate) add_dialog: Option<AddDialog>,
     pub(crate) pending_create_after_pull: Option<CreateContainerRequest>,
-    /// Whether mouse capture is currently enabled on the terminal. Detail
-    /// screens release it so the terminal's native text selection works.
-    pub(crate) mouse_capture_enabled: bool,
+    /// In-app text selection on the details screens: (anchor, current end)
+    /// as (x, y) frame cell coordinates. `None` when nothing is selected.
+    pub details_selection: Option<((u16, u16), (u16, u16))>,
+    /// Text extracted from the current selection on the last render of a
+    /// details screen; this is what `y` / Ctrl+Shift+C copy.
+    pub details_selection_text: Option<String>,
 }
 
 pub(crate) struct PendingImagePull {
@@ -199,7 +204,8 @@ impl App {
             pending_file_copy: None,
             add_dialog: None,
             pending_create_after_pull: None,
-            mouse_capture_enabled: true,
+            details_selection: None,
+            details_selection_text: None,
         }
     }
 
@@ -267,6 +273,7 @@ impl App {
                         self.handle_action(action).await;
                     }
                 }
+                AppEvent::Mouse(mouse) => self.handle_details_mouse(mouse),
                 AppEvent::Tick => {}
             }
 
@@ -278,7 +285,6 @@ impl App {
             self.drain_image_pull().await;
             self.drain_file_ops().await;
             self.drain_file_copy().await;
-            self.sync_mouse_capture(terminal)?;
 
             if self.should_quit {
                 break;
@@ -291,6 +297,18 @@ impl App {
     #[doc(hidden)]
     pub fn render(&mut self, frame: &mut Frame) {
         let area = frame.area();
+
+        // The in-app selection only lives on the details screens.
+        if !matches!(
+            self.screen,
+            Screen::ContainerDetails
+                | Screen::VolumeDetails
+                | Screen::ImageDetails
+                | Screen::NetworkDetails
+        ) {
+            self.details_selection = None;
+            self.details_selection_text = None;
+        }
 
         // Update spinner animation
         self.spinner.update();
@@ -353,6 +371,7 @@ impl App {
                 if let Some(container) = &self.container_presenter.selected_container {
                     render_container_details(frame, content_area, container);
                 }
+                self.apply_details_selection(frame, content_area);
             }
             Screen::ContainerExplorer => {
                 let explorer = &mut self.container_explorer;
@@ -396,6 +415,7 @@ impl App {
                 if let Some(volume) = &self.volume_presenter.selected_volume {
                     render_volume_details(frame, content_area, volume);
                 }
+                self.apply_details_selection(frame, content_area);
             }
             Screen::ImageList => {
                 let presenter = &mut self.image_presenter;
@@ -431,6 +451,7 @@ impl App {
                         },
                     );
                 }
+                self.apply_details_selection(frame, content_area);
             }
             Screen::NetworkList => {
                 let presenter = &mut self.network_presenter;
@@ -459,6 +480,7 @@ impl App {
                         presenter.container_selection.selected(),
                     );
                 }
+                self.apply_details_selection(frame, content_area);
             }
             Screen::StackList => {
                 let presenter = &mut self.stack_presenter;
@@ -1208,43 +1230,59 @@ impl App {
             EnterAlternateScreen,
             EnableMouseCapture
         )?;
-        self.mouse_capture_enabled = true;
         terminal.hide_cursor()?;
         terminal.clear()
     }
 
-    /// Detail screens release the mouse capture so the terminal's native text
-    /// selection (and the OS copy shortcuts that use it) work there; on every
-    /// other screen the capture stays enabled (the app never reads mouse
-    /// events, so nothing is lost).
-    fn desired_mouse_capture(&self) -> bool {
-        !matches!(
-            self.screen,
-            Screen::ContainerDetails
-                | Screen::VolumeDetails
-                | Screen::ImageDetails
-                | Screen::NetworkDetails
+    /// Highlights the current in-app text selection on a details screen and
+    /// refreshes `details_selection_text` from the rendered buffer, so `y`
+    /// copies exactly what is selected on screen.
+    fn apply_details_selection(&mut self, frame: &mut Frame, content_area: Rect) {
+        self.details_selection_text = None;
+        let Some((a, b)) = self.details_selection else {
+            return;
+        };
+        // Clamp to the inner area (inside the section border).
+        let inner = Rect {
+            x: content_area.x + 1,
+            y: content_area.y + 1,
+            width: content_area.width.saturating_sub(2),
+            height: content_area.height.saturating_sub(2),
+        };
+        let selected = Rect::new(
+            a.0.min(b.0),
+            a.1.min(b.1),
+            a.0.abs_diff(b.0) + 1,
+            a.1.abs_diff(b.1) + 1,
         )
-    }
-
-    /// Aligns the terminal mouse capture with the current screen. Called on
-    /// every loop iteration, so it also repairs the state after `resume_tui`
-    /// (exec) re-enabled the capture unconditionally.
-    fn sync_mouse_capture(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> io::Result<()> {
-        let desired = self.desired_mouse_capture();
-        if desired == self.mouse_capture_enabled {
-            return Ok(());
+        .intersection(inner);
+        if selected.width == 0 || selected.height == 0 {
+            return;
         }
-        if desired {
-            execute!(terminal.backend_mut(), EnableMouseCapture)?;
-        } else {
-            execute!(terminal.backend_mut(), DisableMouseCapture)?;
+        let buf = frame.buffer_mut();
+        let buf_area = buf.area;
+        let cell_index =
+            |x: u16, y: u16| ((y - buf_area.y) * buf_area.width + (x - buf_area.x)) as usize;
+        for y in selected.y..selected.y + selected.height {
+            for x in selected.x..selected.x + selected.width {
+                buf.content[cell_index(x, y)].modifier |= Modifier::REVERSED;
+            }
         }
-        self.mouse_capture_enabled = desired;
-        Ok(())
+        let mut lines: Vec<String> = Vec::new();
+        for y in selected.y..selected.y + selected.height {
+            let mut line = String::new();
+            for x in selected.x..selected.x + selected.width {
+                line.push_str(buf.content[cell_index(x, y)].symbol());
+            }
+            lines.push(line.trim_end().to_string());
+        }
+        while lines.last().is_some_and(|line| line.is_empty()) {
+            lines.pop();
+        }
+        let text = lines.join("\n");
+        if !text.is_empty() {
+            self.details_selection_text = Some(text);
+        }
     }
 }
 
@@ -4320,6 +4358,7 @@ mod tests {
                     .set_details(make_network_dto(false, 1)),
                 _ => {}
             }
+            app.details_selection_text = Some("selected text".to_string());
             app.handle_action(AppAction::Copy).await;
             assert!(
                 app.popup_message.is_some(),
@@ -4329,11 +4368,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_copy_action_without_details_is_noop() {
+    async fn test_copy_action_without_selection_is_noop() {
         let mut app = empty_app();
         app.screen = Screen::ContainerDetails;
+        app.container_presenter.set_details(make_container_dto());
         app.handle_action(AppAction::Copy).await;
-        assert!(app.popup_message.is_none());
+        assert!(
+            app.popup_message.is_none(),
+            "copy without a text selection must be a no-op"
+        );
     }
 
     #[test]
@@ -4390,34 +4433,63 @@ mod tests {
     }
 
     #[test]
-    fn test_mouse_capture_released_only_on_details_screens() {
+    fn test_details_mouse_down_and_drag_update_selection() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+        let mouse = |kind, column, row| MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::empty(),
+        };
         let mut app = empty_app();
-        assert!(app.mouse_capture_enabled);
-        for screen in [
-            Screen::MainMenu,
-            Screen::ContainerList,
-            Screen::ContainerLogs,
-            Screen::ContainerExplorer,
-            Screen::VolumeList,
-            Screen::ImageList,
-            Screen::NetworkList,
-            Screen::StackList,
-            Screen::StackContainers,
-        ] {
-            app.screen = screen.clone();
-            assert!(app.desired_mouse_capture(), "{screen:?} keeps the capture");
-        }
-        for screen in [
-            Screen::ContainerDetails,
-            Screen::VolumeDetails,
-            Screen::ImageDetails,
-            Screen::NetworkDetails,
-        ] {
-            app.screen = screen.clone();
-            assert!(
-                !app.desired_mouse_capture(),
-                "{screen:?} releases the capture"
-            );
-        }
+        // Mouse is ignored off the details screens
+        app.screen = Screen::ContainerList;
+        app.handle_details_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 5, 4));
+        assert!(app.details_selection.is_none());
+
+        app.screen = Screen::ContainerDetails;
+        app.handle_details_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 5, 4));
+        assert_eq!(app.details_selection, Some(((5, 4), (5, 4))));
+        app.handle_details_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 20, 8));
+        assert_eq!(app.details_selection, Some(((5, 4), (20, 8))));
+        // A modal overlay freezes the selection
+        app.popup_message = Some(PopupMessage::Error("boom".to_string()));
+        app.handle_details_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 1, 1));
+        assert_eq!(app.details_selection, Some(((5, 4), (20, 8))));
+    }
+
+    #[test]
+    fn test_render_extracts_selected_text_and_highlights_cells() {
+        use ratatui::style::Modifier;
+        let mut app = empty_app();
+        app.screen = Screen::ContainerDetails;
+        app.container_presenter.set_details(make_container_dto());
+        // Select the first two text lines of the details block (100x20
+        // terminal: breadcrumb 3 rows, help bar 3 rows, border 1 row).
+        app.details_selection = Some(((2, 4), (40, 5)));
+        let backend = TestBackend::new(100, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|frame| app.render(frame)).unwrap();
+
+        let text = app
+            .details_selection_text
+            .clone()
+            .expect("selection text extracted on render");
+        assert!(text.contains("abc123"), "selected text: {text:?}");
+        assert!(text.contains("web"), "selected text: {text:?}");
+        assert_eq!(text.lines().count(), 2, "selected text: {text:?}");
+
+        let buffer = terminal.backend().buffer();
+        let reversed = buffer
+            .content
+            .iter()
+            .filter(|cell| cell.modifier.contains(Modifier::REVERSED))
+            .count();
+        assert!(reversed > 0, "selection cells should be highlighted");
+
+        // Leaving the details screen clears the selection
+        app.screen = Screen::ContainerList;
+        terminal.draw(|frame| app.render(frame)).unwrap();
+        assert!(app.details_selection_text.is_none());
     }
 }

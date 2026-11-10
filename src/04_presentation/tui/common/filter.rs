@@ -38,8 +38,17 @@ impl FilterState {
         self.value.push(c);
     }
 
+    pub fn push_str(&mut self, text: &str) {
+        self.value.push_str(text);
+    }
+
     pub fn pop_char(&mut self) {
         self.value.pop();
+    }
+
+    /// Clears the typed value without deactivating the filter.
+    pub fn clear_value(&mut self) {
+        self.value.clear();
     }
 }
 
@@ -55,6 +64,19 @@ mod tests {
 
         filter.activate();
         assert_eq!(filter.active_value(), Some("a"));
+    }
+
+    #[test]
+    fn test_push_str_and_clear_value_keep_active_state() {
+        let mut filter = FilterState::new();
+        filter.activate();
+        filter.push_char('a');
+        filter.push_str("bc");
+        assert_eq!(filter.value(), "abc");
+
+        filter.clear_value();
+        assert!(filter.value().is_empty());
+        assert!(filter.is_active());
     }
 
     #[test]

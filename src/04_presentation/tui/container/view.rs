@@ -246,9 +246,9 @@ pub fn render_file_view(frame: &mut Frame, path: &str, content: &FileContentDto,
     render_action_bar(frame, help_area, resources::FILE_VIEW_CLOSE_HELP);
 }
 
-pub fn render_container_details(frame: &mut Frame, area: Rect, container: &ContainerDto) {
-    let [content_area, help_area] = split_content_area(area);
-
+/// The container details block as plain text (exactly what is displayed);
+/// also used as the text copied to the clipboard with `y`.
+pub fn container_details_text(container: &ContainerDto) -> String {
     let env_section = if container.env_vars.is_empty() {
         String::new()
     } else {
@@ -269,7 +269,7 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
         container.network_io_display()
     );
 
-    let details = format!(
+    format!(
         "{:<10}{}\n\
          {:<10}{}\n\
          {:<10}{}\n\
@@ -297,9 +297,13 @@ pub fn render_container_details(frame: &mut Frame, area: Rect, container: &Conta
         container.networks,
         network_io_section,
         env_section,
-    );
+    )
+}
 
-    let details_widget = Paragraph::new(details)
+pub fn render_container_details(frame: &mut Frame, area: Rect, container: &ContainerDto) {
+    let [content_area, help_area] = split_content_area(area);
+
+    let details_widget = Paragraph::new(container_details_text(container))
         .block(Theme::section_block(Some(
             resources::CONTAINER_DETAILS_TITLE,
         )))
@@ -316,8 +320,9 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        render_container_details, render_container_explorer, render_container_list,
-        render_container_logs, render_file_view, ExplorerView, LogSearchView,
+        container_details_text, render_container_details, render_container_explorer,
+        render_container_list, render_container_logs, render_file_view, ExplorerView,
+        LogSearchView,
     };
     use crate::application::container::{
         ContainerDto, ContainerLogsDto, FileContentDto, FileEntryDto, LogLineDto,
@@ -967,5 +972,19 @@ mod tests {
             .unwrap();
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("[/error 1/1]"));
+    }
+
+    #[test]
+    fn test_container_details_text_contains_all_displayed_fields() {
+        let container = make_container();
+        let text = container_details_text(&container);
+        assert!(text.contains("abc123"));
+        assert!(text.contains("web"));
+        assert!(text.contains("nginx:latest"));
+        assert!(text.contains("Running"));
+        assert!(text.contains("80:80"));
+        assert!(text.contains("bridge"));
+        assert!(text.contains("Network I/O"));
+        assert!(text.contains("RUST_LOG=info"));
     }
 }

@@ -9,10 +9,12 @@ use crate::presentation::tui::app::{
     PendingImagePull, Screen,
 };
 use crate::presentation::tui::common::{
-    copy_text, resources, AppAction, InputDialogState, PopupMessage,
+    copy_text, map_key_to_action, read_text, resources, AppAction, FilterState, InputDialogState,
+    PopupMessage,
 };
 use crate::presentation::tui::confirm::ConfirmAction;
-use crossterm::event::KeyCode;
+use crate::presentation::tui::network::{network_container_line, network_details_text};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 
 use tokio::sync::mpsc::error::TryRecvError;
 
@@ -480,8 +482,8 @@ impl App {
     }
 
     pub(crate) fn handle_details_action(&mut self, action: AppAction) {
-        if action == AppAction::Back {
-            match &self.screen {
+        match action {
+            AppAction::Back => match &self.screen {
                 Screen::ContainerDetails => {
                     self.container_presenter.clear_details();
                     self.screen = self
@@ -494,7 +496,9 @@ impl App {
                     self.screen = Screen::VolumeList;
                 }
                 _ => {}
-            }
+            },
+            AppAction::Copy => self.copy_details_selection(),
+            _ => {}
         }
     }
 
@@ -510,6 +514,7 @@ impl App {
                 self.restore_selected_image_details();
             }
             AppAction::PullImages => self.pull_selected_image().await,
+            AppAction::Copy => self.copy_details_selection(),
             _ => {}
         }
     }
@@ -669,6 +674,27 @@ impl App {
             }
             AppAction::NavigateUp => self.network_presenter.navigate_container_up(),
             AppAction::NavigateDown => self.network_presenter.navigate_container_down(),
+            AppAction::Copy => {
+                if self.details_selection_text.is_some() {
+                    self.copy_details_selection();
+                } else {
+                    // No mouse selection: fall back to the container line
+                    // selected with j/k (network details only).
+                    let text = self
+                        .network_presenter
+                        .selected_network
+                        .as_ref()
+                        .map(
+                            |network| match self.network_presenter.selected_network_container() {
+                                Some(container) => network_container_line(container),
+                                None => network_details_text(network, None),
+                            },
+                        );
+                    if let Some(text) = text {
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
             AppAction::DisconnectContainer => {
                 if self
                     .network_presenter
@@ -985,6 +1011,164 @@ impl App {
         }
     }
 
+    /// Updates the in-app text selection on the details screens from a mouse
+    /// event: left-button down starts a selection, drag extends it. Other
+    /// screens and modal overlays ignore the mouse.
+    pub(crate) fn handle_details_mouse(&mut self, mouse: MouseEvent) {
+        let on_details = matches!(
+            self.screen,
+            Screen::ContainerDetails
+                | Screen::VolumeDetails
+                | Screen::ImageDetails
+                | Screen::NetworkDetails
+        );
+        if !on_details || self.has_modal_overlay() {
+            return;
+        }
+        let pos = (mouse.column, mouse.row);
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.details_selection = Some((pos, pos));
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some((start, _)) = self.details_selection {
+                    self.details_selection = Some((start, pos));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Copies the current in-app text selection of a details screen. Without a
+    /// selection this is a no-op (same as `CopyLogLine` without a selected
+    /// line).
+    pub(crate) fn copy_details_selection(&mut self) {
+        if let Some(text) = self.details_selection_text.clone() {
+            self.copy_to_clipboard(&text);
+        }
+    }
+
+    /// Copies `text` to the system clipboard and reports the outcome as a
+    /// popup (success, or clipboard error e.g. headless session).
+    pub(crate) fn copy_to_clipboard(&mut self, text: &str) {
+        match copy_text(text) {
+            Ok(()) => {
+                self.popup_message = Some(PopupMessage::Info(
+                    resources::clipboard_copy_success_message(),
+                ))
+            }
+            Err(e) => {
+                self.popup_message = Some(PopupMessage::Error(
+                    resources::clipboard_copy_error_message(&e),
+                ))
+            }
+        }
+    }
+
+    /// Mutable access to the filter/search input active on the current screen.
+    fn active_filter_mut(&mut self) -> Option<&mut FilterState> {
+        match self.screen {
+            Screen::ContainerList => Some(&mut self.container_presenter.filter),
+            Screen::VolumeList => Some(&mut self.volume_presenter.filter),
+            Screen::ImageList => Some(&mut self.image_presenter.filter),
+            Screen::NetworkList => Some(&mut self.network_presenter.filter),
+            Screen::StackList => Some(&mut self.stack_presenter.filter),
+            Screen::StackContainers => Some(&mut self.stack_presenter.containers.filter),
+            Screen::ContainerLogs => Some(&mut self.container_presenter.log_search),
+            Screen::ContainerExplorer => Some(&mut self.container_explorer.filter),
+            _ => None,
+        }
+    }
+
+    /// Copies a field value in input mode; only failures raise a popup (a
+    /// success popup would swallow the next keypress of the open input).
+    fn copy_input_value(&mut self, value: &str) {
+        if let Err(e) = copy_text(value) {
+            self.popup_message = Some(PopupMessage::Error(
+                resources::clipboard_copy_error_message(&e),
+            ));
+        }
+    }
+
+    /// Handles the clipboard shortcuts (Ctrl+Shift+C/X/V) while a text input
+    /// is active (add dialog, filter or log search): copy / cut (copy + clear)
+    /// / paste (append at the end) the focused field. Returns true when the
+    /// key was consumed by an input; plain letters are left to the regular
+    /// input handlers so `y`/`x`/`p` stay typeable.
+    pub fn handle_input_clipboard_key(&mut self, key: KeyEvent) -> bool {
+        let action = match map_key_to_action(key) {
+            Some(action @ (AppAction::Copy | AppAction::Cut | AppAction::Paste)) => action,
+            _ => return false,
+        };
+        // An open popup (e.g. a clipboard error) is dismissed by the next
+        // mapped key before any clipboard shortcut acts on the input again.
+        if self.popup_message.is_some() {
+            return false;
+        }
+        if self.add_dialog.is_some() {
+            let dialog = self.add_dialog.as_ref().unwrap();
+            let value = dialog.state.values()[dialog.state.focused_index()].to_string();
+            match action {
+                AppAction::Copy => self.copy_input_value(&value),
+                AppAction::Cut => {
+                    self.copy_input_value(&value);
+                    self.add_dialog
+                        .as_mut()
+                        .unwrap()
+                        .state
+                        .focused_mut()
+                        .clear();
+                }
+                AppAction::Paste => match read_text() {
+                    Ok(text) => self
+                        .add_dialog
+                        .as_mut()
+                        .unwrap()
+                        .state
+                        .focused_mut()
+                        .push_str(&text),
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(
+                            resources::clipboard_paste_error_message(&e),
+                        ))
+                    }
+                },
+                _ => {}
+            }
+            return true;
+        }
+        if self.is_filter_active() {
+            let value = self
+                .active_filter_mut()
+                .map(|filter| filter.value().to_string())
+                .unwrap_or_default();
+            match action {
+                AppAction::Copy => self.copy_input_value(&value),
+                AppAction::Cut => {
+                    self.copy_input_value(&value);
+                    if let Some(filter) = self.active_filter_mut() {
+                        filter.clear_value();
+                    }
+                }
+                AppAction::Paste => match read_text() {
+                    Ok(text) => {
+                        if let Some(filter) = self.active_filter_mut() {
+                            filter.push_str(&text);
+                        }
+                    }
+                    Err(e) => {
+                        self.popup_message = Some(PopupMessage::Error(
+                            resources::clipboard_paste_error_message(&e),
+                        ))
+                    }
+                },
+                _ => {}
+            }
+            return true;
+        }
+        false
+    }
+
     pub(crate) async fn handle_stack_list_action(&mut self, action: AppAction) {
         match action {
             AppAction::Back => self.screen = Screen::MainMenu,
@@ -1196,7 +1380,7 @@ impl App {
             || self.help_popup_open
     }
 
-    pub(crate) fn handle_add_dialog_key(&mut self, code: KeyCode) -> bool {
+    pub fn handle_add_dialog_key(&mut self, code: KeyCode) -> bool {
         let Some(dialog) = self.add_dialog.as_mut() else {
             return false;
         };

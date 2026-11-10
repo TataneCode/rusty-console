@@ -23,6 +23,10 @@ impl TextInputState {
         self.value.push(c);
     }
 
+    pub fn push_str(&mut self, text: &str) {
+        self.value.push_str(text);
+    }
+
     pub fn pop_char(&mut self) {
         self.value.pop();
     }
@@ -204,6 +208,16 @@ mod tests {
         assert!(!input.is_empty());
         input.clear();
         assert!(input.is_empty());
+    }
+
+    #[test]
+    fn test_text_input_push_str_appends_text() {
+        let mut input = TextInputState::new();
+        input.push_char('a');
+        input.push_str("bc");
+        assert_eq!(input.value(), "abc");
+        input.push_str("");
+        assert_eq!(input.value(), "abc");
     }
 
     #[test]

@@ -86,15 +86,10 @@ pub fn render_image_list(
     }
 }
 
-pub fn render_image_details(
-    frame: &mut Frame,
-    area: Rect,
-    image: &ImageDto,
-    help_bar: ImageHelpBarState<'_>,
-) {
-    let [content_area, help_area] = split_content_area(area);
-
-    let details = format!(
+/// The image details block as plain text (exactly what is displayed);
+/// also used as the text copied to the clipboard with `y`.
+pub fn image_details_text(image: &ImageDto) -> String {
+    format!(
         "{:<12}{}\n\
          {:<12}{}\n\
          {:<12}{}\n\
@@ -127,9 +122,18 @@ pub fn render_image_details(
         } else {
             resources::VALUE_NO
         },
-    );
+    )
+}
 
-    let details_widget = Paragraph::new(details)
+pub fn render_image_details(
+    frame: &mut Frame,
+    area: Rect,
+    image: &ImageDto,
+    help_bar: ImageHelpBarState<'_>,
+) {
+    let [content_area, help_area] = split_content_area(area);
+
+    let details_widget = Paragraph::new(image_details_text(image))
         .block(Theme::section_block(Some(resources::IMAGE_DETAILS_TITLE)))
         .wrap(Wrap { trim: false });
 
@@ -146,7 +150,7 @@ pub fn render_image_details(
 
 #[cfg(test)]
 mod tests {
-    use super::{render_image_details, render_image_list, ImageHelpBarState};
+    use super::{image_details_text, render_image_details, render_image_list, ImageHelpBarState};
     use crate::application::image::ImageDto;
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
 
@@ -265,6 +269,18 @@ mod tests {
         assert!(text.contains("Image Details"));
         assert!(text.contains("nginx:latest"));
         assert!(text.contains("In Use"));
+        assert!(text.contains("Yes"));
+    }
+
+    #[test]
+    fn test_image_details_text_contains_all_displayed_fields() {
+        let image = make_image();
+        let text = image_details_text(&image);
+        assert!(text.contains("sha256:abc"));
+        assert!(text.contains("nginx"));
+        assert!(text.contains("latest"));
+        assert!(text.contains("nginx:latest"));
+        assert!(text.contains("12 MB"));
         assert!(text.contains("Yes"));
     }
 }

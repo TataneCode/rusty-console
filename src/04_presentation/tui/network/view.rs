@@ -1,4 +1,4 @@
-use crate::application::network::NetworkDto;
+use crate::application::network::{NetworkContainerDto, NetworkDto};
 use crate::presentation::tui::common::{
     render_action_bar, render_list, resources, split_content_area, truncate_text, ListHelpBar,
     ListRenderInput, ListViewSpec, Theme,
@@ -61,14 +61,11 @@ pub fn render_network_list(
     });
 }
 
-pub fn render_network_details(
-    frame: &mut Frame,
-    area: Rect,
-    network: &NetworkDto,
-    selected_container: Option<usize>,
-) {
-    let [content_area, help_area] = split_content_area(area);
-
+/// The network details block as plain text (exactly what is displayed,
+/// including the `>` marker on the selected container when given); also
+/// used as the text copied to the clipboard with `y` when no container
+/// is selected.
+pub fn network_details_text(network: &NetworkDto, selected_container: Option<usize>) -> String {
     let subnet = network.subnet.clone().unwrap_or_else(|| "N/A".to_string());
     let gateway = network.gateway.clone().unwrap_or_else(|| "N/A".to_string());
 
@@ -91,7 +88,7 @@ pub fn render_network_details(
             .join("\n")
     };
 
-    let details = format!(
+    format!(
         "{:<18}{}\n\
          {:<18}{}\n\
          {:<18}{}\n\
@@ -130,9 +127,24 @@ pub fn render_network_details(
         network.created.as_str(),
         resources::LABEL_CONTAINERS.trim_end_matches(':'),
         containers,
-    );
+    )
+}
 
-    let details_widget = Paragraph::new(details)
+/// The displayed line of a connected container, copied with `y` when a
+/// container is selected on the network details screen.
+pub fn network_container_line(container: &NetworkContainerDto) -> String {
+    format!("{} ({})", container.name, container.ip)
+}
+
+pub fn render_network_details(
+    frame: &mut Frame,
+    area: Rect,
+    network: &NetworkDto,
+    selected_container: Option<usize>,
+) {
+    let [content_area, help_area] = split_content_area(area);
+
+    let details_widget = Paragraph::new(network_details_text(network, selected_container))
         .block(Theme::section_block(Some(resources::NETWORK_DETAILS_TITLE)))
         .wrap(Wrap { trim: false });
 
@@ -143,7 +155,9 @@ pub fn render_network_details(
 
 #[cfg(test)]
 mod tests {
-    use super::{render_network_details, render_network_list};
+    use super::{
+        network_container_line, network_details_text, render_network_details, render_network_list,
+    };
     use crate::application::network::{NetworkContainerDto, NetworkDto};
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
 
@@ -296,5 +310,27 @@ mod tests {
 
         let text = buffer_text(terminal.backend().buffer());
         assert!(!text.contains("web ("));
+    }
+
+    #[test]
+    fn test_network_details_text_marks_only_the_selected_container() {
+        let network = make_network_dto();
+        let with_selection = network_details_text(&network, Some(0));
+        assert!(with_selection.contains("  > web (172.20.0.2/16)"));
+
+        let without_selection = network_details_text(&network, None);
+        assert!(without_selection.contains("web (172.20.0.2/16)"));
+        assert!(!without_selection.contains(">"));
+        assert!(without_selection.contains("app-net"));
+        assert!(without_selection.contains("172.20.0.0/16"));
+    }
+
+    #[test]
+    fn test_network_container_line_formats_name_and_ip() {
+        let network = make_network_dto();
+        assert_eq!(
+            network_container_line(&network.containers[0]),
+            "web (172.20.0.2/16)"
+        );
     }
 }

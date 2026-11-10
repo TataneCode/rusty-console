@@ -32,6 +32,9 @@ pub enum AppAction {
     PreviousLogMatch,
     ExportLogs,
     CopyLogLine,
+    Copy,
+    Cut,
+    Paste,
     DisconnectContainer,
     ToggleHelp,
     BrowseFiles,
@@ -42,8 +45,27 @@ pub enum AppAction {
 
 pub fn map_key_to_action(key: KeyEvent) -> Option<AppAction> {
     match key.code {
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+        // Ctrl+C (without Shift) quits from anywhere; Ctrl+Shift+C copies.
+        KeyCode::Char('c')
+            if key.modifiers.contains(KeyModifiers::CONTROL)
+                && !key.modifiers.contains(KeyModifiers::SHIFT) =>
+        {
             Some(AppAction::Quit)
+        }
+        KeyCode::Char('c') | KeyCode::Char('C')
+            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            Some(AppAction::Copy)
+        }
+        KeyCode::Char('x') | KeyCode::Char('X')
+            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            Some(AppAction::Cut)
+        }
+        KeyCode::Char('v') | KeyCode::Char('V')
+            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            Some(AppAction::Paste)
         }
         KeyCode::Esc => Some(AppAction::Back),
         KeyCode::Up | KeyCode::Char('k') => Some(AppAction::NavigateUp),
@@ -93,6 +115,7 @@ pub enum KeyContext {
     ContainerLogs,
     ContainerExplorer,
     NetworkDetails,
+    Details,
 }
 
 pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Option<AppAction> {
@@ -100,6 +123,7 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
     match context {
         KeyContext::ContainerLogs => match action {
             AppAction::ActivateFilter => Some(AppAction::ActivateLogSearch),
+            AppAction::Copy | AppAction::Cut | AppAction::Paste => None,
             other => Some(other),
         },
         KeyContext::ContainerExplorer => match action {
@@ -121,13 +145,24 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
         },
         KeyContext::NetworkDetails => match action {
             AppAction::Delete => Some(AppAction::DisconnectContainer),
+            AppAction::CopyLogLine => Some(AppAction::Copy),
+            other => Some(other),
+        },
+        KeyContext::Details => match action {
+            AppAction::CopyLogLine => Some(AppAction::Copy),
+            AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
+            AppAction::ActivateLogSearch => None,
+            AppAction::ExportLogs => None,
+            AppAction::Cut | AppAction::Paste => None,
+            AppAction::DisconnectContainer => None,
+            AppAction::CopyFile | AppAction::ViewFile | AppAction::GoToParent => None,
             other => Some(other),
         },
         KeyContext::Global => match action {
             AppAction::NextLogMatch | AppAction::PreviousLogMatch => None,
             AppAction::ActivateLogSearch => None,
             AppAction::ExportLogs => None,
-            AppAction::CopyLogLine => None,
+            AppAction::CopyLogLine | AppAction::Copy | AppAction::Cut | AppAction::Paste => None,
             AppAction::DisconnectContainer => None,
             AppAction::CopyFile | AppAction::ViewFile | AppAction::GoToParent => None,
             other => Some(other),
@@ -167,6 +202,7 @@ mod tests {
             KeyContext::ContainerLogs,
             KeyContext::ContainerExplorer,
             KeyContext::NetworkDetails,
+            KeyContext::Details,
         ] {
             assert_eq!(
                 map_key_to_action_for_context(key, context),
@@ -184,6 +220,7 @@ mod tests {
             KeyContext::ContainerLogs,
             KeyContext::ContainerExplorer,
             KeyContext::NetworkDetails,
+            KeyContext::Details,
         ] {
             assert_eq!(map_key_to_action_for_context(key, context), None);
         }
@@ -590,5 +627,110 @@ mod tests {
             map_key_to_action_for_context(key_event(KeyCode::Char('d')), KeyContext::Global),
             Some(AppAction::Delete)
         );
+    }
+
+    #[test]
+    fn test_ctrl_shift_c_x_v_map_to_copy_cut_paste() {
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        assert_eq!(
+            map_key_to_action(key_event_with_modifiers(KeyCode::Char('c'), ctrl_shift)),
+            Some(AppAction::Copy)
+        );
+        assert_eq!(
+            map_key_to_action(key_event_with_modifiers(KeyCode::Char('x'), ctrl_shift)),
+            Some(AppAction::Cut)
+        );
+        assert_eq!(
+            map_key_to_action(key_event_with_modifiers(KeyCode::Char('v'), ctrl_shift)),
+            Some(AppAction::Paste)
+        );
+        // Some terminals report Ctrl+Shift+letter as the uppercase char with CONTROL.
+        assert_eq!(
+            map_key_to_action(key_event_with_modifiers(
+                KeyCode::Char('C'),
+                KeyModifiers::CONTROL
+            )),
+            Some(AppAction::Copy)
+        );
+    }
+
+    #[test]
+    fn test_ctrl_shift_c_does_not_quit() {
+        let key = key_event_with_modifiers(
+            KeyCode::Char('c'),
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+        );
+        assert_eq!(map_key_to_action(key), Some(AppAction::Copy));
+        for context in [
+            KeyContext::Global,
+            KeyContext::ContainerLogs,
+            KeyContext::ContainerExplorer,
+            KeyContext::NetworkDetails,
+            KeyContext::Details,
+        ] {
+            assert_ne!(
+                map_key_to_action_for_context(key, context),
+                Some(AppAction::Quit),
+                "Ctrl+Shift+C must not quit in {context:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_copy_cut_paste_filtered_outside_details_and_input() {
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        for code in [KeyCode::Char('c'), KeyCode::Char('x'), KeyCode::Char('v')] {
+            let key = key_event_with_modifiers(code, ctrl_shift);
+            assert_eq!(map_key_to_action_for_context(key, KeyContext::Global), None);
+            assert_eq!(
+                map_key_to_action_for_context(key, KeyContext::ContainerLogs),
+                None
+            );
+            assert_eq!(
+                map_key_to_action_for_context(key, KeyContext::ContainerExplorer),
+                None
+            );
+        }
+        let copy_key = key_event_with_modifiers(KeyCode::Char('c'), ctrl_shift);
+        assert_eq!(
+            map_key_to_action_for_context(copy_key, KeyContext::Details),
+            Some(AppAction::Copy)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(copy_key, KeyContext::NetworkDetails),
+            Some(AppAction::Copy)
+        );
+    }
+
+    #[test]
+    fn test_y_maps_to_copy_on_details_contexts_only() {
+        let y = key_event(KeyCode::Char('y'));
+        assert_eq!(
+            map_key_to_action_for_context(y, KeyContext::Details),
+            Some(AppAction::Copy)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(y, KeyContext::NetworkDetails),
+            Some(AppAction::Copy)
+        );
+        assert_eq!(
+            map_key_to_action_for_context(y, KeyContext::ContainerLogs),
+            Some(AppAction::CopyLogLine)
+        );
+        assert_eq!(map_key_to_action_for_context(y, KeyContext::Global), None);
+    }
+
+    #[test]
+    fn test_cut_paste_inert_on_details_context() {
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        for code in [KeyCode::Char('x'), KeyCode::Char('v')] {
+            assert_eq!(
+                map_key_to_action_for_context(
+                    key_event_with_modifiers(code, ctrl_shift),
+                    KeyContext::Details
+                ),
+                None
+            );
+        }
     }
 }

@@ -107,6 +107,9 @@ pub struct App {
     pub(crate) pending_file_copy: Option<FileOpSubscription>,
     pub(crate) add_dialog: Option<AddDialog>,
     pub(crate) pending_create_after_pull: Option<CreateContainerRequest>,
+    /// Whether mouse capture is currently enabled on the terminal. Detail
+    /// screens release it so the terminal's native text selection works.
+    pub(crate) mouse_capture_enabled: bool,
 }
 
 pub(crate) struct PendingImagePull {
@@ -196,6 +199,7 @@ impl App {
             pending_file_copy: None,
             add_dialog: None,
             pending_create_after_pull: None,
+            mouse_capture_enabled: true,
         }
     }
 
@@ -238,6 +242,9 @@ impl App {
                     if map_key_to_action(key) == Some(AppAction::Quit) {
                         // Ctrl+C quits from anywhere, even mid filter-input or dialog
                         self.should_quit = true;
+                    } else if self.handle_input_clipboard_key(key) {
+                        // Key consumed by a clipboard shortcut (Ctrl+Shift+C/X/V)
+                        // in an active text input
                     } else if self.add_dialog.is_some() && self.handle_add_dialog_key(key.code) {
                         // Key consumed by add dialog input
                     } else if !self.has_modal_overlay()
@@ -251,6 +258,9 @@ impl App {
                             Screen::ContainerLogs => KeyContext::ContainerLogs,
                             Screen::ContainerExplorer => KeyContext::ContainerExplorer,
                             Screen::NetworkDetails => KeyContext::NetworkDetails,
+                            Screen::ContainerDetails
+                            | Screen::VolumeDetails
+                            | Screen::ImageDetails => KeyContext::Details,
                             _ => KeyContext::Global,
                         },
                     ) {
@@ -268,6 +278,7 @@ impl App {
             self.drain_image_pull().await;
             self.drain_file_ops().await;
             self.drain_file_copy().await;
+            self.sync_mouse_capture(terminal)?;
 
             if self.should_quit {
                 break;
@@ -1197,8 +1208,43 @@ impl App {
             EnterAlternateScreen,
             EnableMouseCapture
         )?;
+        self.mouse_capture_enabled = true;
         terminal.hide_cursor()?;
         terminal.clear()
+    }
+
+    /// Detail screens release the mouse capture so the terminal's native text
+    /// selection (and the OS copy shortcuts that use it) work there; on every
+    /// other screen the capture stays enabled (the app never reads mouse
+    /// events, so nothing is lost).
+    fn desired_mouse_capture(&self) -> bool {
+        !matches!(
+            self.screen,
+            Screen::ContainerDetails
+                | Screen::VolumeDetails
+                | Screen::ImageDetails
+                | Screen::NetworkDetails
+        )
+    }
+
+    /// Aligns the terminal mouse capture with the current screen. Called on
+    /// every loop iteration, so it also repairs the state after `resume_tui`
+    /// (exec) re-enabled the capture unconditionally.
+    fn sync_mouse_capture(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        let desired = self.desired_mouse_capture();
+        if desired == self.mouse_capture_enabled {
+            return Ok(());
+        }
+        if desired {
+            execute!(terminal.backend_mut(), EnableMouseCapture)?;
+        } else {
+            execute!(terminal.backend_mut(), DisableMouseCapture)?;
+        }
+        self.mouse_capture_enabled = desired;
+        Ok(())
     }
 }
 
@@ -4249,5 +4295,122 @@ mod tests {
         let rendered = render_app(&mut app);
         assert!(rendered.contains("File content /app.conf"));
         assert!(rendered.contains("content"));
+    }
+
+    #[tokio::test]
+    async fn test_copy_action_on_each_details_screen_shows_popup_feedback() {
+        for screen in [
+            Screen::ContainerDetails,
+            Screen::VolumeDetails,
+            Screen::ImageDetails,
+            Screen::NetworkDetails,
+        ] {
+            let mut app = empty_app();
+            app.screen = screen.clone();
+            match &screen {
+                Screen::ContainerDetails => {
+                    app.container_presenter.set_details(make_container_dto())
+                }
+                Screen::VolumeDetails => app
+                    .volume_presenter
+                    .set_details(make_volume_dto(true, false)),
+                Screen::ImageDetails => app.image_presenter.set_details(make_image_dto(true)),
+                Screen::NetworkDetails => app
+                    .network_presenter
+                    .set_details(make_network_dto(false, 1)),
+                _ => {}
+            }
+            app.handle_action(AppAction::Copy).await;
+            assert!(
+                app.popup_message.is_some(),
+                "copy feedback popup should be shown on {screen:?} (success or clipboard error)"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_copy_action_without_details_is_noop() {
+        let mut app = empty_app();
+        app.screen = Screen::ContainerDetails;
+        app.handle_action(AppAction::Copy).await;
+        assert!(app.popup_message.is_none());
+    }
+
+    #[test]
+    fn test_input_clipboard_shortcuts_consumed_only_in_text_inputs() {
+        use crossterm::event::{KeyEvent, KeyModifiers};
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        let mut app = empty_app();
+        // No text input active: the shortcut is not consumed here
+        assert!(!app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('c'), ctrl_shift)));
+
+        app.screen = Screen::ContainerList;
+        app.container_presenter
+            .set_containers(vec![make_container_dto()]);
+        app.container_presenter.activate_filter();
+        app.container_presenter.push_filter_char('a');
+        // Plain letters are not clipboard keys: `y`/`x`/`p` stay typeable
+        assert!(!app
+            .handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::empty())));
+        // Ctrl+Shift+C copies the filter value (popup only on clipboard error)
+        assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('c'), ctrl_shift)));
+        // Ctrl+Shift+X cuts: the value is cleared, the filter stays active
+        assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('x'), ctrl_shift)));
+        assert!(app.container_presenter.filter.value().is_empty());
+        assert!(app.container_presenter.is_filter_active());
+        // Ctrl+Shift+V pastes (may fail headless -> error popup, still consumed)
+        assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('v'), ctrl_shift)));
+    }
+
+    #[tokio::test]
+    async fn test_input_clipboard_shortcuts_in_add_dialog() {
+        use crossterm::event::{KeyEvent, KeyModifiers};
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        let mut app = empty_app();
+        app.screen = Screen::ImageList;
+        app.handle_action(AppAction::Add).await;
+        assert!(app.add_dialog.is_some());
+        assert!(app.handle_add_dialog_key(KeyCode::Char('n')));
+        assert!(app.handle_add_dialog_key(KeyCode::Char('g')));
+        // Ctrl+Shift+X cuts the focused field
+        assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('x'), ctrl_shift)));
+        assert!(app.add_dialog.as_ref().unwrap().state.values()[0].is_empty());
+        // Plain letters still type normally
+        assert!(!app
+            .handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::empty())));
+        assert!(app.handle_add_dialog_key(KeyCode::Char('y')));
+        assert_eq!(app.add_dialog.as_ref().unwrap().state.values()[0], "y");
+    }
+
+    #[test]
+    fn test_mouse_capture_released_only_on_details_screens() {
+        let mut app = empty_app();
+        assert!(app.mouse_capture_enabled);
+        for screen in [
+            Screen::MainMenu,
+            Screen::ContainerList,
+            Screen::ContainerLogs,
+            Screen::ContainerExplorer,
+            Screen::VolumeList,
+            Screen::ImageList,
+            Screen::NetworkList,
+            Screen::StackList,
+            Screen::StackContainers,
+        ] {
+            app.screen = screen.clone();
+            assert!(app.desired_mouse_capture(), "{screen:?} keeps the capture");
+        }
+        for screen in [
+            Screen::ContainerDetails,
+            Screen::VolumeDetails,
+            Screen::ImageDetails,
+            Screen::NetworkDetails,
+        ] {
+            app.screen = screen.clone();
+            assert!(
+                !app.desired_mouse_capture(),
+                "{screen:?} releases the capture"
+            );
+        }
     }
 }

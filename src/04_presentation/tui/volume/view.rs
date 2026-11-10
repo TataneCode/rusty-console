@@ -65,9 +65,9 @@ pub fn render_volume_list(
     });
 }
 
-pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) {
-    let [content_area, help_area] = split_content_area(area);
-
+/// The volume details block as plain text (exactly what is displayed);
+/// also used as the text copied to the clipboard with `y`.
+pub fn volume_details_text(volume: &VolumeDto) -> String {
     let linked_containers = if volume.linked_containers.is_empty() {
         resources::VALUE_NO.to_string()
     } else {
@@ -79,7 +79,7 @@ pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) 
             .join("\n")
     };
 
-    let details = format!(
+    format!(
         "{:<18}{}\n\
          {:<18}{}\n\
          {:<18}{}\n\
@@ -108,9 +108,13 @@ pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) 
         },
         resources::LABEL_LINKED_CONTAINERS.trim_end_matches(':'),
         linked_containers,
-    );
+    )
+}
 
-    let details_widget = Paragraph::new(details)
+pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) {
+    let [content_area, help_area] = split_content_area(area);
+
+    let details_widget = Paragraph::new(volume_details_text(volume))
         .block(Theme::section_block(Some(resources::VOLUME_DETAILS_TITLE)))
         .wrap(Wrap { trim: false });
 
@@ -121,7 +125,7 @@ pub fn render_volume_details(frame: &mut Frame, area: Rect, volume: &VolumeDto) 
 
 #[cfg(test)]
 mod tests {
-    use super::{render_volume_details, render_volume_list};
+    use super::{render_volume_details, render_volume_list, volume_details_text};
     use crate::application::volume::VolumeDto;
     use ratatui::{backend::TestBackend, buffer::Buffer, widgets::TableState, Terminal};
 
@@ -233,5 +237,26 @@ mod tests {
         assert!(text.contains("Linked Containers"));
         assert!(text.contains("/web"));
         assert!(text.contains("/worker"));
+    }
+
+    #[test]
+    fn test_volume_details_text_contains_all_displayed_fields() {
+        let volume = VolumeDto {
+            id: "vol-1".to_string(),
+            name: "db-data".to_string(),
+            driver: "local".to_string(),
+            mountpoint: "/var/lib/docker/volumes/db-data/_data".to_string(),
+            size: "10 MB".to_string(),
+            created: "2024-01-01".to_string(),
+            in_use: true,
+            linked_containers: vec!["/web".to_string()],
+            can_delete: false,
+        };
+        let text = volume_details_text(&volume);
+        assert!(text.contains("vol-1"));
+        assert!(text.contains("db-data"));
+        assert!(text.contains("local"));
+        assert!(text.contains("10 MB"));
+        assert!(text.contains("/web"));
     }
 }

@@ -28,6 +28,12 @@ This guide covers how to use rusty-console: navigation, key bindings for every s
 | `o` | Cycle list sort: A→Z → Z→A → default |
 | `Space` | Open the help popup (full keybinding list of the current screen) |
 
+### Text selection and clipboard
+
+- On the **details screens** (container, volume, image, network) the terminal's native text selection is enabled: select text with the mouse and copy it with your terminal's own shortcut (right-click on Windows, `Ctrl+Shift+C` on most Linux terminals). `y` (or `Ctrl+Shift+C`) also copies the whole details block to the system clipboard — on the network details screen, the selected container line (`name (IP)`) is copied instead.
+- In **text inputs** (filter `/`, log search, add dialogs), `Ctrl+Shift+C` / `Ctrl+Shift+X` / `Ctrl+Shift+V` copy / cut / paste the current field (paste appends at the end of the field). `y`, `x` and `p` remain ordinary typeable letters there.
+- `Ctrl+C` always quits the application, from any screen.
+
 ## Containers
 
 The container list shows all containers regardless of state, with live CPU and memory usage for active containers. Stats are streamed from Docker while the container screens are active, so values update without a full manual refresh.
@@ -155,6 +161,7 @@ The image list shows all images with their usage status.
 |-----|--------|
 | `P` | Pull the latest version of this image (shows a `docker pull`-style progress bar with downloaded/total bytes) |
 | `r` | Refresh the image list and details |
+| `y` | Copy the image details block to the clipboard |
 | `Esc` | Back to the image list |
 
 Notes on pulling:
@@ -186,4 +193,5 @@ Predefined networks (`bridge`, `host`, `none`) are protected and cannot be delet
 | `j` / `k` | Select a connected container |
 | `d` | Disconnect the selected container from the network (opens confirmation dialog) |
 | `r` | Refresh |
+| `y` | Copy the selected container line (`name (IP)`), or the whole details block when no container is selected |
 | `Esc` | Back to the network list |

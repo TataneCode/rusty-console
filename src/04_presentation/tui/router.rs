@@ -1079,6 +1079,11 @@ impl App {
             Some(action @ (AppAction::Copy | AppAction::Cut | AppAction::Paste)) => action,
             _ => return false,
         };
+        // An open popup (e.g. a clipboard error) is dismissed by the next
+        // mapped key before any clipboard shortcut acts on the input again.
+        if self.popup_message.is_some() {
+            return false;
+        }
         if self.add_dialog.is_some() {
             let dialog = self.add_dialog.as_ref().unwrap();
             let value = dialog.state.values()[dialog.state.focused_index()].to_string();

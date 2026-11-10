@@ -4354,10 +4354,17 @@ mod tests {
             .handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::empty())));
         // Ctrl+Shift+C copies the filter value (popup only on clipboard error)
         assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('c'), ctrl_shift)));
+        // While a popup is open (e.g. clipboard error in headless), the shortcut
+        // is not consumed: the popup is dismissed by the next mapped key first
+        if app.popup_message.is_some() {
+            assert!(!app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('x'), ctrl_shift)));
+            app.popup_message = None;
+        }
         // Ctrl+Shift+X cuts: the value is cleared, the filter stays active
         assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('x'), ctrl_shift)));
         assert!(app.container_presenter.filter.value().is_empty());
         assert!(app.container_presenter.is_filter_active());
+        app.popup_message = None;
         // Ctrl+Shift+V pastes (may fail headless -> error popup, still consumed)
         assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('v'), ctrl_shift)));
     }

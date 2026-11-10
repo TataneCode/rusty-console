@@ -224,11 +224,15 @@ fn clipboard_shortcut_consumed_in_filter_but_not_for_plain_letters() {
         !app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::empty()))
     );
     assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('c'), ctrl_shift)));
+    // Dismiss a possible clipboard-error popup (headless): while a popup is
+    // open, clipboard shortcuts are not consumed (dismissed by next key first)
+    app.popup_message = None;
     assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('x'), ctrl_shift)));
     assert!(
         app.container_presenter.filter.value().is_empty(),
         "cut should clear the filter value"
     );
+    app.popup_message = None;
     assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('v'), ctrl_shift)));
 }
 

@@ -146,6 +146,7 @@ pub fn map_key_to_action_for_context(key: KeyEvent, context: KeyContext) -> Opti
         KeyContext::NetworkDetails => match action {
             AppAction::Delete => Some(AppAction::DisconnectContainer),
             AppAction::CopyLogLine => Some(AppAction::Copy),
+            AppAction::Cut | AppAction::Paste => None,
             other => Some(other),
         },
         KeyContext::Details => match action {
@@ -721,16 +722,19 @@ mod tests {
     }
 
     #[test]
-    fn test_cut_paste_inert_on_details_context() {
+    fn test_cut_paste_inert_on_details_contexts() {
         let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
-        for code in [KeyCode::Char('x'), KeyCode::Char('v')] {
-            assert_eq!(
-                map_key_to_action_for_context(
-                    key_event_with_modifiers(code, ctrl_shift),
-                    KeyContext::Details
-                ),
-                None
-            );
+        for context in [KeyContext::Details, KeyContext::NetworkDetails] {
+            for code in [KeyCode::Char('x'), KeyCode::Char('v')] {
+                assert_eq!(
+                    map_key_to_action_for_context(
+                        key_event_with_modifiers(code, ctrl_shift),
+                        context
+                    ),
+                    None,
+                    "Ctrl+Shift+{code:?} must be inert in {context:?}"
+                );
+            }
         }
     }
 }

@@ -153,7 +153,7 @@ The image list shows all images with their usage status.
 | `d` | Delete (opens confirmation dialog) |
 | `X` | Prune dangling images |
 | `o` | Cycle list sort by name (A→Z → Z→A → default) |
-| `A` | Open the Download Image dialog (single field, e.g. `nginx:1.25`; a name without tag defaults to `:latest`) |
+| `A` | Open the Download Image dialog (single field, e.g. `nginx:1.25`; a name without tag defaults to `:latest`) — the dialog stays open with a spinner and the pull progress bar and blocks other actions until the download completes; on failure it stays open with the entered value and shows the error |
 
 ### Image details
 

@@ -42,7 +42,7 @@ The container list shows all containers regardless of state, with live CPU and m
 |-----|--------|
 | `s` | Start or stop the selected container |
 | `o` | Cycle list sort by name (A→Z → Z→A → default) |
-| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container) |
+| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container — the dialog stays open with a spinner and blocks other actions until the container is created) |
 | `p` | Pause or unpause the selected container |
 | `R` | Restart the selected container |
 | `e` | Open the exec shell picker, then launch `docker exec -it` with `sh` or `bash` |
@@ -129,7 +129,7 @@ This screen offers the same features as the Containers list (same columns, live 
 | `/` | Filter containers by name or image |
 | `o` | Cycle list sort by name (A→Z → Z→A → default) |
 | `X` | Prune all stopped containers |
-| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container) |
+| `A` | Open the Create Container dialog (name, image, port mappings; downloads the image first if needed, then creates and starts the container — the dialog stays open with a spinner and blocks other actions until the container is created) |
 | `r` | Refresh the stack's containers |
 
 ## Volumes

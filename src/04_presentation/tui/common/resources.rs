@@ -86,6 +86,7 @@ pub const ADD_CONTAINER_DIALOG_HELP: &str = " Enter: Create | Tab: Next | Esc: C
 pub const ADD_CONTAINER_NAME_LABEL: &str = "Name";
 pub const ADD_CONTAINER_IMAGE_LABEL: &str = "Image (<name>:<version>, latest if empty)";
 pub const ADD_CONTAINER_PORTS_LABEL: &str = "Ports (<host>:<internal>;...)";
+pub const ADD_CONTAINER_CREATING_HELP: &str = "Creating container, please wait...";
 
 pub const VOLUME_TITLE: &str = "Volumes";
 pub const VOLUME_HEADERS: [&str; 5] = ["Name", "Driver", "Size", "In Use", "Created"];

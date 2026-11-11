@@ -614,6 +614,18 @@ impl App {
                     resources::ADD_CONTAINER_DIALOG_HELP,
                 ),
             };
+            let creating_help;
+            let help = if matches!(dialog.kind, AddDialogKind::Container)
+                && self.is_container_create_pending()
+            {
+                creating_help = format!(
+                    " {spinner_char} {} ",
+                    resources::ADD_CONTAINER_CREATING_HELP
+                );
+                creating_help.as_str()
+            } else {
+                help
+            };
             render_input_dialog(
                 frame,
                 title,
@@ -1001,7 +1013,7 @@ impl App {
     }
 
     async fn finish_pending_container_create(&mut self, pull_ok: bool) {
-        self.container_presenter.set_loading(false);
+        self.set_container_list_loading(false);
         let Some(request) = self.pending_create_after_pull.take() else {
             return;
         };
@@ -1013,7 +1025,11 @@ impl App {
                 if let Err(e) = self.container_actions.start_container(&id).await {
                     self.popup_message = Some(PopupMessage::Error(e.to_string()));
                 }
-                self.load_containers().await;
+                self.add_dialog = None;
+                match self.screen {
+                    Screen::StackContainers => self.refresh_stack_containers().await,
+                    _ => self.load_containers().await,
+                }
                 if self.popup_message.is_none() {
                     self.popup_message = Some(PopupMessage::Info(
                         resources::container_created_message(&request.name),
@@ -3758,7 +3774,16 @@ mod tests {
     #[tokio::test]
     async fn test_add_container_dialog_creates_and_starts_container_after_pull() {
         let mut container_repo = MockContainerRepository::new();
-        container_repo.expect_get_all().returning(|| Ok(vec![]));
+        container_repo.expect_get_all().returning(|| {
+            Ok(vec![crate::domain::container::Container::new(
+                crate::domain::container::ContainerId::new("abc123").unwrap(),
+                "web",
+                "nginx:latest",
+                ContainerState::Stopped,
+                "Exited",
+                Utc::now(),
+            )])
+        });
         container_repo
             .expect_create()
             .withf(|request| {
@@ -3793,12 +3818,15 @@ mod tests {
         app.handle_container_list_action(AppAction::Add).await;
         fill_add_dialog(&mut app, &["web", "nginx", "8080:80"]);
         app.handle_add_dialog_action(AppAction::Select).await;
-        assert!(app.add_dialog.is_none());
+        assert!(app.add_dialog.is_some());
         assert!(app.pending_create_after_pull.is_some());
         assert!(app.pending_image_pull.is_some());
+        assert!(app.container_presenter.is_loading());
         app.drain_image_pull().await;
         assert!(app.pending_create_after_pull.is_none());
+        assert!(app.add_dialog.is_none());
         assert!(!app.container_presenter.is_loading());
+        assert_eq!(app.container_presenter.items.len(), 1);
         match &app.popup_message {
             Some(PopupMessage::Info(msg)) => assert!(msg.contains("Container web created")),
             other => panic!("expected info popup, got {other:?}"),
@@ -3834,9 +3862,115 @@ mod tests {
         fill_add_dialog(&mut app, &["web", "nginx", ""]);
         app.handle_add_dialog_action(AppAction::Select).await;
         app.drain_image_pull().await;
+        assert!(app.pending_create_after_pull.is_none());
+        assert!(app.add_dialog.is_some());
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["web", "nginx", ""]
+        );
         match &app.popup_message {
             Some(PopupMessage::Error(msg)) => assert!(msg.contains("name taken")),
             other => panic!("expected error popup, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_container_dialog_blocks_input_and_actions_while_creating() {
+        use crossterm::event::{KeyEvent, KeyModifiers};
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        let mut container_repo = MockContainerRepository::new();
+        container_repo.expect_get_all().returning(|| Ok(vec![]));
+        container_repo
+            .expect_create()
+            .returning(|_| Ok("abc123".to_string()));
+        container_repo.expect_start().returning(|_| Ok(()));
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ContainerList;
+        app.handle_container_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["web", "nginx", "8080:80"]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        assert!(app.is_container_create_pending());
+
+        assert!(app.handle_add_dialog_key(KeyCode::Char('x')));
+        assert!(app.handle_add_dialog_key(KeyCode::Tab));
+        assert!(app.handle_add_dialog_key(KeyCode::Backspace));
+        assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('v'), ctrl_shift)));
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["web", "nginx", "8080:80"]
+        );
+
+        app.handle_add_dialog_action(AppAction::Back).await;
+        assert!(app.add_dialog.is_some());
+        app.handle_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::ContainerList);
+        app.handle_action(AppAction::Select).await;
+        assert_eq!(app.screen, Screen::ContainerList);
+        assert!(app.container_presenter.selected_container.is_none());
+
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains(resources::ADD_CONTAINER_CREATING_HELP));
+    }
+
+    #[tokio::test]
+    async fn test_add_container_dialog_refreshes_stack_containers_after_create() {
+        let mut container_repo = MockContainerRepository::new();
+        container_repo
+            .expect_create()
+            .returning(|_| Ok("abc123".to_string()));
+        container_repo.expect_start().returning(|_| Ok(()));
+        expect_empty_stats_subscription(&mut container_repo, 1);
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let mut stack_repo = MockStackRepository::new();
+        stack_repo
+            .expect_get_all()
+            .returning(|| Ok(vec![make_stack(2)]));
+        let mut app = build_app(
+            container_repo,
+            MockVolumeRepository::new(),
+            image_repo,
+            stack_repo,
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::StackContainers;
+        app.stack_presenter
+            .set_stacks(vec![make_stack_dto(vec![make_stack_container(
+                false, true,
+            )])]);
+        app.handle_stack_containers_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["web", "nginx", ""]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        assert!(app.stack_presenter.containers.is_loading());
+        app.drain_image_pull().await;
+        assert!(app.add_dialog.is_none());
+        assert!(!app.stack_presenter.containers.is_loading());
+        assert_eq!(app.stack_presenter.containers.items.len(), 2);
+        match &app.popup_message {
+            Some(PopupMessage::Info(msg)) => assert!(msg.contains("Container web created")),
+            other => panic!("expected info popup, got {other:?}"),
         }
     }
 

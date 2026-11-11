@@ -1106,6 +1106,9 @@ impl App {
             return false;
         }
         if self.add_dialog.is_some() {
+            if self.is_container_create_pending() {
+                return true;
+            }
             let dialog = self.add_dialog.as_ref().unwrap();
             let value = dialog.state.values()[dialog.state.focused_index()].to_string();
             match action {
@@ -1380,10 +1383,18 @@ impl App {
             || self.help_popup_open
     }
 
+    pub fn is_container_create_pending(&self) -> bool {
+        self.pending_create_after_pull.is_some()
+    }
+
     pub fn handle_add_dialog_key(&mut self, code: KeyCode) -> bool {
-        let Some(dialog) = self.add_dialog.as_mut() else {
+        if self.add_dialog.is_none() {
             return false;
-        };
+        }
+        if self.is_container_create_pending() {
+            return true;
+        }
+        let dialog = self.add_dialog.as_mut().unwrap();
         match code {
             KeyCode::Tab => dialog.state.focus_next(),
             KeyCode::BackTab => dialog.state.focus_previous(),
@@ -1395,6 +1406,9 @@ impl App {
     }
 
     pub(crate) async fn handle_add_dialog_action(&mut self, action: AppAction) {
+        if self.is_container_create_pending() {
+            return;
+        }
         match action {
             AppAction::Back => self.add_dialog = None,
             AppAction::NavigateUp => {
@@ -1445,7 +1459,6 @@ impl App {
                         return;
                     }
                 };
-                self.add_dialog = None;
                 self.start_container_pull_then_create(CreateContainerRequest::new(
                     &name,
                     &image,
@@ -1457,7 +1470,7 @@ impl App {
     }
 
     pub(crate) fn open_add_dialog(&mut self) {
-        if self.pending_image_pull.is_some() {
+        if self.pending_image_pull.is_some() || self.is_container_create_pending() {
             return;
         }
         let kind = match self.screen {
@@ -1494,7 +1507,7 @@ impl App {
 
     async fn start_container_pull_then_create(&mut self, request: CreateContainerRequest) {
         self.pending_create_after_pull = Some(request);
-        self.container_presenter.set_loading(true);
+        self.set_container_list_loading(true);
         self.start_image_pull_for_create().await;
     }
 
@@ -1514,7 +1527,7 @@ impl App {
             }
             Err(e) => {
                 self.pending_create_after_pull = None;
-                self.container_presenter.set_loading(false);
+                self.set_container_list_loading(false);
                 self.image_presenter.set_loading(false);
                 self.popup_message = Some(PopupMessage::Error(e.to_string()));
             }

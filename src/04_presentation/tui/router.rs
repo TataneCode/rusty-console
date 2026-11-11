@@ -1106,7 +1106,7 @@ impl App {
             return false;
         }
         if self.add_dialog.is_some() {
-            if self.is_container_create_pending() {
+            if self.is_add_dialog_submitting() {
                 return true;
             }
             let dialog = self.add_dialog.as_ref().unwrap();
@@ -1383,15 +1383,15 @@ impl App {
             || self.help_popup_open
     }
 
-    pub fn is_container_create_pending(&self) -> bool {
-        self.pending_create_after_pull.is_some()
+    pub fn is_add_dialog_submitting(&self) -> bool {
+        self.pending_create_after_pull.is_some() || self.pending_image_pull.is_some()
     }
 
     pub fn handle_add_dialog_key(&mut self, code: KeyCode) -> bool {
         if self.add_dialog.is_none() {
             return false;
         }
-        if self.is_container_create_pending() {
+        if self.is_add_dialog_submitting() {
             return true;
         }
         let dialog = self.add_dialog.as_mut().unwrap();
@@ -1406,7 +1406,7 @@ impl App {
     }
 
     pub(crate) async fn handle_add_dialog_action(&mut self, action: AppAction) {
-        if self.is_container_create_pending() {
+        if self.is_add_dialog_submitting() {
             return;
         }
         match action {
@@ -1439,7 +1439,6 @@ impl App {
                     ));
                     return;
                 }
-                self.add_dialog = None;
                 self.start_image_pull(vec![image_ref]).await;
             }
             AddDialogKind::Container => {
@@ -1470,7 +1469,7 @@ impl App {
     }
 
     pub(crate) fn open_add_dialog(&mut self) {
-        if self.pending_image_pull.is_some() || self.is_container_create_pending() {
+        if self.is_add_dialog_submitting() {
             return;
         }
         let kind = match self.screen {

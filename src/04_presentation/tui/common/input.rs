@@ -1,6 +1,10 @@
-use crate::presentation::tui::common::{action_bar::render_action_bar, resources, Theme};
+use crate::application::image::ImagePullProgress;
+use crate::presentation::tui::common::{
+    action_bar::render_action_bar, progress_bar::render_pull_progress_bar, resources, Theme,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    text::{Line, Span},
     widgets::{Block, BorderType, Clear, Padding, Paragraph},
     Frame,
 };
@@ -100,14 +104,22 @@ pub fn input_dialog_height(field_count: usize) -> u16 {
         + 1
 }
 
+pub struct InputDialogBusy<'a> {
+    pub spinner_char: &'a str,
+    pub message: &'a str,
+    pub progress: Option<&'a ImagePullProgress>,
+}
+
 pub fn render_input_dialog(
     frame: &mut Frame,
     title: &str,
     fields: &[InputField<'_>],
     help_text: &str,
     width_percent: u16,
+    busy: Option<InputDialogBusy<'_>>,
 ) {
-    let dialog_height = input_dialog_height(fields.len());
+    let busy_height = u16::from(busy.as_ref().is_some_and(|b| b.progress.is_some()));
+    let dialog_height = input_dialog_height(fields.len()) + busy_height;
     let area = vertically_centered_rect(width_percent, dialog_height, frame.area());
     frame.render_widget(Clear, area);
 
@@ -116,7 +128,9 @@ pub fn render_input_dialog(
     let inner = Theme::section_block(None).inner(area);
     let inner_area = Rect {
         y: inner.y + 1,
-        height: inner.height.saturating_sub(HELP_BAR_HEIGHT + 1),
+        height: inner
+            .height
+            .saturating_sub(HELP_BAR_HEIGHT + 1 + busy_height),
         ..inner
     };
 
@@ -170,7 +184,31 @@ pub fn render_input_dialog(
         height: HELP_BAR_HEIGHT,
         ..area
     };
-    render_action_bar(frame, help_area, help_text);
+    match &busy {
+        Some(busy) => match busy.progress {
+            Some(progress) => {
+                let status_area = Rect {
+                    y: help_area.y.saturating_sub(1),
+                    height: 1,
+                    ..inner
+                };
+                let status = Line::from(vec![
+                    Span::styled(
+                        format!(" {} ", busy.spinner_char),
+                        Theme::action_key_style(),
+                    ),
+                    Span::styled(busy.message.to_string(), Theme::action_label_style()),
+                ]);
+                frame.render_widget(Paragraph::new(status), status_area);
+                render_pull_progress_bar(frame, help_area, progress);
+            }
+            None => {
+                let help = format!(" {} {} ", busy.spinner_char, busy.message);
+                render_action_bar(frame, help_area, &help);
+            }
+        },
+        None => render_action_bar(frame, help_area, help_text),
+    }
 }
 
 pub(crate) fn vertically_centered_rect(percent_x: u16, height: u16, r: Rect) -> Rect {
@@ -267,7 +305,14 @@ mod tests {
                         focused: false,
                     },
                 ];
-                render_input_dialog(frame, " Create ", &fields, " Enter: OK | Esc: Cancel ", 60);
+                render_input_dialog(
+                    frame,
+                    " Create ",
+                    &fields,
+                    " Enter: OK | Esc: Cancel ",
+                    60,
+                    None,
+                );
             })
             .unwrap();
         let buffer = terminal.backend().buffer();

@@ -80,6 +80,7 @@ pub const INPUT_EMPTY: &str = " ";
 pub const INPUT_DIALOG_WIDTH_PERCENT: u16 = 60;
 pub const ADD_IMAGE_DIALOG_TITLE: &str = " Download Image ";
 pub const ADD_IMAGE_DIALOG_HELP: &str = " Enter: Download | Tab: Next | Esc: Cancel ";
+pub const ADD_IMAGE_PULLING_HELP: &str = "Downloading image, please wait...";
 pub const ADD_IMAGE_FIELD_LABEL: &str = "Image (<name>:<version>, latest if empty)";
 pub const ADD_CONTAINER_DIALOG_TITLE: &str = " Create Container ";
 pub const ADD_CONTAINER_DIALOG_HELP: &str = " Enter: Create | Tab: Next | Esc: Cancel ";

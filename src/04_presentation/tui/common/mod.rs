@@ -20,7 +20,7 @@ pub use breadcrumb::{breadcrumb_text, render_breadcrumb, BREADCRUMB_BAR_HEIGHT};
 pub use clipboard::{copy_text, read_text};
 pub use filter::FilterState;
 pub use help_popup::{help_popup_lines, render_help_popup, HelpPopupState};
-pub use input::render_input_dialog;
+pub use input::{render_input_dialog, InputDialogBusy};
 pub use input::{InputDialogState, InputField, TextInputState};
 pub use keys::{map_key_to_action, map_key_to_action_for_context, AppAction, KeyContext};
 pub use list::ListCore;

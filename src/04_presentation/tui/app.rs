@@ -12,7 +12,8 @@ use crate::presentation::tui::common::{
     dim_background, map_key_to_action, map_key_to_action_for_context, render_breadcrumb,
     render_confirm_dialog, render_expanded_log_line, render_help_popup, render_input_dialog,
     render_main_menu, render_popup_message, render_selection_dialog, resources, split_app_area,
-    AppAction, HelpPopupState, InputDialogState, InputField, KeyContext, PopupMessage, Spinner,
+    AppAction, HelpPopupState, InputDialogBusy, InputDialogState, InputField, KeyContext,
+    PopupMessage, Spinner,
 };
 use crate::presentation::tui::confirm::{confirm_message, ConfirmAction};
 use crate::presentation::tui::container::{
@@ -614,17 +615,21 @@ impl App {
                     resources::ADD_CONTAINER_DIALOG_HELP,
                 ),
             };
-            let creating_help;
-            let help = if matches!(dialog.kind, AddDialogKind::Container)
-                && self.is_container_create_pending()
-            {
-                creating_help = format!(
-                    " {spinner_char} {} ",
-                    resources::ADD_CONTAINER_CREATING_HELP
-                );
-                creating_help.as_str()
+            let busy = if self.is_add_dialog_submitting() {
+                match dialog.kind {
+                    AddDialogKind::Container => Some(InputDialogBusy {
+                        spinner_char,
+                        message: resources::ADD_CONTAINER_CREATING_HELP,
+                        progress: None,
+                    }),
+                    AddDialogKind::Image => Some(InputDialogBusy {
+                        spinner_char,
+                        message: resources::ADD_IMAGE_PULLING_HELP,
+                        progress: self.image_presenter.pull_progress.as_ref(),
+                    }),
+                }
             } else {
-                help
+                None
             };
             render_input_dialog(
                 frame,
@@ -632,6 +637,7 @@ impl App {
                 &fields,
                 help,
                 resources::INPUT_DIALOG_WIDTH_PERCENT,
+                busy,
             );
         }
     }
@@ -998,6 +1004,7 @@ impl App {
         }
         match result {
             Ok(outcome) => {
+                self.add_dialog = None;
                 self.load_images().await;
                 if self.screen == Screen::ImageDetails {
                     self.restore_selected_image_details();
@@ -1351,7 +1358,7 @@ mod tests {
     };
     use crate::application::image::traits::MockImageRepository;
     use crate::application::image::{
-        ImageDto, ImagePullOutcome, ImagePullSubscription, ImageService,
+        ImageDto, ImagePullOutcome, ImagePullProgress, ImagePullSubscription, ImageService,
     };
     use crate::application::network::traits::MockNetworkRepository;
     use crate::application::network::{NetworkContainerDto, NetworkDto, NetworkService};
@@ -3714,11 +3721,102 @@ mod tests {
         app.handle_image_list_action(AppAction::Add).await;
         fill_add_dialog(&mut app, &["nginx"]);
         app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        assert!(app.is_add_dialog_submitting());
         assert!(app.pending_image_pull.is_some());
         app.drain_image_pull().await;
+        assert!(app.add_dialog.is_none());
+        assert!(!app.is_add_dialog_submitting());
         match &app.popup_message {
             Some(PopupMessage::Info(msg)) => assert!(msg.contains("pulled 1 image(s)")),
             other => panic!("expected info popup, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_image_dialog_blocks_input_and_shows_progress_while_pulling() {
+        use crossterm::event::{KeyEvent, KeyModifiers};
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_get_all().returning(|| Ok(vec![]));
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Ok(ImagePullOutcome {
+                pulled: vec!["nginx:latest".to_string()],
+                up_to_date: vec![],
+            })))
+        });
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.handle_image_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["nginx"]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        assert!(app.is_add_dialog_submitting());
+
+        assert!(app.handle_add_dialog_key(KeyCode::Char('x')));
+        assert!(app.handle_add_dialog_key(KeyCode::Backspace));
+        assert!(app.handle_input_clipboard_key(KeyEvent::new(KeyCode::Char('v'), ctrl_shift)));
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["nginx"]
+        );
+
+        app.handle_add_dialog_action(AppAction::Back).await;
+        assert!(app.add_dialog.is_some());
+        app.handle_action(AppAction::Back).await;
+        assert_eq!(app.screen, Screen::ImageList);
+
+        app.image_presenter.set_pull_progress(ImagePullProgress {
+            image: "nginx:latest".to_string(),
+            downloaded_bytes: 5_000_000,
+            total_bytes: 10_000_000,
+        });
+        let rendered = render_app(&mut app);
+        assert!(rendered.contains(resources::ADD_IMAGE_PULLING_HELP));
+        assert!(
+            rendered.contains("(50%)"),
+            "progress bar missing: {rendered}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_add_image_dialog_pull_error_keeps_dialog_open_with_value() {
+        let mut image_repo = MockImageRepository::new();
+        image_repo.expect_local_digest().returning(|_| Ok(None));
+        image_repo.expect_pull_images().returning(|_| {
+            Ok(ImagePullSubscription::completed(Err(
+                crate::application::error::AppError::repository("registry unreachable"),
+            )))
+        });
+        let mut app = build_app(
+            MockContainerRepository::new(),
+            MockVolumeRepository::new(),
+            image_repo,
+            MockStackRepository::new(),
+            MockNetworkRepository::new(),
+        );
+        app.screen = Screen::ImageList;
+        app.handle_image_list_action(AppAction::Add).await;
+        fill_add_dialog(&mut app, &["nginx"]);
+        app.handle_add_dialog_action(AppAction::Select).await;
+        assert!(app.add_dialog.is_some());
+        app.drain_image_pull().await;
+        assert!(!app.is_add_dialog_submitting());
+        assert!(app.add_dialog.is_some());
+        assert_eq!(
+            app.add_dialog.as_ref().unwrap().state.values(),
+            vec!["nginx"]
+        );
+        match &app.popup_message {
+            Some(PopupMessage::Error(msg)) => assert!(msg.contains("registry unreachable")),
+            other => panic!("expected error popup, got {other:?}"),
         }
     }
 
@@ -3904,7 +4002,7 @@ mod tests {
         fill_add_dialog(&mut app, &["web", "nginx", "8080:80"]);
         app.handle_add_dialog_action(AppAction::Select).await;
         assert!(app.add_dialog.is_some());
-        assert!(app.is_container_create_pending());
+        assert!(app.is_add_dialog_submitting());
 
         assert!(app.handle_add_dialog_key(KeyCode::Char('x')));
         assert!(app.handle_add_dialog_key(KeyCode::Tab));
